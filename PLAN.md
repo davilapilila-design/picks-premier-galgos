@@ -77,8 +77,18 @@ Columnas de datos (rellenadas por el script):
 `message_id` (clave real de deduplicación, único de Telegram) · `confirm_message_id` · `fecha_pick` · `hipodromo` · `hora_carrera` ("HH:MM", normalizada) · `trampa` · `seleccion` · `cuota` · `stake` (en **unidades**, no en moneda) · `retorno_potencial` · `resultado_manual` (vacío / gano / perdio, solo si alguien respondió "ganó"/"perdió") · `oculto` (TRUE/FALSE) · `posible_duplicado_de` (aviso, no bloqueo) · `creado_en`
 
 Columnas **fórmula** (no las toca el script, se recalculan solas):
-- `posicion_auto` → `QUERY` contra `resultados_galgos` por canódromo+fecha+hora+trampa
-- `resultado_final` → si hay `resultado_manual`, ese manda; si no, se deduce de `posicion_auto`
+- `posicion_auto` → `INDEX`/`MATCH` (no `QUERY`: da `#ERROR!` de parseo
+  contra un rango sin filas de datos) contra `resultados_galgos` por
+  canódromo+fecha+hora+trampa exactos
+- `resultado_final` → si hay `resultado_manual`, ese manda. Si no: si mi
+  trampa tiene fila exacta, "gano"/"perdio" según su posición (los no
+  corredores, `posicion="N"`, se dejan en "pendiente" a propósito). Si no
+  tiene fila exacta (el dataset de resultados no siempre trae el campo
+  completo, solo a veces el podio), se busca igualmente la trampa que ganó
+  esa misma carrera: si existe y no es la mía, "perdio" con certeza (si mi
+  trampa hubiera ganado, la búsqueda exacta ya la habría encontrado); si no
+  hay ganador registrado para esa carrera, sigue "pendiente" (ver
+  `docs/BITACORA.md` 2026-08-26)
 - `fuente_resultado` → "manual" o "auto" según cuál de las dos se usó
 - `retorno_real` / `unidades_netas` → fórmula sobre `cuota`, `stake` y `resultado_final`
 
@@ -107,13 +117,37 @@ responde confirmando, citando el mensaje original.
 - `ocultar` / `mostrar` como reply → cambia `oculto`, sin borrar nada.
 
 ## 7. Verificación automática de resultados
-Resuelto: sin scraping nuevo. La VM de Proyecto Galgos ya tiene los
-resultados oficiales de Racing Post; un paso nuevo al final de
-`automation/job_poll_results.py` (que ya corre cada 20 min) empuja los
-resultados recientes (últimas 24-48h) a la pestaña `resultados_galgos` vía
-`gspread` y una cuenta de servicio de Google (la hoja se comparte con el
-email de esa cuenta de servicio como editor; la clave del servicio vive solo
-en la VM, igual que el resto de secrets del proyecto).
+**Hecho y en producción** (2026-08-26): sin scraping nuevo. La VM de
+Proyecto Galgos ya tiene los resultados oficiales de Racing Post en
+`data/historical/results_enriched.parquet` (más completo que
+`results_historical.parquet`: trae posiciones 4ª-6ª además del podio, y el
+canódromo ya en el mismo formato que usa el tipster). Un script
+(`scripts/vm_job_resultados_galgos.py`, desplegado en
+`/opt/picks-premier-galgos/` en la VM, `systemd timer` propio
+`picks-resultados.timer`, sin tocar `job_poll_results.py`) lee ese parquet
+en local cada 20 min (5 min después de cada pasada de
+`galgos-poll-results`, para darle tiempo a refrescarse) y empuja los
+resultados nuevos a la pestaña `resultados_galgos` vía `gspread` y una
+cuenta de servicio de Google (la hoja se comparte con el email de esa
+cuenta de servicio como editor; la clave del servicio vive en
+`/root/.config/picks-premier-galgos/` en la VM, nunca en ningún repo). Es
+idempotente (salta carreras que ya tiene) y solo procesa carreras que ya
+deberían haber corrido. Al escribir, la hora de la carrera (`rTime`, en
+UTC) se convierte a hora de Reino Unido (`Europe/London`) antes de
+guardarla — sin esto el cruce por hora exacta falla en horario de verano
+británico (ver `docs/BITACORA.md` 2026-08-25/26 para el hallazgo, la
+verificación y el despliegue completos).
+
+`cuota_final`/`url_carrera`/posición exacta para picks fuera de podio
+(gano/perdio ya se resuelve sin ellos, vía el fallback de "trampa
+ganadora") se completan con un segundo job, `scripts/vm_job_dog_forms.py`
+(1 vez al día): primero busca la carrera en el historial ya guardado de
+las cards de Proyecto Galgos (`galgos_master.parquet`/
+`galgos_json_sidecar.parquet` en la VM, sin red); si el galgo aún no ha
+vuelto a correr desde entonces, hace una única petición en vivo a Racing
+Post (`dog/blocks.sd`, sin la rotación de VPN del propio Proyecto Galgos,
+que está rota) con un enfriamiento de 2 días por galgo. Ver
+`docs/BITACORA.md` 2026-08-26 para el diseño y la verificación completos.
 
 Si una pista no fue cubierta ese día, o la hora no coincide exactamente, la
 fórmula de `apuestas` simplemente no encuentra fila → `resultado_final`
@@ -129,8 +163,9 @@ Misma disyuntiva que en el plan original, sin cambios:
 | Requiere tarjeta | Sí | No |
 | Uso de tus datos para entrenar modelos | No | Sí, en el nivel gratis |
 
-Recomendación suave: Claude Haiku, el coste es marginal y evita ceder las
-capturas para entrenamiento.
+Recomendación suave original: Claude Haiku, el coste es marginal y evita
+ceder las capturas para entrenamiento. **Decisión final: Gemini Flash**
+(ver sección 13) — prioriza coste cero sobre esa cesión de datos.
 
 ## 9. Panel (dashboard)
 La propia hoja, con una pestaña de tabla dinámica/gráfico filtrando
@@ -164,8 +199,20 @@ autenticación propio.
 - [ ] **Fase 4** — Implementar `doPost`: guardar crudo, extraer con IA, escribir en `apuestas`, confirmar por Telegram.
 - [ ] **Fase 5** — Desplegar como Web App y registrar la URL (con `?token=`) como webhook de Telegram.
 - [ ] **Fase 6** — Implementar comandos por reply: ganó/perdió/ocultar/mostrar/corregir.
-- [ ] **Fase 7** — Crear cuenta de servicio de Google, compartir la hoja con ella, escribir el script de push en la VM (`gspread`).
-- [ ] **Fase 8** — Montar el panel (pestaña de gráficos nativos o Looker Studio).
+- [x] **Fase 7** — Completa (2026-08-26): cuenta de servicio, fórmulas de
+  resolución (`apuestas_patas`/`apuestas`, simples/dobles/tríples),
+  backfill del histórico completo (87 picks reales resueltos) y script
+  recurrente (`picks-resultados.timer`) desplegado y probado en la VM.
+  Pendiente solo como mejora no bloqueante: cuota/posición exacta/URL
+  para picks fuera de podio (necesita llamadas en vivo a Racing Post,
+  aparcado por el problema de rate-limit/VPN del 2026-08-26).
+- [x] **Fase 8** — Completa (2026-08-26): panel web (`doGet` en
+  `src/Dashboard.gs` + `src/Panel.html`) sobre el mismo deployment del
+  webhook, con conversión a euros (excepción documentada en `CLAUDE.md`).
+  Ampliado el mismo día: ventana de últimos 30 días, tabla de últimos
+  picks resueltos, rediseño mobile-first. Ver
+  `docs/superpowers/specs/2026-08-26-panel-metricas-design.md` y
+  `docs/BITACORA.md`.
 
 ## 12. Lo que tienes que hacer tú (no delegable)
 1. Crear el bot en Telegram y agregarlo al grupo como admin.
@@ -175,5 +222,5 @@ autenticación propio.
 5. Autenticar `clasp` con tu cuenta de Google (login interactivo, una vez).
 
 ## 13. Decisiones abiertas
-- [ ] ¿Claude Haiku o Gemini Flash? (recomendación: Claude, coste marginal)
+- [x] ¿Claude Haiku o Gemini Flash? → **Gemini Flash** (decidido: tier gratuito, evita coste aparte de la suscripción de Claude).
 - [ ] ¿Panel dentro de la propia hoja o Looker Studio aparte?
