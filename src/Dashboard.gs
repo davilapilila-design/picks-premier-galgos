@@ -146,3 +146,21 @@ function getMetricasPanel() {
     }),
   };
 }
+
+/**
+ * Punto de entrada web (GET). Apps Script enruta GET -> doGet y POST ->
+ * doPost (webhook de Telegram, en Main.gs) dentro del mismo despliegue de
+ * Web App - no hay conflicto entre el panel y el bot.
+ *
+ * La plantilla se llama 'Panel' (src/Panel.html), no 'Dashboard': Apps
+ * Script no permite que un archivo .gs y un archivo .html compartan el
+ * mismo nombre base dentro del mismo proyecto (lo bloquea con "A file
+ * with this name already exists in the current project" - comprobado con
+ * clasp push contra el proyecto real). Dashboard.gs conserva su nombre tal
+ * como pide el plan; el HTML se renombró para evitar el choque.
+ */
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('Panel')
+    .evaluate()
+    .setTitle('Panel de métricas - Picks Premier Galgos');
+}
