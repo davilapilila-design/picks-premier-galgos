@@ -41,6 +41,24 @@ function test_calcularMetricas_() {
   const vacio = calcularMetricas_([]);
   assertIguales_(vacio.hayDatos, false, 'hayDatos (sin filas)');
 
+  // El array de entrada no viene ordenado por fecha (marzo antes que enero):
+  // si el .sort() de calcularMetricas_ se rompiera o se borrase, evolucion[0]
+  // sería la fila de marzo (acumuladoUnidades=1) en vez de la de enero.
+  const filasOrden = [
+    { oculto: false, resultadoFinal: 'gano', unidadesNetas: 1, stake: 1, fechaPick: new Date('2026-03-01') },
+    { oculto: false, resultadoFinal: 'gano', unidadesNetas: 2, stake: 1, fechaPick: new Date('2026-01-01') },
+  ];
+  const resultadoOrden = calcularMetricas_(filasOrden);
+  assertIguales_(resultadoOrden.evolucion[0].acumuladoUnidades, 2, 'orden: evolucion[0] debe ser la fecha mas antigua (enero), no la primera del array');
+  assertIguales_(resultadoOrden.evolucion[1].acumuladoUnidades, 3, 'orden: evolucion[1] acumulado tras ambas');
+
+  // stakeTotal=0: roiPct debe caer en la guarda y devolver 0, no NaN/Infinity.
+  const filasStakeCero = [
+    { oculto: false, resultadoFinal: 'gano', unidadesNetas: 0, stake: 0, fechaPick: new Date('2026-01-01') },
+  ];
+  const resultadoStakeCero = calcularMetricas_(filasStakeCero);
+  assertIguales_(resultadoStakeCero.roiPct, 0, 'roiPct debe ser 0 cuando stakeTotal es 0, no NaN/Infinity');
+
   Logger.log('test_calcularMetricas_: OK, todas las comprobaciones pasaron.');
 }
 
