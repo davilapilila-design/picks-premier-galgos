@@ -103,3 +103,46 @@ function calcularMetricas_(filas) {
     evolucion: evolucion,
   };
 }
+
+/**
+ * Llamada desde el cliente (Dashboard.html) vía google.script.run. Lee
+ * `apuestas` completa, delega el cálculo en calcularMetricas_ (en
+ * unidades) y convierte a euros lo que sea una cifra absoluta (unidades
+ * netas, stake total, cada punto de la evolución) - ROI% y % de aciertos
+ * son ratios, no se convierten. Ver TASA_EUR_POR_UNIDAD en Config.gs y la
+ * excepción documentada en CLAUDE.md.
+ */
+function getMetricasPanel() {
+  const sheet = getSheet_(SHEET_APUESTAS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { hayDatos: false };
+
+  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const filas = datos.map(function (fila) {
+    return {
+      oculto: fila[index['oculto']] === true,
+      resultadoFinal: fila[index['resultado_final']],
+      unidadesNetas: fila[index['unidades_netas']],
+      stake: fila[index['stake']],
+      fechaPick: fila[index['fecha_pick']],
+    };
+  });
+
+  const metricas = calcularMetricas_(filas);
+  if (!metricas.hayDatos) return { hayDatos: false };
+
+  return {
+    hayDatos: true,
+    unidadesNetasEur: Math.round(metricas.unidadesNetas * TASA_EUR_POR_UNIDAD * 100) / 100,
+    stakeTotalEur: Math.round(metricas.stakeTotal * TASA_EUR_POR_UNIDAD * 100) / 100,
+    roiPct: Math.round(metricas.roiPct * 10) / 10,
+    pctAciertos: Math.round(metricas.pctAciertos * 10) / 10,
+    evolucion: metricas.evolucion.map(function (p) {
+      return {
+        fechaLabel: Utilities.formatDate(p.fecha, 'Europe/Madrid', 'dd/MM/yyyy'),
+        acumuladoEur: Math.round(p.acumuladoUnidades * TASA_EUR_POR_UNIDAD * 100) / 100,
+      };
+    }),
+  };
+}
