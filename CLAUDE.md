@@ -19,7 +19,7 @@ roadmap completos.
 - **Stake/retorno se registran en unidades, no en moneda** en la hoja y en
   todo el código de registro/resolución — no exponer el bankroll real ahí.
   Excepción explícita y deliberada (2026-08-26): el **panel de métricas**
-  (`src/Dashboard.gs`/`Dashboard.html`, Fase 8) sí puede mostrar la
+  (`src/Dashboard.gs`/`Panel.html`, Fase 8) sí puede mostrar la
   conversión a euros (tasa fija 1 unidad = 250€, constante en el propio
   código del panel) porque el dueño lo pidió así a sabiendas de que el panel
   es de acceso público por enlace (sin login) — no cambia esta regla para

@@ -105,7 +105,7 @@ function calcularMetricas_(filas) {
 }
 
 /**
- * Llamada desde el cliente (Dashboard.html) vía google.script.run. Lee
+ * Llamada desde el cliente (Panel.html) vía google.script.run. Lee
  * `apuestas` completa, delega el cálculo en calcularMetricas_ (en
  * unidades) y convierte a euros lo que sea una cifra absoluta (unidades
  * netas, stake total, cada punto de la evolución) - ROI% y % de aciertos
