@@ -3,6 +3,41 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-26 (cont.) — Panel v3: bug real de la tabla de últimos picks (mostraba euros en vez de unidades) + rediseño visual completo, a petición del dueño ("mejora el diseño")
+El dueño reportó dos cosas y delegó el criterio visual explícitamente
+("lo dejo en tus manos no estoy atento"), así que se implementó
+directamente sin más preguntas, con una revisión de calidad antes de
+desplegar y commitear.
+
+- **Bug real**: la columna "Unidades" de la tabla de últimos picks
+  (añadida en la ampliación de esta misma tarde) mostraba el valor
+  convertido a euros (`unidadesEur`, multiplicando por
+  `TASA_EUR_POR_UNIDAD`) en vez de las unidades tal cual, que es lo que se
+  había pedido originalmente ("las unidades ganadas por apuesta") y lo que
+  el dueño confirmó ("las unidades ganadas son numeros"). Las 4 tarjetas
+  principales (ganancia neta, total jugado) SÍ se quedan en euros - esa
+  parte no cambia, es la excepción ya documentada en `CLAUDE.md`. Fix en
+  `getMetricasPanel()` (`src/Dashboard.gs`): el campo pasa de
+  `unidadesEur` a `unidades` (sin multiplicar por la tasa). Verificado con
+  grep que no queda ninguna referencia a `unidadesEur` en el repo.
+- **Rediseño visual de `src/Panel.html`**: sigue mobile-first (misma
+  estructura de grid 2→4 columnas, mismos tokens de color validados con la
+  skill `dataviz`), pero con más cuidado de detalle - sombras suaves en
+  las tarjetas, etiquetas en mayúsculas con letter-spacing, flechita
+  ▲/▼ delante de los positivos/negativos (para que el color nunca sea la
+  única pista de si es un número bueno o malo, regla de accesibilidad de
+  `dataviz`), spinner de carga animado en vez de solo texto, filas
+  alternas en la tabla de picks, ancho máximo centrado en pantallas
+  anchas.
+- Revisión de calidad: confirmado el camino completo del fix (sin ningún
+  resto de conversión a euros en la tabla), sin riesgo de inyección en el
+  `innerHTML` nuevo (solo recibe contenido generado por el propio código,
+  nunca texto de la hoja sin pasar por `textContent`), CSS confirmado
+  mobile-first de verdad tras leer el diff completo. Encontrada y
+  eliminada una variable CSS muerta (`--linea-grafico-suave`, sin usar).
+- Redesplegado sobre el mismo deployment (v13).
+- Commits: (pendiente)
+
 ## 2026-08-26 (cont.) — Bug real: 11 reenvíos de picks antiguos cargados con la fecha de llegada en vez de la fecha real de la carrera; uno de ellos dio un "perdió" FALSO. Arreglada la causa raíz (mensajes_crudos no guardaba si el mensaje era un reenvío)
 - Tras arreglar el login de NordVPN (entrada anterior), quedaban 10
   apuestas en "pendiente" del bloque de 11 mensajes cargados a mano por

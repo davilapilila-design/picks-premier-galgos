@@ -6,19 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
       /* Tokens de color (dark, único tema - el panel siempre se ve en
-         fondo oscuro, no sigue el tema del sistema). Valores del sistema
-         de diseño validado (contraste >=3:1 sobre superficie oscura,
-         separación CVD comprobada para la línea del gráfico). */
+         fondo oscuro). Del sistema de diseño validado por la skill
+         dataviz: contraste >=3:1 sobre superficie oscura comprobado con
+         el validador, línea del gráfico separada de los colores de
+         estado para que nunca se confundan. */
       :root {
         --pagina: #0d0d0d;
         --superficie: #1a1a19;
+        --superficie-alt: #202220;
         --texto: #ffffff;
         --texto-secundario: #c3c2b7;
         --texto-mudo: #898781;
         --linea-grafico: #3987e5;
         --bueno: #0ca30c;
         --critico: #d03b3b;
-        --borde: rgba(255, 255, 255, 0.10);
+        --borde: rgba(255, 255, 255, 0.08);
+        --sombra: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
       }
 
       * { box-sizing: border-box; }
@@ -28,73 +31,117 @@
         background: var(--pagina);
         color: var(--texto);
         margin: 0;
-        padding: 16px;
+        padding: 20px 16px 40px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .cabecera {
+        margin-bottom: 22px;
       }
 
       h1 {
-        font-size: 18px;
-        font-weight: 600;
-        margin: 0 0 2px;
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 4px;
       }
 
       .subtitulo {
         font-size: 13px;
         color: var(--texto-mudo);
-        margin: 0 0 20px;
+        margin: 0;
       }
 
       h2 {
-        font-size: 15px;
-        font-weight: 600;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
         margin: 28px 0 12px;
-        color: var(--texto-secundario);
+        color: var(--texto-mudo);
       }
 
-      /* Mobile-first: 2 columnas de tarjetas por defecto (caben cómodas
-         en una pantalla estrecha sin dejar demasiado hueco vertical). */
+      /* Mobile-first: 2 columnas por defecto - caben cómodas en una
+         pantalla estrecha sin dejar demasiado hueco vertical. */
       .tarjetas {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
       }
 
       .tarjeta {
         background: var(--superficie);
         border: 1px solid var(--borde);
-        border-radius: 10px;
-        padding: 12px 14px;
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: var(--sombra);
       }
 
       .tarjeta .etiqueta {
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         color: var(--texto-mudo);
-        margin-bottom: 4px;
+        margin-bottom: 8px;
       }
 
       .tarjeta .valor {
-        font-size: 20px;
+        font-size: 21px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
       }
+
+      .valor .signo { font-size: 0.7em; }
 
       .positivo { color: var(--bueno); }
       .negativo { color: var(--critico); }
 
-      #grafico {
-        width: 100%;
-        height: 260px;
+      .grafico-envoltorio {
         background: var(--superficie);
         border: 1px solid var(--borde);
-        border-radius: 10px;
+        border-radius: 12px;
+        padding: 12px 8px 4px;
+        box-shadow: var(--sombra);
       }
 
-      #mensaje { color: var(--texto-mudo); }
+      #grafico {
+        width: 100%;
+        height: 230px;
+      }
+
+      #mensaje {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--texto-mudo);
+        font-size: 14px;
+        padding: 32px 0;
+      }
+
+      .girando {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--borde);
+        border-top-color: var(--linea-grafico);
+        border-radius: 50%;
+        animation: girar 0.7s linear infinite;
+        flex-shrink: 0;
+      }
+
+      @keyframes girar { to { transform: rotate(360deg); } }
 
       .tabla-envoltorio {
         overflow-x: auto;
+        background: var(--superficie);
         border: 1px solid var(--borde);
-        border-radius: 10px;
+        border-radius: 12px;
+        box-shadow: var(--sombra);
       }
 
       table {
@@ -105,38 +152,56 @@
 
       th, td {
         text-align: left;
-        padding: 10px 12px;
+        padding: 11px 14px;
         white-space: nowrap;
       }
+
+      th:last-child, td:last-child { text-align: right; }
 
       th {
         color: var(--texto-mudo);
         font-weight: 600;
-        font-size: 12px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         border-bottom: 1px solid var(--borde);
       }
 
-      td { font-variant-numeric: tabular-nums; }
+      td {
+        font-variant-numeric: tabular-nums;
+        color: var(--texto-secundario);
+      }
 
-      tbody tr + tr td { border-top: 1px solid var(--borde); }
+      tbody tr:nth-child(even) { background: var(--superficie-alt); }
+      tbody tr:hover { background: var(--superficie-alt); }
+
+      td.celda-fecha { color: var(--texto); }
+      td.celda-unidades { font-weight: 700; }
 
       /* A partir de aquí, más espacio: tarjetas en una sola fila y tipos
          algo mayores. La base de arriba ya es completamente usable en
          móvil - esto es una mejora, no un layout distinto. */
       @media (min-width: 640px) {
-        body { padding: 24px; }
-        h1 { font-size: 20px; }
+        body { padding: 32px; }
+        h1 { font-size: 22px; }
         .tarjetas { grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .tarjeta { padding: 16px 20px; }
-        .tarjeta .valor { font-size: 24px; }
-        #grafico { height: 360px; }
+        .tarjeta { padding: 18px 20px; }
+        .tarjeta .valor { font-size: 26px; }
+        #grafico { height: 340px; }
+      }
+
+      @media (min-width: 960px) {
+        body { max-width: 880px; margin: 0 auto; }
       }
     </style>
   </head>
   <body>
-    <h1>Panel de métricas — Picks Premier Galgos</h1>
-    <p class="subtitulo">Últimos 30 días</p>
-    <div id="mensaje">Cargando...</div>
+    <div class="cabecera">
+      <h1>Picks Premier Galgos</h1>
+      <p class="subtitulo">Últimos 30 días</p>
+    </div>
+
+    <div id="mensaje"><span class="girando"></span>Cargando...</div>
     <div id="contenido" style="display:none;">
       <div class="tarjetas">
         <div class="tarjeta"><div class="etiqueta">Ganancia neta</div><div class="valor" id="valUnidadesNetas">-</div></div>
@@ -144,7 +209,7 @@
         <div class="tarjeta"><div class="etiqueta">ROI / Yield</div><div class="valor" id="valRoi">-</div></div>
         <div class="tarjeta"><div class="etiqueta">% de aciertos</div><div class="valor" id="valAciertos">-</div></div>
       </div>
-      <div id="grafico"></div>
+      <div class="grafico-envoltorio"><div id="grafico"></div></div>
     </div>
 
     <div id="seccionPicks" style="display:none;">
@@ -152,7 +217,7 @@
       <div class="tabla-envoltorio">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Cuota</th><th>Unidades ganadas</th></tr>
+            <tr><th>Fecha</th><th>Cuota</th><th>Unidades</th></tr>
           </thead>
           <tbody id="cuerpoTablaPicks"></tbody>
         </table>
@@ -173,10 +238,10 @@
           document.getElementById('mensaje').style.display = 'none';
           document.getElementById('contenido').style.display = 'block';
 
-          setValor('valUnidadesNetas', formatearEur(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0);
-          setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true);
-          setValor('valRoi', metricas.roiPct.toFixed(1) + ' %', metricas.roiPct >= 0);
-          setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true);
+          setValor('valUnidadesNetas', formatearEur(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0, true);
+          setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true, false);
+          setValor('valRoi', metricas.roiPct.toFixed(1) + ' %', metricas.roiPct >= 0, true);
+          setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true, false);
 
           google.charts.setOnLoadCallback(function () { pintarGrafico(metricas.evolucion); });
         } else {
@@ -186,14 +251,24 @@
         pintarTablaPicks(metricas.ultimosPicks || []);
       }
 
-      function setValor(id, texto, positivo) {
+      // conSigno=true añade una flechita (▲/▼) antes del número - el
+      // color nunca es la única pista de si es positivo o negativo
+      // (regla de accesibilidad de la skill dataviz).
+      function setValor(id, texto, positivo, conSigno) {
         const el = document.getElementById(id);
-        el.textContent = texto;
         el.className = 'valor ' + (positivo ? 'positivo' : 'negativo');
+        el.innerHTML = conSigno
+          ? '<span class="signo">' + (positivo ? '▲' : '▼') + '</span>' + texto
+          : texto;
       }
 
       function formatearEur(valor) {
         return valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+      }
+
+      function formatearUnidades(valor) {
+        const signo = valor > 0 ? '+' : '';
+        return signo + valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u';
       }
 
       function pintarGrafico(evolucion) {
@@ -206,11 +281,13 @@
         grafico.draw(datos, {
           backgroundColor: 'transparent',
           colors: ['#3987e5'],
-          lineWidth: 2,
+          lineWidth: 3,
+          pointSize: 0,
+          curveType: 'none',
           legend: { position: 'none' },
-          hAxis: { textStyle: { color: '#898781' }, gridlines: { color: '#2c2c2a' } },
-          vAxis: { textStyle: { color: '#898781' }, gridlines: { color: '#2c2c2a' } },
-          chartArea: { left: 48, right: 16, top: 16, bottom: 32 },
+          hAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: 'transparent' }, baselineColor: '#2c2c2a' },
+          vAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: '#2c2c2a', count: 4 }, baseline: 0, baselineColor: '#2c2c2a' },
+          chartArea: { left: 44, right: 12, top: 12, bottom: 28 },
         });
       }
 
@@ -229,13 +306,14 @@
 
           const celdaFecha = document.createElement('td');
           celdaFecha.textContent = p.fechaLabel;
+          celdaFecha.className = 'celda-fecha';
 
           const celdaCuota = document.createElement('td');
           celdaCuota.textContent = p.cuota.toFixed(2);
 
           const celdaUnidades = document.createElement('td');
-          celdaUnidades.textContent = formatearEur(p.unidadesEur);
-          celdaUnidades.className = p.unidadesEur >= 0 ? 'positivo' : 'negativo';
+          celdaUnidades.textContent = formatearUnidades(p.unidades);
+          celdaUnidades.className = 'celda-unidades ' + (p.unidades >= 0 ? 'positivo' : 'negativo');
 
           fila.appendChild(celdaFecha);
           fila.appendChild(celdaCuota);

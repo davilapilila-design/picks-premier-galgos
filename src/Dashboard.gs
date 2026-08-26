@@ -196,11 +196,15 @@ function getMetricasPanel() {
     };
   });
 
+  // A diferencia de las tarjetas (que sí convierten a euros), la tabla de
+  // últimos picks se queda en UNIDADES tal cual - pedido explícito del
+  // dueño (2026-08-26): "las unidades ganadas son numeros", no €. La
+  // relación entre las dos vistas sigue siendo 1 unidad = TASA_EUR_POR_UNIDAD.
   const ultimosPicks = calcularUltimosPicks_(filas, LIMITE_ULTIMOS_PICKS).map(function (p) {
     return {
       fechaLabel: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'dd/MM/yyyy'),
       cuota: p.cuota,
-      unidadesEur: Math.round(p.unidadesNetas * TASA_EUR_POR_UNIDAD * 100) / 100,
+      unidades: Math.round(p.unidadesNetas * 100) / 100,
     };
   });
 
