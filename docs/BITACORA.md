@@ -3,6 +3,46 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 — Panel v4: revertida la ventana de 30 días ("no me cuadran los números"), tabla de últimos picks sustituida por el historial completo con canódromo/galgo/mensaje, tarjeta nueva de unidades en crudo
+El dueño reportó que los números del panel no le cuadraban con la ventana
+de 30 días de la v2/v3, y pidió tres cosas directas: (1) volver a todo el
+histórico en las tarjetas/gráfico, (2) sustituir la tabla de "últimos 10
+picks" por el historial COMPLETO (mismo filtro que las tarjetas -
+`oculto=false`, resuelto - pero sin límite de filas ni de fecha), con
+canódromo, galgo(s) y el mensaje original del tipster, para poder
+revisarlas una a una, y (3) una tarjeta más con las unidades netas en
+crudo (sin convertir a euros) para poder cuadrar el número en € contra la
+hoja a mano.
+
+- **`src/Dashboard.gs`**: quitadas `DIAS_VENTANA_PANEL`/
+  `LIMITE_ULTIMOS_PICKS` y el filtro de fecha en `getMetricasPanel()` -
+  `calcularMetricas_` vuelve a recibir todas las filas, como en la v1.
+  `calcularUltimosPicks_(filas, limite)` renombrada a
+  `calcularHistoricoPicks_(filas)` (sin parámetro de límite, siempre
+  devuelve todo lo que pasa el filtro) y ampliada para llevar también
+  `canodromo`/`galgo`/`mensaje` - columnas fórmula que YA existían en la
+  hoja real (`crearApuestas_` en `Setup.gs`), simplemente no se leían
+  todavía desde el panel. Test manual renombrado a
+  `test_calcularHistoricoPicks_`, reforzado para comprobar el orden de las
+  3 filas completas en vez de solo un top-2.
+  `getMetricasPanel()` añade el campo `unidadesNetas` (mismo dato que
+  `unidadesNetasEur` pero SIN multiplicar por `TASA_EUR_POR_UNIDAD`).
+- **`src/Panel.html`**: subtítulo "Últimos 30 días" → "Todo el histórico";
+  5ª tarjeta "Unidades ganadas" (en unidades, no €); la sección de "Últimos
+  picks" pasa a ser "Historial de picks" con 3 columnas nuevas
+  (Canódromo/Galgo/Mensaje), renderizadas igual que el resto de la tabla
+  (`textContent`, no `innerHTML` - sigue sin riesgo de inyección pese a
+  que `mensaje` es la primera columna con texto libre real, el mensaje
+  original del tipster). Grid de tarjetas ajustado a 5 (columna doble para
+  la 5ª en el layout de 2 columnas de móvil, para que no quede huérfana
+  con hueco vacío al lado).
+- Revisión de calidad: confirmado con grep que no queda ninguna referencia
+  a la ventana de 30 días ni al límite de 10 en todo el repo (el revert es
+  completo, no parcial); confirmado que `unidadesNetas` y
+  `unidadesNetasEur` no se cruzan entre sí.
+- Redesplegado sobre el mismo deployment.
+- Commits: (pendiente)
+
 ## 2026-08-26 (cont.) — Panel v3: bug real de la tabla de últimos picks (mostraba euros en vez de unidades) + rediseño visual completo, a petición del dueño ("mejora el diseño")
 El dueño reportó dos cosas y delegó el criterio visual explícitamente
 ("lo dejo en tus manos no estoy atento"), así que se implementó

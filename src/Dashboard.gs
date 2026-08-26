@@ -1,18 +1,24 @@
 /**
  * Panel de métricas (Fase 8 del PLAN.md). Ver
  * docs/superpowers/specs/2026-08-26-panel-metricas-design.md para el
- * diseño completo (filtro, fórmulas, decisión de mostrar euros). Ampliado
- * 2026-08-26 (v2, pedido directo del dueño): las tarjetas y el gráfico
- * pasan a estar acotados a los últimos DIAS_VENTANA_PANEL días (antes eran
- * de todo el histórico), y se añade una tabla con los últimos
- * LIMITE_ULTIMOS_PICKS picks resueltos.
+ * diseño completo (filtro, fórmulas, decisión de mostrar euros).
+ *
+ * Historial de cambios sobre el diseño original (todos 2026-08-26/27,
+ * pedidos directos del dueño):
+ * - v2: tarjetas/gráfico acotados a los últimos 30 días + tabla de los
+ *   últimos 10 picks resueltos.
+ * - v3: la tabla de picks se queda en unidades (no euros) + rediseño
+ *   visual.
+ * - v4 (esta versión): revertido lo de "últimos 30 días" - el dueño dijo
+ *   "no me cuadran los números", así que las tarjetas/gráfico vuelven a
+ *   ser de TODO el histórico, como en la v1. La tabla deja de ser "los
+ *   últimos 10" y pasa a ser el histórico COMPLETO de picks visibles y
+ *   resueltos (mismo filtro que las tarjetas, sin límite de filas), con
+ *   canódromo/galgo/mensaje original para poder revisarlas una a una.
+ *   Se añade una tarjeta más con las unidades netas en crudo (sin
+ *   convertir a euros), para poder cuadrar a mano el número en € contra
+ *   las unidades reales de la hoja.
  */
-
-// Ventana de las tarjetas/gráfico. LIMITE_ULTIMOS_PICKS no depende de esta
-// ventana - la tabla de últimos picks muestra los N más recientes
-// resueltos aunque caigan fuera de los últimos 30 días.
-const DIAS_VENTANA_PANEL = 30;
-const LIMITE_ULTIMOS_PICKS = 10;
 
 function assertIguales_(actual, esperado, etiqueta) {
   if (actual !== esperado) {
@@ -115,11 +121,11 @@ function calcularMetricas_(filas) {
 }
 
 /**
- * Ejecutar A MANO desde el editor (Ejecutar > test_calcularUltimosPicks_)
- * tras cada cambio en calcularUltimosPicks_ - mismo patrón que
+ * Ejecutar A MANO desde el editor (Ejecutar > test_calcularHistoricoPicks_)
+ * tras cada cambio en calcularHistoricoPicks_ - mismo patrón que
  * test_calcularMetricas_ más arriba.
  */
-function test_calcularUltimosPicks_() {
+function test_calcularHistoricoPicks_() {
   const filas = [
     { oculto: false, resultadoFinal: 'gano', unidadesNetas: 2, cuota: 3.5, fechaPick: new Date('2026-01-01') },
     { oculto: false, resultadoFinal: 'perdio', unidadesNetas: -4, cuota: 2.1, fechaPick: new Date('2026-01-05') },
@@ -130,59 +136,67 @@ function test_calcularUltimosPicks_() {
     { oculto: false, resultadoFinal: 'gano', unidadesNetas: 1, cuota: 2.0, fechaPick: new Date('2026-01-03') },
   ];
 
-  const top2 = calcularUltimosPicks_(filas, 2);
-  assertIguales_(top2.length, 2, 'top2.length');
+  const historico = calcularHistoricoPicks_(filas);
+  assertIguales_(historico.length, 3, 'historico.length (solo las 3 resueltas y visibles, sin límite)');
   // Más reciente primero (orden descendente por fecha), no el orden del array.
-  assertIguales_(top2[0].fechaPick.getTime(), new Date('2026-01-05').getTime(), 'top2[0] debe ser 05/01 (el resuelto mas reciente)');
-  assertIguales_(top2[0].cuota, 2.1, 'top2[0].cuota');
-  assertIguales_(top2[0].unidadesNetas, -4, 'top2[0].unidadesNetas');
-  assertIguales_(top2[1].fechaPick.getTime(), new Date('2026-01-03').getTime(), 'top2[1] debe ser 03/01');
+  assertIguales_(historico[0].fechaPick.getTime(), new Date('2026-01-05').getTime(), 'historico[0] debe ser 05/01 (la mas reciente)');
+  assertIguales_(historico[0].cuota, 2.1, 'historico[0].cuota');
+  assertIguales_(historico[0].unidadesNetas, -4, 'historico[0].unidadesNetas');
+  assertIguales_(historico[1].fechaPick.getTime(), new Date('2026-01-03').getTime(), 'historico[1] debe ser 03/01');
+  assertIguales_(historico[2].fechaPick.getTime(), new Date('2026-01-01').getTime(), 'historico[2] debe ser 01/01 (la mas antigua, ultima)');
 
-  const sinLimite = calcularUltimosPicks_(filas, 10);
-  assertIguales_(sinLimite.length, 3, 'sinLimite.length (solo las 3 resueltas y visibles)');
-
-  const vacio = calcularUltimosPicks_([], 10);
+  const vacio = calcularHistoricoPicks_([]);
   assertIguales_(vacio.length, 0, 'vacio.length');
 
-  Logger.log('test_calcularUltimosPicks_: OK, todas las comprobaciones pasaron.');
+  Logger.log('test_calcularHistoricoPicks_: OK, todas las comprobaciones pasaron.');
 }
 
 /**
- * filas: mismo formato que calcularMetricas_, con `cuota` añadido. Filtra
- * igual (visible + resuelta) y devuelve las `limite` más recientes por
- * fechaPick, en unidades - getMetricasPanel() convierte a euros.
+ * filas: mismo formato que calcularMetricas_, con `cuota`/`canodromo`/
+ * `galgo`/`mensaje` añadidos. Filtra igual que calcularMetricas_ (visible
+ * + resuelta) y devuelve TODAS (sin límite de filas), más reciente
+ * primero - es la tabla de revisión completa del panel, no un resumen.
+ * Unidades en crudo - getMetricasPanel() no las convierte a euros (pedido
+ * explícito del dueño, ver más abajo).
  */
-function calcularUltimosPicks_(filas, limite) {
+function calcularHistoricoPicks_(filas) {
   const resueltas = filas.filter(function (f) {
     return f.oculto !== true && (f.resultadoFinal === 'gano' || f.resultadoFinal === 'perdio') &&
       f.fechaPick instanceof Date;
   });
-  const ordenadas = resueltas.slice().sort(function (a, b) { return b.fechaPick - a.fechaPick; });
-  return ordenadas.slice(0, limite).map(function (f) {
-    return { fechaPick: f.fechaPick, cuota: Number(f.cuota), unidadesNetas: Number(f.unidadesNetas) };
+  return resueltas.slice().sort(function (a, b) { return b.fechaPick - a.fechaPick; }).map(function (f) {
+    return {
+      fechaPick: f.fechaPick,
+      cuota: Number(f.cuota),
+      unidadesNetas: Number(f.unidadesNetas),
+      canodromo: f.canodromo,
+      galgo: f.galgo,
+      mensaje: f.mensaje,
+    };
   });
 }
 
 /**
  * Llamada desde el cliente (Panel.html) vía google.script.run. Lee
- * `apuestas` completa una sola vez y la reparte en dos vistas:
- * - Tarjetas + gráfico: solo picks de los últimos DIAS_VENTANA_PANEL días
- *   (antes era todo el histórico - cambiado 2026-08-26 a petición del
- *   dueño). calcularMetricas_ sigue siendo agnóstico de la ventana; el
- *   filtro de fecha se aplica aquí, antes de llamar a esa función.
- * - Tabla de últimos picks: los LIMITE_ULTIMOS_PICKS resueltos más
- *   recientes, SIN acotar a la ventana de 30 días (petición aparte del
- *   dueño) - por eso usa `filas` completo, no `filasVentana`.
- * Convierte a euros lo que sea una cifra absoluta (unidades netas, stake
- * total, cada punto de la evolución, unidades de cada pick) - ROI% y % de
- * aciertos son ratios, no se convierten. Ver TASA_EUR_POR_UNIDAD en
- * Config.gs y la excepción documentada en CLAUDE.md.
+ * `apuestas` completa una sola vez y la reparte en dos vistas, ambas de
+ * TODO el histórico (sin ventana de fecha ni límite de filas - revertido
+ * 2026-08-27, ver el historial de cambios en la cabecera del archivo):
+ * - Tarjetas + gráfico: calcularMetricas_ sobre todas las filas.
+ * - Tabla de historial: calcularHistoricoPicks_ sobre todas las filas,
+ *   con canódromo/galgo/mensaje para poder revisar cada pick.
+ * Convierte a euros las cifras absolutas de las TARJETAS (unidades netas,
+ * stake total, cada punto de la evolución) - ROI% y % de aciertos son
+ * ratios, no se convierten. La tarjeta de "unidades ganadas" y la tabla de
+ * historial se quedan en UNIDADES tal cual, sin convertir (pedido
+ * explícito del dueño, para poder cuadrar el número en € contra las
+ * unidades reales de la hoja). Ver TASA_EUR_POR_UNIDAD en Config.gs y la
+ * excepción documentada en CLAUDE.md.
  */
 function getMetricasPanel() {
   const sheet = getSheet_(SHEET_APUESTAS);
   const index = getHeaderIndex_(sheet);
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { hayDatos: false, ultimosPicks: [] };
+  if (lastRow < 2) return { hayDatos: false, historicoPicks: [] };
 
   const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
   const filas = datos.map(function (fila) {
@@ -193,33 +207,30 @@ function getMetricasPanel() {
       stake: fila[index['stake']],
       cuota: fila[index['cuota']],
       fechaPick: fila[index['fecha_pick']],
+      canodromo: fila[index['canodromo']],
+      galgo: fila[index['galgo']],
+      mensaje: fila[index['mensaje']],
     };
   });
 
-  // A diferencia de las tarjetas (que sí convierten a euros), la tabla de
-  // últimos picks se queda en UNIDADES tal cual - pedido explícito del
-  // dueño (2026-08-26): "las unidades ganadas son numeros", no €. La
-  // relación entre las dos vistas sigue siendo 1 unidad = TASA_EUR_POR_UNIDAD.
-  const ultimosPicks = calcularUltimosPicks_(filas, LIMITE_ULTIMOS_PICKS).map(function (p) {
+  const historicoPicks = calcularHistoricoPicks_(filas).map(function (p) {
     return {
       fechaLabel: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'dd/MM/yyyy'),
       cuota: p.cuota,
       unidades: Math.round(p.unidadesNetas * 100) / 100,
+      canodromo: p.canodromo,
+      galgo: p.galgo,
+      mensaje: p.mensaje,
     };
   });
 
-  const fechaCorte = new Date();
-  fechaCorte.setDate(fechaCorte.getDate() - DIAS_VENTANA_PANEL);
-  const filasVentana = filas.filter(function (f) {
-    return f.fechaPick instanceof Date && f.fechaPick >= fechaCorte;
-  });
-
-  const metricas = calcularMetricas_(filasVentana);
-  if (!metricas.hayDatos) return { hayDatos: false, ultimosPicks: ultimosPicks };
+  const metricas = calcularMetricas_(filas);
+  if (!metricas.hayDatos) return { hayDatos: false, historicoPicks: historicoPicks };
 
   return {
     hayDatos: true,
     unidadesNetasEur: Math.round(metricas.unidadesNetas * TASA_EUR_POR_UNIDAD * 100) / 100,
+    unidadesNetas: Math.round(metricas.unidadesNetas * 100) / 100,
     stakeTotalEur: Math.round(metricas.stakeTotal * TASA_EUR_POR_UNIDAD * 100) / 100,
     roiPct: Math.round(metricas.roiPct * 10) / 10,
     pctAciertos: Math.round(metricas.pctAciertos * 10) / 10,
@@ -229,7 +240,7 @@ function getMetricasPanel() {
         acumuladoEur: Math.round(p.acumuladoUnidades * TASA_EUR_POR_UNIDAD * 100) / 100,
       };
     }),
-    ultimosPicks: ultimosPicks,
+    historicoPicks: historicoPicks,
   };
 }
 

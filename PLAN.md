@@ -206,11 +206,16 @@ autenticación propio.
   Pendiente solo como mejora no bloqueante: cuota/posición exacta/URL
   para picks fuera de podio (necesita llamadas en vivo a Racing Post,
   aparcado por el problema de rate-limit/VPN del 2026-08-26).
-- [x] **Fase 8** — Completa (2026-08-26): panel web (`doGet` en
-  `src/Dashboard.gs` + `src/Panel.html`) sobre el mismo deployment del
-  webhook, con conversión a euros (excepción documentada en `CLAUDE.md`).
-  Ampliado el mismo día: ventana de últimos 30 días, tabla de últimos
-  picks resueltos, rediseño mobile-first. Ver
+- [x] **Fase 8** — Completa (2026-08-26, revisada 2026-08-27): panel web
+  (`doGet` en `src/Dashboard.gs` + `src/Panel.html`) sobre el mismo
+  deployment del webhook, con conversión a euros (excepción documentada en
+  `CLAUDE.md`). Tarjetas/gráfico de TODO el histórico (se probó acotar a
+  los últimos 30 días el mismo día 26, pero se revirtió el 27 porque no
+  cuadraban los números) + tarjeta con las unidades netas en crudo (sin
+  convertir, para poder cuadrarlas a mano) + tabla con el historial
+  COMPLETO de picks visibles y resueltos (canódromo, galgo, cuota,
+  unidades, mensaje original del tipster) para poder revisarlos uno a uno.
+  Rediseño mobile-first. Ver
   `docs/superpowers/specs/2026-08-26-panel-metricas-design.md` y
   `docs/BITACORA.md`.
 

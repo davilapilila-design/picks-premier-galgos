@@ -70,6 +70,11 @@
         margin-bottom: 20px;
       }
 
+      /* 5 tarjetas en un grid de 2 columnas dejan la última huérfana en su
+         propia fila - que ocupe las 2 columnas en vez de quedar pegada a
+         la izquierda con hueco vacío al lado. */
+      .tarjetas .tarjeta:nth-child(5) { grid-column: span 2; }
+
       .tarjeta {
         background: var(--superficie);
         border: 1px solid var(--borde);
@@ -156,7 +161,12 @@
         white-space: nowrap;
       }
 
-      th:last-child, td:last-child { text-align: right; }
+      th.col-mensaje, td.celda-mensaje {
+        white-space: pre-wrap;
+        min-width: 220px;
+        max-width: 360px;
+        word-break: break-word;
+      }
 
       th {
         color: var(--texto-mudo);
@@ -176,7 +186,8 @@
       tbody tr:hover { background: var(--superficie-alt); }
 
       td.celda-fecha { color: var(--texto); }
-      td.celda-unidades { font-weight: 700; }
+      th.col-unidades, td.celda-unidades { text-align: right; font-weight: 700; }
+      td.celda-mensaje { color: var(--texto-mudo); font-size: 12px; line-height: 1.5; }
 
       /* A partir de aquí, más espacio: tarjetas en una sola fila y tipos
          algo mayores. La base de arriba ya es completamente usable en
@@ -184,27 +195,29 @@
       @media (min-width: 640px) {
         body { padding: 32px; }
         h1 { font-size: 22px; }
-        .tarjetas { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .tarjetas { grid-template-columns: repeat(5, 1fr); gap: 16px; }
+        .tarjetas .tarjeta:nth-child(5) { grid-column: span 1; }
         .tarjeta { padding: 18px 20px; }
         .tarjeta .valor { font-size: 26px; }
         #grafico { height: 340px; }
       }
 
       @media (min-width: 960px) {
-        body { max-width: 880px; margin: 0 auto; }
+        body { max-width: 1080px; margin: 0 auto; }
       }
     </style>
   </head>
   <body>
     <div class="cabecera">
       <h1>Picks Premier Galgos</h1>
-      <p class="subtitulo">Últimos 30 días</p>
+      <p class="subtitulo">Todo el histórico</p>
     </div>
 
     <div id="mensaje"><span class="girando"></span>Cargando...</div>
     <div id="contenido" style="display:none;">
       <div class="tarjetas">
         <div class="tarjeta"><div class="etiqueta">Ganancia neta</div><div class="valor" id="valUnidadesNetas">-</div></div>
+        <div class="tarjeta"><div class="etiqueta">Unidades ganadas</div><div class="valor" id="valUnidades">-</div></div>
         <div class="tarjeta"><div class="etiqueta">Total jugado</div><div class="valor" id="valStakeTotal">-</div></div>
         <div class="tarjeta"><div class="etiqueta">ROI / Yield</div><div class="valor" id="valRoi">-</div></div>
         <div class="tarjeta"><div class="etiqueta">% de aciertos</div><div class="valor" id="valAciertos">-</div></div>
@@ -212,14 +225,17 @@
       <div class="grafico-envoltorio"><div id="grafico"></div></div>
     </div>
 
-    <div id="seccionPicks" style="display:none;">
-      <h2>Últimos picks</h2>
+    <div id="seccionHistorico" style="display:none;">
+      <h2>Historial de picks</h2>
       <div class="tabla-envoltorio">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Cuota</th><th>Unidades</th></tr>
+            <tr>
+              <th>Fecha</th><th>Canódromo</th><th>Galgo</th><th>Cuota</th>
+              <th class="col-unidades">Unidades</th><th class="col-mensaje">Mensaje</th>
+            </tr>
           </thead>
-          <tbody id="cuerpoTablaPicks"></tbody>
+          <tbody id="cuerpoHistorico"></tbody>
         </table>
       </div>
     </div>
@@ -239,16 +255,17 @@
           document.getElementById('contenido').style.display = 'block';
 
           setValor('valUnidadesNetas', formatearEur(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0, true);
+          setValor('valUnidades', formatearUnidades(metricas.unidadesNetas), metricas.unidadesNetas >= 0, false);
           setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true, false);
           setValor('valRoi', metricas.roiPct.toFixed(1) + ' %', metricas.roiPct >= 0, true);
           setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true, false);
 
           google.charts.setOnLoadCallback(function () { pintarGrafico(metricas.evolucion); });
         } else {
-          document.getElementById('mensaje').textContent = 'Sin datos en los últimos 30 días.';
+          document.getElementById('mensaje').textContent = 'Sin datos todavía.';
         }
 
-        pintarTablaPicks(metricas.ultimosPicks || []);
+        pintarTablaHistorico(metricas.historicoPicks || []);
       }
 
       // conSigno=true añade una flechita (▲/▼) antes del número - el
@@ -291,15 +308,15 @@
         });
       }
 
-      function pintarTablaPicks(picks) {
-        const seccion = document.getElementById('seccionPicks');
+      function pintarTablaHistorico(picks) {
+        const seccion = document.getElementById('seccionHistorico');
         if (!picks.length) {
           seccion.style.display = 'none';
           return;
         }
         seccion.style.display = 'block';
 
-        const cuerpo = document.getElementById('cuerpoTablaPicks');
+        const cuerpo = document.getElementById('cuerpoHistorico');
         cuerpo.innerHTML = '';
         picks.forEach(function (p) {
           const fila = document.createElement('tr');
@@ -308,6 +325,12 @@
           celdaFecha.textContent = p.fechaLabel;
           celdaFecha.className = 'celda-fecha';
 
+          const celdaCanodromo = document.createElement('td');
+          celdaCanodromo.textContent = p.canodromo || '';
+
+          const celdaGalgo = document.createElement('td');
+          celdaGalgo.textContent = p.galgo || '';
+
           const celdaCuota = document.createElement('td');
           celdaCuota.textContent = p.cuota.toFixed(2);
 
@@ -315,9 +338,16 @@
           celdaUnidades.textContent = formatearUnidades(p.unidades);
           celdaUnidades.className = 'celda-unidades ' + (p.unidades >= 0 ? 'positivo' : 'negativo');
 
+          const celdaMensaje = document.createElement('td');
+          celdaMensaje.textContent = p.mensaje || '';
+          celdaMensaje.className = 'celda-mensaje';
+
           fila.appendChild(celdaFecha);
+          fila.appendChild(celdaCanodromo);
+          fila.appendChild(celdaGalgo);
           fila.appendChild(celdaCuota);
           fila.appendChild(celdaUnidades);
+          fila.appendChild(celdaMensaje);
           cuerpo.appendChild(fila);
         });
       }
