@@ -16,8 +16,14 @@ roadmap completos.
   webhook y clave de la cuenta de servicio de Google van en
   `PropertiesService` (lado Apps Script) o en un archivo local ignorado por
   git (lado VM) — nunca en el código fuente ni en este repo.
-- **Stake/retorno se registran en unidades, no en moneda** — no exponer el
-  bankroll real.
+- **Stake/retorno se registran en unidades, no en moneda** en la hoja y en
+  todo el código de registro/resolución — no exponer el bankroll real ahí.
+  Excepción explícita y deliberada (2026-08-26): el **panel de métricas**
+  (`src/Dashboard.gs`/`Dashboard.html`, Fase 8) sí puede mostrar la
+  conversión a euros (tasa fija 1 unidad = 250€, constante en el propio
+  código del panel) porque el dueño lo pidió así a sabiendas de que el panel
+  es de acceso público por enlace (sin login) — no cambia esta regla para
+  ningún otro sitio del proyecto.
 - **Verificación automática de resultados**: nunca inferir sobre ambigüedad.
   Sin fila exacta en `resultados_galgos` (canódromo+fecha+hora+trap) → la
   apuesta queda `pendiente` (columna fórmula), el marcado manual es la red
