@@ -1,856 +1,607 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      /* Tokens de color (dark, único tema - el panel siempre se ve en
-         fondo oscuro, decisión ya tomada, no sigue el tema del sistema).
-         Mismos hex que la v4 - ya pasaron el validador de la skill dataviz
-         (contraste >=3:1 sobre superficie oscura; el par bueno/critico
-         falla la separación CVD categórica en aislamiento, pero eso está
-         permitido explícitamente cuando va con una señal secundaria - aquí
-         siempre acompañado de ▲/▼ y, en las cifras que pueden ser
-         negativas, también del signo +/- en el propio texto, nunca solo
-         color). Los tokens *-wash de abajo son variantes alfa de esos
-         mismos hex validados (mismo canal RGB, solo transparencia) para
-         los fondos de las píldoras de resultado - no son colores nuevos,
-         así que no hace falta re-validar contraste de texto por ellos. */
-      :root {
-        --pagina: #0d0d0d;
-        --superficie: #1a1a19;
-        --superficie-alt: #202220;
-        --texto: #ffffff;
-        --texto-secundario: #c3c2b7;
-        --texto-mudo: #898781;
-        --linea-grafico: #3987e5;
-        --bueno: #0ca30c;
-        --bueno-wash: rgba(12, 163, 12, 0.14);
-        --critico: #d03b3b;
-        --critico-wash: rgba(208, 59, 59, 0.14);
-        --borde: rgba(255, 255, 255, 0.08);
-        --sombra: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
-        --radio: 14px;
-        --transicion: 220ms ease;
-      }
-
-      * { box-sizing: border-box; }
-
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
-          animation-duration: 0.001ms !important;
-          transition-duration: 0.001ms !important;
-        }
-      }
-
-      body {
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-        background: var(--pagina);
-        color: var(--texto);
-        margin: 0;
-        padding: 20px 16px 48px;
-        -webkit-font-smoothing: antialiased;
-      }
-
-      .pagina { max-width: 100%; }
-
-      /* Utilidad estándar para texto que solo debe existir para lectores
-         de pantalla (encabezados de sección sin equivalente visual, aquí
-         "Resumen de resultados" - la jerarquía visual ya la da el tamaño
-         de la cifra hero, pero un lector de pantalla necesita el landmark). */
-      .solo-lectores {
-        position: absolute;
-        width: 1px; height: 1px;
-        padding: 0; margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-      .cabecera { margin-bottom: 24px; }
-
-      h1 {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        margin: 0 0 4px;
-      }
-
-      .subtitulo {
-        font-size: 13px;
-        color: var(--texto-mudo);
-        margin: 0;
-      }
-
-      h2 {
-        font-size: 13px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 0;
-        color: var(--texto-mudo);
-      }
-
-      /* ---------- Estados especiales (carga / vacío / error) ---------- */
-
-      .shimmer {
-        background: linear-gradient(100deg, var(--superficie) 30%, var(--superficie-alt) 50%, var(--superficie) 70%);
-        background-size: 240% 100%;
-        animation: desplazar-shimmer 1.6s ease-in-out infinite;
-        border-radius: var(--radio);
-      }
-
-      @keyframes desplazar-shimmer {
-        0% { background-position: 100% 0; }
-        100% { background-position: -60% 0; }
-      }
-
-      .esqueleto-hero { height: 168px; margin-bottom: 12px; }
-
-      .esqueleto-tarjetas {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-
-      .esqueleto-tarjetas > div { height: 74px; }
-
-      .esqueleto-picks > div {
-        height: 84px;
-        margin-bottom: 10px;
-      }
-
-      .estado-especial {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        background: var(--superficie);
-        border: 1px solid var(--borde);
-        border-radius: var(--radio);
-        padding: 18px;
-        box-shadow: var(--sombra);
-        color: var(--texto-secundario);
-        font-size: 14px;
-        line-height: 1.5;
-      }
-
-      /* CAUSA REAL del bug reportado 2026-08-27 (avisos de "sin datos"/
-         "error" visibles siempre, superpuestos al contenido real): el
-         atributo `hidden` de HTML oculta un elemento poniendo
-         `display:none` por defecto, pero SOLO si ningún CSS del autor le
-         pone otro `display` - la regla de arriba (`display: flex`) le
-         ganaba siempre a `hidden`, así que `elemento.hidden = true` desde
-         JS no hacía nada visualmente. El fix de ayer (ocultarTodosLosEstados_)
-         era necesario pero no suficiente - esta línea es la que faltaba.
-         Selector con más especificidad que `.estado-especial` sola, para
-         que gane siempre que `hidden` esté puesto. */
-      .estado-especial[hidden] { display: none; }
-
-      .estado-icono {
-        flex-shrink: 0;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 14px;
-        background: var(--superficie-alt);
-        color: var(--texto-secundario);
-      }
-
-      .estado-error .estado-icono {
-        background: var(--critico-wash);
-        color: var(--critico);
-      }
-
-      /* ---------- Contenido ---------- */
-
-      #contenido {
-        opacity: 0;
-        transform: translateY(6px);
-        transition: opacity var(--transicion), transform var(--transicion);
-      }
-
-      #contenido.visible { opacity: 1; transform: translateY(0); }
-
-      /* Panel hero: la cifra que más importa (ganancia neta) más el
-         gráfico que la visualiza, agrupados en una sola tarjeta elevada -
-         "un único hero, todo lo demás es numérico" (patrón visto en el
-         dashboard de Stripe), en vez de que la ganancia neta compita
-         visualmente con las otras 4 cifras como una tarjeta más. Usa
-         --superficie-alt (ya en la paleta, antes solo para las filas cebra
-         de la tabla) para quedar "un escalón por encima" de las tarjetas
-         secundarias sin inventar un tono nuevo. */
-      .panel-hero {
-        background: var(--superficie-alt);
-        border: 1px solid var(--borde);
-        border-radius: var(--radio);
-        padding: 18px 16px 10px;
-        box-shadow: var(--sombra);
-        margin-bottom: 12px;
-      }
-
-      .hero-cabecera { margin-bottom: 4px; }
-
-      .hero-etiqueta {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--texto-mudo);
-        margin-bottom: 6px;
-      }
-
-      /* Tamaño fluido: apunta a >=48px (cifra hero, regla de la skill
-         dataviz) en pantallas con sitio de sobra, pero se reduce en
-         móviles estrechos para que "1.234,56 €" no se parta en dos líneas
-         ni se salga del padding en un viewport de 320px. */
-      .hero-valor {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        font-size: clamp(2.1rem, 6vw + 1rem, 3.4rem);
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        font-variant-numeric: normal;
-      }
-
-      .hero-valor .signo { font-size: 0.42em; }
-
-      .hero-grafico { margin-top: 6px; }
-
-      #grafico {
-        width: 100%;
-        height: 220px;
-      }
-
-      /* Grid de las 4 tarjetas secundarias - mobile-first: 2 columnas,
-         suficiente para no dejar demasiado hueco vertical en una pantalla
-         estrecha. */
-      .tarjetas-secundarias {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-bottom: 26px;
-      }
-
-      .tarjeta {
-        background: var(--superficie);
-        border: 1px solid var(--borde);
-        border-radius: 12px;
-        padding: 13px 14px;
-        box-shadow: var(--sombra);
-      }
-
-      .tarjeta .etiqueta {
-        display: block;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--texto-mudo);
-        margin-bottom: 7px;
-      }
-
-      /* Cifras en columna dentro del grid -> tabular-nums para que los
-         dígitos alineen entre tarjetas (la cifra hero de arriba, en
-         cambio, es un valor suelto y usa el ancho proporcional por
-         defecto - más legible a tamaño grande, regla de la skill dataviz). */
-      .tarjeta .valor {
-        display: flex;
-        align-items: baseline;
-        gap: 4px;
-        font-size: 19px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        letter-spacing: -0.01em;
-      }
-
-      .valor .signo { font-size: 0.68em; }
-
-      /* Solo las cifras con un sentido real de "bien/mal" (ganancia,
-         unidades, ROI) llevan color dinámico. Total jugado y % de
-         aciertos son informativas, no una señal binaria positiva/negativa
-         - forzarlas siempre en verde sería usar el color de forma
-         engañosa (un 20% de aciertos no es "bueno" solo porque comparta
-         estilo con un 90%; en value-betting el acierto bajo con cuotas
-         altas puede ser rentable). Se quedan en el tono de texto normal. */
-      .valor.neutro { color: var(--texto); }
-      .positivo { color: var(--bueno); }
-      .negativo { color: var(--critico); }
-
-      /* ---------- Historial de picks ---------- */
-
-      .historico-cabecera {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 12px;
-      }
-
-      .historico-contador {
-        font-size: 12px;
-        color: var(--texto-mudo);
-        font-variant-numeric: tabular-nums;
-      }
-
-      /* --- Vista móvil: lista de tarjetas apiladas ---
-         Una tabla ancha con scroll horizontal es el síntoma de un mal
-         mobile-first, no la solución: en una pantalla estrecha nadie
-         desliza una tabla de 6 columnas a propósito, y "fecha" y "mensaje"
-         acaban fuera de la vista inicial. Cada pick como tarjeta,
-         ordenado por lo que se escanea primero (fecha+resultado), luego
-         contexto (pista/galgo/cuota) y el mensaje original al final,
-         recortado con "ver más" - mismo patrón que una lista de
-         transacciones de una app bancaria. */
-      .historico-cards { display: block; }
-
-      .pick-card {
-        background: var(--superficie);
-        border: 1px solid var(--borde);
-        border-radius: 12px;
-        padding: 13px 14px;
-        box-shadow: var(--sombra);
-        margin-bottom: 10px;
-      }
-
-      .pick-card-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 8px;
-      }
-
-      .pick-fecha {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--texto);
-      }
-
-      .pick-resultado {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 3px 9px;
-        border-radius: 999px;
-        font-size: 13px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-
-      .pick-resultado.positivo { background: var(--bueno-wash); color: var(--bueno); }
-      .pick-resultado.negativo { background: var(--critico-wash); color: var(--critico); }
-
-      .pick-card-meta {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 4px 10px;
-        font-size: 13px;
-        color: var(--texto-secundario);
-        margin-bottom: 8px;
-      }
-
-      .pick-lugar { min-width: 0; overflow-wrap: anywhere; }
-      .pick-cuota { color: var(--texto-mudo); white-space: nowrap; font-variant-numeric: tabular-nums; }
-
-      .bloque-mensaje { border-top: 1px solid var(--borde); padding-top: 8px; }
-
-      .mensaje-texto {
-        margin: 0 0 4px;
-        font-size: 12.5px;
-        line-height: 1.5;
-        color: var(--texto-mudo);
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-
-      .mensaje-texto.expandido {
-        -webkit-line-clamp: unset;
-        line-clamp: unset;
-        overflow: visible;
-      }
-
-      .btn-expandir {
-        appearance: none;
-        border: none;
-        background: none;
-        color: var(--linea-grafico);
-        font-size: 12px;
-        font-weight: 600;
-        padding: 2px 0;
-        cursor: pointer;
-      }
-
-      .btn-expandir:hover { text-decoration: underline; }
-
-      button:focus-visible,
-      .pick-card:focus-within {
-        outline: 2px solid var(--linea-grafico);
-        outline-offset: 2px;
-      }
-
-      /* --- Vista de escritorio: tabla clásica ---
-         Solo aparece a partir de 720px (ver media query más abajo). No es
-         "la misma tarjeta con más columnas": una tabla necesita hueco de
-         verdad para que Canódromo/Galgo/Mensaje quepan sin apretarse, así
-         que la lista de tarjetas sigue siendo la vista real hasta que ese
-         hueco existe. Ambas vistas se pintan siempre (mismos datos, sin
-         llamada de red extra) y CSS decide cuál se muestra - así no hace
-         falta escuchar el resize para redecidir el layout. */
-      .historico-tabla { display: none; }
-
-      .tabla-envoltorio {
-        background: var(--superficie);
-        border: 1px solid var(--borde);
-        border-radius: var(--radio);
-        box-shadow: var(--sombra);
-        overflow: hidden;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-      }
-
-      th, td {
-        text-align: left;
-        padding: 11px 14px;
-        vertical-align: top;
-      }
-
-      th.col-mensaje, td.celda-mensaje { min-width: 260px; max-width: 420px; }
-
-      th {
-        color: var(--texto-mudo);
-        font-weight: 600;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border-bottom: 1px solid var(--borde);
-        white-space: nowrap;
-      }
-
-      td {
-        font-variant-numeric: tabular-nums;
-        color: var(--texto-secundario);
-      }
-
-      tbody tr:nth-child(even) { background: var(--superficie-alt); }
-      tbody tr:hover { background: var(--superficie-alt); }
-
-      td.celda-fecha { color: var(--texto); white-space: nowrap; }
-      th.col-unidades, td.celda-unidades { text-align: right; font-weight: 700; }
-      td.celda-mensaje .mensaje-texto { color: var(--texto-mudo); font-size: 12.5px; -webkit-line-clamp: 2; line-clamp: 2; }
-
-      /* A partir de aquí, más espacio: la base de arriba ya es
-         completamente usable en móvil - esto es una mejora, no un layout
-         distinto. */
-      @media (min-width: 640px) {
-        body { padding: 32px; }
-        h1 { font-size: 23px; }
-        .panel-hero { padding: 24px 26px 16px; }
-        #grafico { height: 320px; }
-        .tarjetas-secundarias { grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .tarjeta { padding: 16px 18px; }
-        .tarjeta .valor { font-size: 22px; }
-      }
-
-      /* Punto de corte propio para el historial (no el mismo que el de
-         las tarjetas de arriba): una tabla de 6 columnas con una de texto
-         libre necesita más ancho real que un grid de estadísticas antes
-         de dejar de sentirse apretada. */
-      @media (min-width: 720px) {
-        .historico-cards { display: none; }
-        .historico-tabla { display: block; }
-      }
-
-      @media (min-width: 960px) {
-        .pagina { max-width: 1080px; margin: 0 auto; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="pagina">
-      <header class="cabecera">
-        <h1>Picks Premier Galgos</h1>
-        <p class="subtitulo">Todo el histórico</p>
-      </header>
-
-      <div id="estadoCarga" role="status" aria-live="polite" aria-busy="true">
-        <span class="solo-lectores">Cargando el panel de métricas…</span>
-        <div class="shimmer esqueleto-hero"></div>
-        <div class="esqueleto-tarjetas">
-          <div class="shimmer"></div><div class="shimmer"></div>
-          <div class="shimmer"></div><div class="shimmer"></div>
-        </div>
-        <div class="esqueleto-picks">
-          <div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div>
-        </div>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base target="_top">
+<title>Premier Galgos · Track Record</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  :root{
+    --bg:#0a0e13; --bg2:#07090c;
+    --acc:#39FF14; --acc-soft:#6cff4a; --acc-pale:#b6ffa6;
+    --neg:#ff6b5e; --neg-pale:#ffb3ab;
+    --card:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+    --line:rgba(255,255,255,.08); --line-soft:rgba(255,255,255,.06);
+    --dim:#9fb0bd; --dim2:#6b7682; --txt:#fff;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden;-webkit-text-size-adjust:100%}
+  ::selection{background:var(--acc);color:#07120a}
+  a{text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  h1,h2,h3{font-family:'Inter Tight',sans-serif;margin:0}
+  @keyframes pgPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+  @keyframes pgGlow{0%,100%{opacity:.55}50%{opacity:.85}}
+  @keyframes pgSkel{0%{opacity:.35}50%{opacity:.7}100%{opacity:.35}}
+  @keyframes pgSpin{to{transform:rotate(360deg)}}
+  @keyframes pgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ---------- layout base (mobile first) ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+  .glow{position:absolute;pointer-events:none;filter:blur(20px)}
+
+  .nav{position:sticky;top:0;z-index:50;background:rgba(10,14,19,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--line-soft)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 18px;max-width:1180px;margin:0 auto}
+  .logo{display:flex;align-items:center;gap:10px;min-width:0}
+  .logo-mark{width:38px;height:38px;border-radius:50%;flex-shrink:0;background:#fff;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-family:'Inter Tight',sans-serif;font-weight:800;font-size:13px;color:#07120a;letter-spacing:.5px}
+  .logo-mark img{width:100%;height:100%;object-fit:cover;display:block}
+  .logo-txt{display:flex;flex-direction:column;line-height:1;min-width:0}
+  .logo-txt b{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:14px;letter-spacing:.5px;white-space:nowrap}
+  .logo-txt span{font-size:9.5px;color:var(--acc-soft);letter-spacing:1.6px;font-weight:600;margin-top:3px;white-space:nowrap}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--acc);color:#07120a;font-family:'Inter Tight',sans-serif;font-weight:700;border-radius:9px;box-shadow:0 6px 22px -6px rgba(57,255,20,.6);transition:transform .18s ease,box-shadow .18s ease}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 12px 34px -8px rgba(57,255,20,.8)}
+  .btn-sm{font-size:13px;padding:9px 14px}
+  .btn-lg{font-size:16px;padding:16px 26px;border-radius:11px;width:100%}
+
+  .pill{display:inline-flex;align-items:center;gap:9px;padding:6px 13px;border:1px solid rgba(57,255,20,.35);border-radius:100px;background:rgba(57,255,20,.06)}
+  .pill span{font-size:10.5px;letter-spacing:1.4px;font-weight:600;color:var(--acc-pale);font-family:'Inter Tight',sans-serif}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);flex-shrink:0;animation:pgPulse 1.8s ease-in-out infinite}
+
+  .card{border-radius:18px;background:var(--card);border:1px solid var(--line)}
+  .eyebrow{font-family:'Inter Tight',sans-serif;font-size:11px;letter-spacing:1.8px;font-weight:700;color:var(--acc-soft)}
+  .lede{font-size:15.5px;line-height:1.6;color:var(--dim);margin:0}
+
+  /* ---------- hero / claim ---------- */
+  .hero{position:relative;overflow:hidden;padding:26px 0 8px}
+  .claim{font-weight:800;font-size:29px;line-height:1.1;letter-spacing:-.7px;margin:16px 0 14px}
+  .claim em{font-style:normal;color:var(--acc)}
+
+  .figure{position:relative;margin-top:22px;padding:22px 20px 20px;border-radius:20px;border:1px solid rgba(57,255,20,.2);background:linear-gradient(135deg,rgba(57,255,20,.07),rgba(20,28,38,.4));overflow:hidden}
+  .fig-label{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:1.6px;font-weight:700;font-family:'Inter Tight',sans-serif;color:var(--acc-pale)}
+  .fig-num{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:44px;line-height:1;letter-spacing:-1.6px;margin:12px 0 0;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+  .fig-num .cur{font-size:24px;letter-spacing:-.5px;opacity:.75}
+  .fig-sent{font-size:14.5px;line-height:1.55;color:#c2ccd4;margin:12px 0 0}
+  .fig-sent b{color:#fff;font-weight:600}
+  .fig-roi{display:inline-flex;align-items:baseline;gap:7px;margin-top:16px;padding:8px 14px;border-radius:100px;background:rgba(57,255,20,.12);border:1px solid rgba(57,255,20,.28);white-space:nowrap}
+  .fig-roi i{font-style:normal;font-size:10.5px;letter-spacing:1.4px;font-weight:700;color:var(--acc-pale);font-family:'Inter Tight',sans-serif}
+  .fig-roi b{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:19px;color:var(--acc);letter-spacing:-.3px}
+
+  /* ---------- chart ---------- */
+  .chart-card{margin-top:16px;padding:18px 14px 12px}
+  .seg-mini{flex-shrink:0;padding:3px;border-radius:10px}
+  .seg-mini button{padding:7px 11px;font-size:11.5px;min-height:32px;flex:0 0 auto;border-radius:7px}
+  .chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 4px 14px;flex-wrap:wrap}
+  .chart-title{font-weight:700;font-size:16px}
+  .chart-sub{font-size:12px;color:var(--dim2);margin:4px 0 0}
+  .chart-box{position:relative;height:190px;touch-action:pan-y}
+  .chart-box svg{display:block;width:100%;height:100%;overflow:visible}
+  .chart-x{display:flex;justify-content:space-between;padding:8px 4px 0;font-family:var(--mono);font-size:10px;color:var(--dim2);letter-spacing:.2px}
+  .tip{position:absolute;pointer-events:none;transform:translate(-50%,-118%);background:rgba(9,13,18,.94);border:1px solid rgba(57,255,20,.3);border-radius:10px;padding:8px 11px;white-space:nowrap;opacity:0;transition:opacity .12s ease;box-shadow:0 14px 34px -12px rgba(0,0,0,.9);z-index:3}
+  .tip u{display:block;text-decoration:none;font-family:var(--mono);font-size:10px;color:var(--dim2);letter-spacing:.4px}
+  .tip b{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:14.5px;color:#fff}
+
+  /* ---------- metric strip ---------- */
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .metric{padding:15px 14px;border-radius:15px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+  .metric u{display:block;text-decoration:none;font-size:10px;letter-spacing:1.3px;font-weight:700;color:var(--dim2);font-family:'Inter Tight',sans-serif}
+  .metric b{display:block;font-family:'Inter Tight',sans-serif;font-weight:800;font-size:23px;letter-spacing:-.6px;margin-top:9px;line-height:1}
+  .metric i{display:block;font-style:normal;font-size:11.5px;color:var(--dim2);margin-top:6px}
+
+  /* ---------- ledger ---------- */
+  .sec-head{margin:34px 0 14px}
+  .sec-head h2{font-weight:800;font-size:24px;letter-spacing:-.5px;margin:12px 0 8px}
+  .tools{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+  .seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+  .seg button{flex:1;padding:9px 6px;border-radius:9px;font-family:'Inter Tight',sans-serif;font-weight:700;font-size:12.5px;color:var(--dim);transition:background .15s ease,color .15s ease;min-height:40px}
+  .seg button[aria-pressed="true"]{background:rgba(57,255,20,.14);color:var(--acc);box-shadow:inset 0 0 0 1px rgba(57,255,20,.3)}
+  .seg button i{font-style:normal;opacity:.55;font-size:11px;margin-left:4px}
+  .count{font-family:var(--mono);font-size:11px;color:var(--dim2);letter-spacing:.3px;padding-left:2px}
+
+  .rows{display:flex;flex-direction:column;gap:8px}
+  .row{border-radius:15px;background:var(--card);border:1px solid var(--line);overflow:hidden;animation:pgIn .3s ease both}
+  .row-main{display:grid;grid-template-columns:1fr auto;grid-template-areas:"meta meta" "id num" "foot foot";gap:8px 12px;align-items:center;padding:14px}
+  .row-meta{grid-area:meta}
+  .row-id{grid-area:id}
+  .row-num{grid-area:num}
+  .row-foot{grid-area:foot}
+  .row-id{min-width:0}
+  .row-meta{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--dim2);letter-spacing:.3px}
+  .row-meta s{text-decoration:none;color:rgba(255,255,255,.2)}
+  .row-dog{font-family:'Inter Tight',sans-serif;font-weight:700;font-size:16.5px;margin-top:5px;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row-num{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .res{display:inline-flex;align-items:center;gap:6px;font-family:'Inter Tight',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.3px;padding:5px 10px;border-radius:9px;white-space:nowrap}
+  .res.pos{color:var(--acc);background:rgba(57,255,20,.1);box-shadow:inset 0 0 0 1px rgba(57,255,20,.25)}
+  .res.neg{color:var(--neg);background:rgba(255,107,94,.09);box-shadow:inset 0 0 0 1px rgba(255,107,94,.25)}
+  .res svg{display:block;flex-shrink:0}
+  .res u{text-decoration:none;font-size:10px;font-weight:700;letter-spacing:1px;opacity:.7}
+  .row-cuota{font-family:var(--mono);font-size:11px;color:var(--dim2)}
+  .row-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line-soft);margin:2px -14px -14px;padding:10px 14px}
+  .row-toggle{display:inline-flex;align-items:center;gap:7px;font-family:'Inter Tight',sans-serif;font-weight:600;font-size:12px;color:var(--acc-soft);min-height:34px}
+  .row-toggle svg{transition:transform .2s ease}
+  .row[data-open="true"] .row-toggle svg{transform:rotate(180deg)}
+  .row-msg{display:none;padding:0 14px 14px}
+  .row[data-open="true"] .row-msg{display:block;animation:pgIn .2s ease both}
+  .row-msg pre{margin:0;padding:12px 13px;border-radius:12px;background:rgba(0,0,0,.32);border:1px solid var(--line-soft);border-left:2px solid rgba(57,255,20,.45);font-family:var(--mono);font-size:12px;line-height:1.6;color:#c2ccd4;white-space:pre-wrap;word-break:break-word}
+  .row-msg u{display:block;text-decoration:none;font-size:9.5px;letter-spacing:1.4px;font-weight:700;color:var(--dim2);font-family:'Inter Tight',sans-serif;margin-bottom:8px}
+
+  .more{display:flex;justify-content:center;margin-top:14px}
+  .more button{padding:13px 22px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.025);font-family:'Inter Tight',sans-serif;font-weight:700;font-size:13.5px;color:#fff;transition:border-color .18s ease,background .18s ease;min-height:46px}
+  .more button:hover{border-color:rgba(57,255,20,.5);background:rgba(57,255,20,.06)}
+
+  /* ---------- CTA + footer ---------- */
+  .cta{position:relative;overflow:hidden;margin-top:44px;background:linear-gradient(180deg,#0a0e13,#0c1219);border-top:1px solid var(--line-soft)}
+  .cta-in{position:relative;max-width:760px;margin:0 auto;padding:52px 20px 56px;text-align:center}
+  .cta h2{font-weight:800;font-size:27px;line-height:1.12;letter-spacing:-.7px;margin:0 0 12px}
+  .cta h2 em{font-style:normal;color:var(--acc)}
+  .cta p{font-size:14.5px;color:var(--dim);margin:0 0 24px;line-height:1.6}
+  .foot{background:var(--bg2);border-top:1px solid var(--line-soft)}
+  .foot-in{max-width:1180px;margin:0 auto;padding:22px 18px 30px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
+  .foot b{font-family:'Inter Tight',sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px}
+  .foot p{font-size:11.5px;color:var(--dim2);margin:0;line-height:1.6}
+
+  /* ---------- states ---------- */
+  .state{max-width:560px;margin:0 auto;padding:34px 22px 40px;text-align:center}
+  .state-icon{width:62px;height:62px;border-radius:17px;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;background:rgba(57,255,20,.1);border:1px solid rgba(57,255,20,.25);color:var(--acc)}
+  .state-icon.err{background:rgba(255,107,94,.09);border-color:rgba(255,107,94,.28);color:var(--neg)}
+  .state h2{font-weight:800;font-size:24px;letter-spacing:-.5px;margin:0 0 12px;line-height:1.15}
+  .state p{font-size:14.5px;line-height:1.65;color:var(--dim);margin:0 auto 22px;max-width:420px}
+  .state code{font-family:var(--mono);font-size:11.5px;color:var(--dim2);display:block;margin:0 auto 22px;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.3);border:1px solid var(--line-soft);max-width:100%;overflow-wrap:break-word}
+  .skel{border-radius:18px;background:rgba(255,255,255,.04);animation:pgSkel 1.4s ease-in-out infinite}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(7,18,10,.25);border-top-color:#07120a;animation:pgSpin .7s linear infinite}
+  .hidden{display:none !important}
+
+  /* ---------- desktop ---------- */
+  @media (min-width:820px){
+    .wrap{padding:0 24px}
+    .nav-in{padding:14px 24px}
+    .logo-mark{width:46px;height:46px;font-size:15px}
+    .logo-txt b{font-size:16px}
+    .logo-txt span{font-size:11px;letter-spacing:2px}
+    .btn-sm{font-size:14px;padding:10px 18px}
+    .btn-lg{width:auto;font-size:19px;padding:19px 40px;border-radius:12px}
+    .pill span{font-size:12px;letter-spacing:1.6px}
+    .hero{padding:52px 0 10px}
+    .claim{font-size:44px;letter-spacing:-1.3px;max-width:15ch;margin:20px 0 18px}
+    .lede{font-size:17px;max-width:44ch}
+    .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:48px;align-items:center}
+    .figure{margin-top:0;padding:34px 32px 30px;border-radius:22px}
+    .fig-num{font-size:64px;letter-spacing:-2.6px;margin-top:16px}
+    .fig-num .cur{font-size:34px}
+    .fig-sent{font-size:16px;margin-top:16px}
+    .chart-card{margin-top:26px;padding:24px 22px 16px}
+    .chart-title{font-size:19px}
+    .chart-box{height:280px}
+    .chart-x{font-size:11px}
+    .metrics{grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+    .metric{padding:20px 18px}
+    .metric b{font-size:29px;margin-top:12px}
+    .metric u{font-size:10.5px}
+    .sec-head{margin:56px 0 18px;display:flex;align-items:flex-end;justify-content:space-between;gap:28px}
+    .sec-head h2{font-size:34px;letter-spacing:-.9px}
+    .sec-head .lede{margin-top:2px}
+    .tools{flex-direction:row;align-items:center;justify-content:space-between}
+    .seg{gap:6px}
+    .seg button{padding:9px 18px;font-size:13px;flex:0 0 auto}
+    .row-main{grid-template-columns:112px minmax(0,1fr) 150px 76px 128px auto;grid-template-areas:"meta id track cuota num foot";gap:20px;padding:16px 20px;align-items:center}
+    .row-track{grid-area:track}
+    .row-cuota.row-track-desk{grid-area:cuota}
+    .row-meta{font-size:11.5px;flex-direction:column;align-items:flex-start;gap:4px}
+    .row-dog{margin-top:0;font-size:17px}
+    .row-track{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .row-num{align-items:flex-end}
+    .row-foot{border:0;margin:0;padding:0;justify-content:flex-end}
+    .row-toggle{white-space:nowrap}
+    .row-msg{padding:0 20px 16px 132px}
+    .cta{margin-top:80px}
+    .cta-in{padding:84px 24px 88px}
+    .cta h2{font-size:42px;letter-spacing:-1.4px}
+    .cta p{font-size:16.5px;margin-bottom:30px}
+    .foot-in{flex-direction:row;justify-content:space-between;padding:30px 24px;text-align:left}
+    .state{padding:70px 24px 80px;max-width:620px}
+    .state h2{font-size:34px;letter-spacing:-.9px}
+    .state p{font-size:16.5px}
+  }
+  @media (min-width:820px){
+    .row-hide-desk{display:none}
+  }
+  @media (max-width:819px){
+    .row-track-desk{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-in">
+    <div class="logo">
+      <div class="logo-mark">PG</div>
+      <div class="logo-txt">
+        <b>PREMIER GALGOS</b>
+        <span>TRACK RECORD PÚBLICO</span>
       </div>
-
-      <div id="estadoVacio" class="estado-especial" hidden>
-        <span class="estado-icono" aria-hidden="true">–</span>
-        <p>Todavía no hay picks resueltos y visibles. En cuanto se marque el
-          primer resultado (manual o automático), las métricas aparecerán aquí.</p>
-      </div>
-
-      <div id="estadoError" class="estado-especial estado-error" hidden>
-        <span class="estado-icono" aria-hidden="true">!</span>
-        <p>Error cargando el panel: <span id="textoError"></span></p>
-      </div>
-
-      <main id="contenido" hidden>
-        <h2 class="solo-lectores">Resumen de resultados</h2>
-
-        <section class="panel-hero" aria-labelledby="etiquetaHero">
-          <div class="hero-cabecera">
-            <span class="hero-etiqueta" id="etiquetaHero">Ganancia neta</span>
-            <div class="hero-valor" id="valUnidadesNetas">—</div>
-          </div>
-          <div class="hero-grafico"><div id="grafico"></div></div>
-        </section>
-
-        <section class="tarjetas-secundarias" aria-label="Métricas adicionales">
-          <div class="tarjeta"><span class="etiqueta">Unidades ganadas</span><div class="valor" id="valUnidades">—</div></div>
-          <div class="tarjeta"><span class="etiqueta">Total jugado</span><div class="valor neutro" id="valStakeTotal">—</div></div>
-          <div class="tarjeta"><span class="etiqueta">ROI / Yield</span><div class="valor" id="valRoi">—</div></div>
-          <div class="tarjeta"><span class="etiqueta">% de aciertos</span><div class="valor neutro" id="valAciertos">—</div></div>
-        </section>
-
-        <section id="seccionHistorico" hidden>
-          <div class="historico-cabecera">
-            <h2>Historial de picks</h2>
-            <span class="historico-contador" id="contadorPicks"></span>
-          </div>
-
-          <div class="historico-cards" id="historicoCards"></div>
-
-          <div class="historico-tabla">
-            <div class="tabla-envoltorio">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fecha</th><th>Canódromo</th><th>Galgo</th><th>Cuota</th>
-                    <th class="col-unidades">Unidades</th><th class="col-mensaje">Mensaje</th>
-                  </tr>
-                </thead>
-                <tbody id="cuerpoHistorico"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      </main>
     </div>
+    <a href="https://t.me/+VtCh-VrBHPpiMzg0" target="_blank" rel="noopener" class="btn btn-sm">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M21.94 4.27a1.2 1.2 0 0 0-1.27-.19L3.4 11.07c-.92.37-.9 1.69.04 2.02l4.3 1.5 1.66 5.06c.27.82 1.32 1.04 1.9.4l2.3-2.52 4.27 3.14c.62.46 1.51.13 1.69-.62l3.06-13.6c.13-.57-.08-1.13-.43-1.18z"></path></svg>
+      Unirme
+    </a>
+  </div>
+</header>
 
-    <script src="https://www.gstatic.com/charts/loader.js"></script>
-    <script>
-      google.charts.load('current', { packages: ['corechart'] });
+<!-- ============ CARGANDO ============ -->
+<div id="vLoad">
+  <section class="hero">
+    <div class="glow" style="top:-160px;right:-120px;width:520px;height:520px;background:radial-gradient(circle,rgba(57,255,20,.16) 0%,rgba(57,255,20,0) 65%);animation:pgGlow 6s ease-in-out infinite"></div>
+    <div class="wrap">
+      <div class="pill"><span class="dot"></span><span>CARGANDO REGISTRO</span></div>
+      <div class="skel" style="height:150px;margin-top:22px;border-radius:20px"></div>
+      <div class="skel" style="height:210px;margin-top:16px"></div>
+      <div class="metrics">
+        <div class="skel" style="height:86px;border-radius:15px"></div>
+        <div class="skel" style="height:86px;border-radius:15px"></div>
+        <div class="skel" style="height:86px;border-radius:15px"></div>
+        <div class="skel" style="height:86px;border-radius:15px"></div>
+      </div>
+    </div>
+  </section>
+</div>
 
-      // Guarda la evolución pintada la última vez para poder re-dibujar el
-      // gráfico si el usuario gira el móvil o redimensiona la ventana -
-      // Google Charts no se reajusta solo, y sin esto el gráfico se queda
-      // con las proporciones del ancho antiguo tras un giro de pantalla.
-      var ultimaEvolucion = null;
-      var graficoListo = false;
-      var timerRedimension = null;
+<!-- ============ ERROR ============ -->
+<div id="vError" class="hidden">
+  <section class="hero">
+    <div class="glow" style="top:-180px;right:-140px;width:520px;height:520px;background:radial-gradient(circle,rgba(255,107,94,.14) 0%,rgba(255,107,94,0) 65%)"></div>
+    <div class="wrap">
+      <div class="state">
+        <div class="state-icon err">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 8v5"></path><path d="M12 16.5h.01"></path><path d="M10.3 3.9 2.4 17.5A1.8 1.8 0 0 0 4 20.2h16a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0z"></path></svg>
+        </div>
+        <h2>No hemos podido leer el registro</h2>
+        <p>Los datos viven en nuestra hoja de resultados y ahora mismo no responde. El historial no se ha perdido: vuelve a intentarlo en unos segundos.</p>
+        <code id="errMsg">Error</code>
+        <button class="btn btn-lg" id="btnRetry" style="border:0">
+          <span class="spin hidden" id="retrySpin"></span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" id="retryIcon" style="display:block"><path d="M21 12a9 9 0 1 1-3.2-6.9"></path><path d="M21 4v5h-5"></path></svg>
+          Reintentar
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
 
-      google.script.run
-        .withSuccessHandler(pintarPanel)
-        .withFailureHandler(mostrarError)
-        .getMetricasPanel();
+<!-- ============ SIN DATOS ============ -->
+<div id="vEmpty" class="hidden">
+  <section class="hero">
+    <div class="glow" style="top:-160px;right:-120px;width:520px;height:520px;background:radial-gradient(circle,rgba(57,255,20,.16) 0%,rgba(57,255,20,0) 65%);animation:pgGlow 6s ease-in-out infinite"></div>
+    <div class="wrap">
+      <div class="state">
+        <div class="state-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5.5-6 4 4L21 6"></path><path d="M21 6h-5"></path><path d="M21 6v5"></path></svg>
+        </div>
+        <h2>El registro arranca con la primera carrera resuelta</h2>
+        <p>Todavía no hay ninguna apuesta cerrada. En cuanto se resuelva el primer pick aparecerá aquí con su cuota, su resultado y el mensaje original del análisis, sin retoques.</p>
+        <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+          <a href="https://t.me/+VtCh-VrBHPpiMzg0" target="_blank" rel="noopener" class="btn btn-lg">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M21.94 4.27a1.2 1.2 0 0 0-1.27-.19L3.4 11.07c-.92.37-.9 1.69.04 2.02l4.3 1.5 1.66 5.06c.27.82 1.32 1.04 1.9.4l2.3-2.52 4.27 3.14c.62.46 1.51.13 1.69-.62l3.06-13.6c.13-.57-.08-1.13-.43-1.18z"></path></svg>
+            Seguir los análisis en Telegram
+          </a>
+          <p style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim2);margin:0"><span class="dot" style="animation:none;box-shadow:none;width:6px;height:6px"></span>Esta página se actualiza sola en cada resultado</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 
-      // Los 4 estados (carga/vacío/error/contenido) son mutuamente
-      // excluyentes, pero antes nada los ocultaba entre sí - si por lo que
-      // sea el navegador llega a ejecutar el script más de una vez (visto
-      // en real en móvil: parpadeo de red al establecer el puente de
-      // google.script.run con el iframe de Apps Script), los avisos se
-      // quedaban apilados unos encima de otros en vez de sustituirse.
-      // Se llama al principio de pintarPanel/mostrarError, antes de
-      // decidir cuál mostrar - así el resultado final nunca depende de
-      // cuántas veces se haya llamado antes, solo de la última.
-      function ocultarTodosLosEstados_() {
-        document.getElementById('estadoCarga').hidden = true;
-        document.getElementById('estadoVacio').hidden = true;
-        document.getElementById('estadoError').hidden = true;
-        var contenido = document.getElementById('contenido');
-        contenido.hidden = true;
-        contenido.classList.remove('visible');
-      }
+<!-- ============ CON DATOS ============ -->
+<div id="vData" class="hidden">
+  <section class="hero">
+    <div class="glow" style="top:-190px;right:-140px;width:620px;height:620px;background:radial-gradient(circle,rgba(57,255,20,.18) 0%,rgba(57,255,20,0) 65%);animation:pgGlow 6s ease-in-out infinite"></div>
+    <div class="glow" style="bottom:-240px;left:-180px;width:540px;height:540px;background:radial-gradient(circle,rgba(45,80,120,.26) 0%,rgba(45,80,120,0) 65%)"></div>
+    <div class="wrap" style="position:relative">
+      <div class="hero-grid">
+        <div>
+          <div class="pill"><span class="dot"></span><span id="pillTxt" style="white-space:nowrap">REGISTRO PÚBLICO · EN ABIERTO</span></div>
+          <h1 class="claim">Cada pick publicado. Cada resultado, <em>en abierto</em>.</h1>
+          <p class="lede">Aquí no hay capturas seleccionadas. Está el histórico completo de apuestas resueltas, con el mensaje original que se publicó en Telegram antes de que la carrera empezara.</p>
+        </div>
 
-      function pintarPanel(metricas) {
-        ocultarTodosLosEstados_();
+        <div class="figure">
+          <div class="glow" style="top:-110px;right:-70px;width:320px;height:320px;background:radial-gradient(circle,rgba(57,255,20,.16),transparent 65%)"></div>
+          <div style="position:relative">
+            <div class="fig-label"><span class="dot"></span><span>BENEFICIO NETO ACUMULADO</span></div>
+            <div class="fig-num" id="figNum">—</div>
+            <p class="fig-sent" id="figSent"></p>
+            <div class="fig-roi"><i>ROI</i><b id="figRoi">—</b></div>
+          </div>
+        </div>
+      </div>
 
-        if (!metricas || !metricas.hayDatos) {
-          document.getElementById('estadoVacio').hidden = false;
-          return;
-        }
+      <div class="card chart-card">
+        <div class="chart-head">
+          <div>
+            <h3 class="chart-title">Curva de beneficio</h3>
+            <p class="chart-sub" id="chartSub"></p>
+          </div>
+          <div class="seg seg-mini" id="segGran">
+            <button type="button" data-g="dia" aria-pressed="true">Día</button>
+            <button type="button" data-g="sem" aria-pressed="false">Semana</button>
+            <button type="button" data-g="mes" aria-pressed="false">Mes</button>
+          </div>
+        </div>
+        <div class="chart-box" id="chartBox">
+          <svg id="chartSvg" preserveAspectRatio="none"></svg>
+          <div class="tip" id="chartTip"><u id="tipDate"></u><b id="tipVal"></b></div>
+        </div>
+        <div class="chart-x"><span id="xFirst"></span><span id="xLast"></span></div>
+      </div>
 
-        setValor('valUnidadesNetas', formatearEurConSigno(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0, true, true);
-        setValor('valUnidades', formatearUnidades(metricas.unidadesNetas), metricas.unidadesNetas >= 0, true, false);
-        setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true, false, false);
-        setValor('valRoi', formatearPctConSigno(metricas.roiPct), metricas.roiPct >= 0, true, false);
-        setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true, false, false);
+      <div class="metrics">
+        <div class="metric"><u>UNIDADES NETAS</u><b id="mUnits">—</b><i>ganancia en unidades</i></div>
+        <div class="metric"><u>ACIERTOS</u><b id="mHit">—</b><i id="mHitSub">picks ganados</i></div>
+        <div class="metric"><u>VOLUMEN APOSTADO</u><b id="mStake">—</b><i>stake total acumulado</i></div>
+        <div class="metric"><u>PICKS RESUELTOS</u><b id="mPicks">—</b><i id="mPicksSub">carreras cerradas</i></div>
+      </div>
 
-        var contenido = document.getElementById('contenido');
-        contenido.hidden = false;
-        // Doble rAF: hidden->visible necesita al menos un frame pintado con
-        // opacity:0 antes de añadir la clase que dispara la transición, si
-        // no el navegador colapsa los dos estados y no se ve la entrada.
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () { contenido.classList.add('visible'); });
-        });
+      <div class="sec-head">
+        <div>
+          <span class="eyebrow">EL REGISTRO COMPLETO</span>
+          <h2>Pick a pick, sin filtrar</h2>
+          <p class="lede">Despliega cualquier fila para leer el mensaje original tal y como se envió.</p>
+        </div>
+      </div>
 
-        ultimaEvolucion = metricas.evolucion || [];
-        google.charts.setOnLoadCallback(function () {
-          graficoListo = true;
-          pintarGrafico(ultimaEvolucion);
-        });
+      <div class="tools">
+        <div class="seg" id="seg">
+          <button type="button" data-f="all" aria-pressed="true">Todos <i id="cAll"></i></button>
+          <button type="button" data-f="win" aria-pressed="false">Ganados <i id="cWin"></i></button>
+          <button type="button" data-f="loss" aria-pressed="false">Perdidos <i id="cLoss"></i></button>
+        </div>
+        <div class="count" id="rowCount"></div>
+      </div>
 
-        pintarHistorico(metricas.historicoPicks || []);
-      }
+      <div class="rows" id="rows"></div>
+      <div class="more" id="more"><button type="button" id="btnMore">Ver más picks</button></div>
+    </div>
+  </section>
 
-      // positivo controla el color; conSigno añade además una flechita
-      // (▲/▼) delante del número - el color nunca es la única pista de si
-      // algo es bueno o malo (regla de accesibilidad de la skill dataviz).
-      // signoEnTexto añade también un "+"/"-" textual (además del glyph de
-      // la flecha) en las cifras que pueden ser negativas, para que un
-      // lector de pantalla que no verbalice bien ▲/▼ no se quede sin la
-      // señal - "Total jugado" y "% de aciertos" no la llevan porque
-      // nunca son negativos, no hace falta.
-      function setValor(id, texto, positivo, conSigno, esHero) {
-        var el = document.getElementById(id);
-        el.textContent = '';
-        el.className = (esHero ? 'hero-valor' : 'valor') + ' ' + (conSigno ? (positivo ? 'positivo' : 'negativo') : 'neutro');
-        if (conSigno) {
-          var signo = document.createElement('span');
-          signo.className = 'signo';
-          signo.textContent = positivo ? '▲' : '▼';
-          el.appendChild(signo);
-        }
-        el.appendChild(document.createTextNode(texto));
-      }
+  <section class="cta" id="unirme">
+    <div class="glow" style="inset:0;background:radial-gradient(circle at 50% 130%,rgba(57,255,20,.16),transparent 55%);filter:none;position:absolute"></div>
+    <div class="cta-in">
+      <h2>Los números de arriba se publican <em>antes</em> de cada carrera.</h2>
+      <p>Los picks se envían en Telegram con su cuota y su stake. Lo que ves en esta página es lo que pasó después.</p>
+      <a href="https://t.me/+VtCh-VrBHPpiMzg0" target="_blank" rel="noopener" class="btn btn-lg" style="display:inline-flex">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M21.94 4.27a1.2 1.2 0 0 0-1.27-.19L3.4 11.07c-.92.37-.9 1.69.04 2.02l4.3 1.5 1.66 5.06c.27.82 1.32 1.04 1.9.4l2.3-2.52 4.27 3.14c.62.46 1.51.13 1.69-.62l3.06-13.6c.13-.57-.08-1.13-.43-1.18z"></path></svg>
+        Únete al grupo de Premier Galgos
+      </a>
+    </div>
+  </section>
+</div>
 
-      function formatearEur(valor) {
-        return valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-      }
+<footer class="foot">
+  <div class="foot-in">
+    <b>PREMIER GALGOS</b>
+    <p>Datos actualizados automáticamente desde el registro de picks. Juega con responsabilidad · 18+</p>
+  </div>
+</footer>
 
-      // A diferencia de formatearEur, antepone "+" cuando el valor es
-      // positivo (el signo "-" de un negativo ya lo pone toLocaleString
-      // solo) - mismo criterio que formatearUnidades, para que la cifra
-      // hero (que sí puede ser negativa) nunca dependa solo del color/
-      // flecha para decir "esto es una pérdida".
-      function formatearEurConSigno(valor) {
-        var signo = valor > 0 ? '+' : '';
-        return signo + formatearEur(valor);
-      }
+<script>
+(function(){
+  "use strict";
+  var PAGE = 20;
+  var st = { data:null, filter:"all", shown:PAGE, pts:[], gran:"dia" };
+  var MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  function parseF(s){ var m=String(s||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
+  function granKey(s){
+    var d=parseF(s); if(!d) return s;
+    if(st.gran==="mes") return d.getFullYear()+"-"+d.getMonth();
+    var t=new Date(d); t.setDate(t.getDate()-((t.getDay()+6)%7));
+    return t.getFullYear()+"-"+t.getMonth()+"-"+t.getDate();
+  }
+  function granLabel(s){
+    var d=parseF(s); if(!d) return s;
+    if(st.gran==="mes") return MESES[d.getMonth()]+" "+d.getFullYear();
+    var t=new Date(d); t.setDate(t.getDate()-((t.getDay()+6)%7));
+    return ("0"+t.getDate()).slice(-2)+"/"+("0"+(t.getMonth()+1)).slice(-2);
+  }
+  function serie(){
+    var ev=(st.data&&st.data.evolucion)||[];
+    if(st.gran==="dia"||ev.length<3) return ev;
+    var out=[],k=null;
+    ev.forEach(function(p){
+      var kk=granKey(p.fechaLabel);
+      if(kk!==k){ out.push({fechaLabel:granLabel(p.fechaLabel),acumuladoEur:p.acumuladoEur}); k=kk; }
+      else out[out.length-1].acumuladoEur=p.acumuladoEur;
+    });
+    return out;
+  }
 
-      function formatearUnidades(valor) {
-        var signo = valor > 0 ? '+' : '';
-        return signo + valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u';
-      }
+  /* ---------- formato ---------- */
+  function nf(v,d){ return (v==null||isNaN(v)) ? "—" : Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function eur(v,d){ return nf(v, d==null?2:d)+" €"; }
+  function sgn(v){ return v>0?"+":(v<0?"−":""); }
+  function signedEur(v){ return sgn(v)+eur(Math.abs(v)); }
+  function pct(v){ return sgn(v)+nf(Math.abs(v),1)+" %"; }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function show(id){ ["vLoad","vData","vEmpty","vError"].forEach(function(k){ document.getElementById(k).classList.toggle("hidden", k!==id); }); }
+  var $ = function(id){ return document.getElementById(id); };
 
-      function formatearPctConSigno(valor) {
-        var signo = valor > 0 ? '+' : '';
-        return signo + valor.toFixed(1) + ' %';
-      }
+  /* ---------- gráfico SVG ---------- */
+  var ARROW_UP='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 12H4z"/></svg>';
+  var ARROW_DN='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20L4 8h16z"/></svg>';
 
-      function pintarGrafico(evolucion) {
-        if (!graficoListo || !evolucion || !evolucion.length) return;
+  function drawChart(){
+    var box=$("chartBox"), svg=$("chartSvg"), ev=serie();
+    if(!box||ev.length===0) return;
+    var w=box.clientWidth||320, h=box.clientHeight||190;
+    svg.setAttribute("viewBox","0 0 "+w+" "+h);
+    var pl=6, pr=8, pt=16, pb=10;
+    var vals=ev.map(function(p){ return Number(p.acumuladoEur)||0; });
+    var mn=Math.min.apply(null,vals.concat([0])), mx=Math.max.apply(null,vals.concat([0]));
+    if(mx===mn){ mx=mn+1; }
+    var pad=(mx-mn)*0.12; mx+=pad; mn-=pad*0.5;
+    var iw=w-pl-pr, ih=h-pt-pb, n=ev.length;
+    var X=function(i){ return n===1?pl+iw/2:pl+i*iw/(n-1); };
+    var Y=function(v){ return pt+(mx-v)/(mx-mn)*ih; };
+    st.pts=ev.map(function(p,i){ return {x:X(i), y:Y(Number(p.acumuladoEur)||0), v:Number(p.acumuladoEur)||0, d:p.fechaLabel}; });
 
-        var datos = new google.visualization.DataTable();
-        datos.addColumn('string', 'Fecha');
-        datos.addColumn('number', 'Ganancia acumulada (€)');
-        evolucion.forEach(function (p) { datos.addRow([p.fechaLabel, p.acumuladoEur]); });
+    var line="", area="";
+    st.pts.forEach(function(p,i){ line += (i?" L ":"M ")+p.x.toFixed(1)+" "+p.y.toFixed(1); });
+    area = line+" L "+st.pts[n-1].x.toFixed(1)+" "+(h-pb).toFixed(1)+" L "+st.pts[0].x.toFixed(1)+" "+(h-pb).toFixed(1)+" Z";
+    var zeroY=Y(0), last=st.pts[n-1];
+    var grid="";
+    [0.25,0.5,0.75].forEach(function(f){ var y=pt+ih*f; grid+='<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,.05)" stroke-width="1"/>'; });
 
-        var grafico = new google.visualization.LineChart(document.getElementById('grafico'));
-        grafico.draw(datos, {
-          backgroundColor: 'transparent',
-          colors: ['#3987e5'],
-          lineWidth: 2,
-          pointSize: 0,
-          curveType: 'none',
-          legend: { position: 'none' },
-          focusTarget: 'category',
-          tooltip: { textStyle: { fontSize: 12 } },
-          hAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: 'transparent' }, baselineColor: '#2c2c2a' },
-          vAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: '#2c2c2a', count: 4 }, baseline: 0, baselineColor: '#2c2c2a' },
-          chartArea: { left: 46, right: 12, top: 12, bottom: 28 },
-        });
-      }
+    svg.innerHTML =
+      '<defs><linearGradient id="pgFill" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="#39FF14" stop-opacity=".28"/><stop offset="100%" stop-color="#39FF14" stop-opacity="0"/></linearGradient>'+
+      '<filter id="pgBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="4"/></filter></defs>'+
+      grid+
+      (zeroY>pt&&zeroY<h-pb ? '<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+zeroY.toFixed(1)+'" y2="'+zeroY.toFixed(1)+'" stroke="rgba(255,255,255,.22)" stroke-width="1" stroke-dasharray="4 4"/>' : '')+
+      '<path d="'+area+'" fill="url(#pgFill)"/>'+
+      '<path d="'+line+'" fill="none" stroke="#39FF14" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity=".5" filter="url(#pgBlur)"/>'+
+      '<path d="'+line+'" fill="none" stroke="#39FF14" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
+      '<line id="pgCursor" x1="0" x2="0" y1="'+pt+'" y2="'+(h-pb)+'" stroke="rgba(57,255,20,.45)" stroke-width="1" opacity="0"/>'+
+      '<circle id="pgHover" r="5" fill="#0a0e13" stroke="#39FF14" stroke-width="2.5" opacity="0"/>'+
+      '<circle cx="'+last.x.toFixed(1)+'" cy="'+last.y.toFixed(1)+'" r="9" fill="#39FF14" opacity=".22" filter="url(#pgBlur)"/>'+
+      '<circle cx="'+last.x.toFixed(1)+'" cy="'+last.y.toFixed(1)+'" r="4.5" fill="#39FF14"/>';
 
-      window.addEventListener('resize', function () {
-        clearTimeout(timerRedimension);
-        timerRedimension = setTimeout(function () { pintarGrafico(ultimaEvolucion); }, 200);
-      });
+    $("xFirst").textContent = ev[0].fechaLabel||"";
+    $("xLast").textContent  = ev[n-1].fechaLabel||"";
+    var jorn=((st.data&&st.data.evolucion)||[]).length, np=((st.data&&st.data.historicoPicks)||[]).length;
+    var unidad = st.gran==="mes" ? " meses" : (st.gran==="sem" ? " semanas" : " jornadas");
+    $("chartSub").textContent = st.gran==="dia" ? (jorn+" jornadas · "+np+" picks") : (n+unidad+" · "+jorn+" jornadas · "+np+" picks");
+  }
 
-      function pintarHistorico(picks) {
-        var seccion = document.getElementById('seccionHistorico');
-        if (!picks.length) {
-          seccion.hidden = true;
-          return;
-        }
-        seccion.hidden = false;
+  function bindChart(){
+    var box=$("chartBox"), tip=$("chartTip");
+    if(!box) return;
+    function move(e){
+      if(!st.pts.length) return;
+      var r=box.getBoundingClientRect(), x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+      var best=0, bd=1e9;
+      st.pts.forEach(function(p,i){ var d=Math.abs(p.x-x); if(d<bd){ bd=d; best=i; } });
+      var p=st.pts[best], c=document.getElementById("pgHover"), cur=document.getElementById("pgCursor");
+      if(c){ c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("opacity","1"); }
+      if(cur){ cur.setAttribute("x1",p.x); cur.setAttribute("x2",p.x); cur.setAttribute("opacity","1"); }
+      tip.style.left=p.x+"px"; tip.style.top=p.y+"px"; tip.style.opacity="1";
+      $("tipDate").textContent=p.d; $("tipVal").textContent=signedEur(p.v);
+    }
+    function out(){
+      tip.style.opacity="0";
+      var c=document.getElementById("pgHover"), cur=document.getElementById("pgCursor");
+      if(c) c.setAttribute("opacity","0");
+      if(cur) cur.setAttribute("opacity","0");
+    }
+    box.addEventListener("mousemove",move);
+    box.addEventListener("mouseleave",out);
+    box.addEventListener("touchstart",move,{passive:true});
+    box.addEventListener("touchmove",move,{passive:true});
+    box.addEventListener("touchend",out);
+  }
 
-        var contador = document.getElementById('contadorPicks');
-        contador.textContent = picks.length === 1 ? '1 pick' : (picks.length + ' picks');
+  /* ---------- historial ---------- */
+  function filtered(){
+    var h=(st.data&&st.data.historicoPicks)||[];
+    if(st.filter==="win")  return h.filter(function(p){ return Number(p.unidades)>0; });
+    if(st.filter==="loss") return h.filter(function(p){ return Number(p.unidades)<=0; });
+    return h;
+  }
 
-        // Los bloques de mensaje se recortan a N líneas por CSS
-        // (line-clamp) y solo se muestra el botón "ver más" si el texto
-        // realmente desborda - eso solo se puede medir una vez que el
-        // párrafo ya tiene layout real, así que se comprueban todos juntos
-        // en un único rAF tras insertar ambas vistas (evita ir midiendo
-        // fila a fila, que fuerza reflow en cada iteración).
-        var bloquesParaComprobar = [];
+  function rowHtml(p,i){
+    var u=Number(p.unidades)||0, pos=u>0;
+    var msg=String(p.mensaje||"").trim();
+    return '<article class="row" data-open="false" style="animation-delay:'+Math.min(i*14,220)+'ms">'+
+      '<div class="row-main">'+
+        '<div class="row-meta"><span>'+esc(p.fechaLabel)+'</span><s class="row-hide-desk">·</s><span class="row-hide-desk">'+esc(p.canodromo)+'</span></div>'+
+        '<div class="row-id"><div class="row-dog">'+esc(p.galgo)+'</div><div class="row-cuota row-hide-desk">Cuota '+nf(p.cuota,2)+'</div></div>'+
+        '<div class="row-track row-track-desk">'+esc(p.canodromo)+'</div>'+
+        '<div class="row-cuota row-track-desk" style="font-size:13px;color:#fff">'+nf(p.cuota,2)+'</div>'+
+        '<div class="row-num"><span class="res '+(pos?"pos":"neg")+'">'+(pos?ARROW_UP:ARROW_DN)+sgn(u)+nf(Math.abs(u),2)+'<u>UD</u></span></div>'+
+        (msg?'<div class="row-foot"><button type="button" class="row-toggle">Mensaje original<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button></div>':'')+
+      '</div>'+
+      (msg?'<div class="row-msg"><u>PUBLICADO EN TELEGRAM</u><pre>'+esc(msg)+'</pre></div>':'')+
+    '</article>';
+  }
 
-        pintarListaTarjetas(picks, bloquesParaComprobar);
-        pintarTablaHistorico(picks, bloquesParaComprobar);
+  function renderRows(){
+    var list=filtered(), slice=list.slice(0,st.shown);
+    $("rows").innerHTML = slice.map(rowHtml).join("") ||
+      '<div class="card" style="padding:26px;text-align:center;color:var(--dim)">Sin picks en este filtro.</div>';
+    $("rowCount").textContent = "Mostrando "+slice.length+" de "+list.length+" picks";
+    $("more").classList.toggle("hidden", slice.length>=list.length);
+  }
 
-        requestAnimationFrame(function () {
-          bloquesParaComprobar.forEach(function (b) {
-            if (b.parrafo.scrollHeight > b.parrafo.clientHeight + 1) {
-              b.boton.hidden = false;
-            }
-          });
-        });
-      }
+  document.addEventListener("click",function(e){
+    var t=e.target.closest?e.target.closest(".row-toggle"):null;
+    if(t){ var row=t.closest(".row"); row.setAttribute("data-open", row.getAttribute("data-open")==="true"?"false":"true"); }
+  });
 
-      // Construye el bloque de mensaje (párrafo recortado + botón "ver
-      // más/ver menos") compartido entre la tarjeta móvil y la celda de la
-      // tabla de escritorio. El mensaje del tipster es texto libre real
-      // (puede traer cualquier cosa) - textContent siempre, nunca innerHTML.
-      function crearBloqueMensaje(mensaje, bloquesParaComprobar) {
-        var contenedor = document.createElement('div');
-        contenedor.className = 'bloque-mensaje';
+  /* ---------- pintar ---------- */
+  function pintarPanel(d){
+    if(!d){ mostrarError({message:"Respuesta vacía"}); return; }
+    st.data=d;
+    if(!d.hayDatos){ show("vEmpty"); return; }
+    var picks=d.historicoPicks||[], wins=picks.filter(function(p){ return Number(p.unidades)>0; }).length;
+    var net=Number(d.unidadesNetasEur)||0, up=net>=0;
 
-        var parrafo = document.createElement('p');
-        parrafo.className = 'mensaje-texto';
-        parrafo.textContent = mensaje || '(mensaje original no disponible)';
-        contenedor.appendChild(parrafo);
+    $("figNum").innerHTML='<span>'+sgn(net)+nf(Math.abs(net),2)+'</span><span class="cur">€</span>';
+    $("figNum").style.color = up ? "var(--acc)" : "var(--neg)";
+    $("figSent").innerHTML='Sobre un volumen de <b>'+eur(d.stakeTotalEur)+'</b> apostados en <b>'+picks.length+' carreras</b> resueltas.';
+    $("figRoi").textContent=pct(d.roiPct);
+    $("figRoi").style.color = (Number(d.roiPct)>=0) ? "var(--acc)" : "var(--neg)";
 
-        var boton = document.createElement('button');
-        boton.type = 'button';
-        boton.className = 'btn-expandir';
-        boton.textContent = 'Ver mensaje completo';
-        boton.setAttribute('aria-expanded', 'false');
-        boton.hidden = true;
-        boton.addEventListener('click', function () {
-          var expandido = parrafo.classList.toggle('expandido');
-          boton.textContent = expandido ? 'Ver menos' : 'Ver mensaje completo';
-          boton.setAttribute('aria-expanded', expandido ? 'true' : 'false');
-        });
-        contenedor.appendChild(boton);
+    $("mUnits").innerHTML=(Number(d.unidadesNetas)>=0?ARROW_UP:ARROW_DN)+' '+sgn(Number(d.unidadesNetas))+nf(Math.abs(Number(d.unidadesNetas)),2);
+    $("mUnits").style.display="flex"; $("mUnits").style.alignItems="center"; $("mUnits").style.gap="7px";
+    $("mUnits").style.color = Number(d.unidadesNetas)>=0 ? "var(--acc)" : "var(--neg)";
+    $("mHit").textContent=nf(d.pctAciertos,1)+" %";
+    $("mHitSub").textContent=wins+" de "+picks.length+" picks ganados";
+    $("mStake").textContent=eur(d.stakeTotalEur,0);
+    $("mPicks").textContent=picks.length;
 
-        bloquesParaComprobar.push({ parrafo: parrafo, boton: boton });
-        return contenedor;
-      }
+    $("mPicksSub").textContent=(d.evolucion||[]).length+" jornadas con actividad";
 
-      function pintarListaTarjetas(picks, bloquesParaComprobar) {
-        var lista = document.getElementById('historicoCards');
-        lista.replaceChildren();
+    $("cAll").textContent="("+picks.length+")";
+    $("cWin").textContent="("+wins+")";
+    $("cLoss").textContent="("+(picks.length-wins)+")";
 
-        picks.forEach(function (p) {
-          var positivo = p.unidades >= 0;
+    show("vData");
+    st.shown=PAGE; renderRows(); drawChart();
+  }
 
-          var card = document.createElement('article');
-          card.className = 'pick-card';
+  function mostrarError(err){
+    $("errMsg").textContent=(err&&(err.message||err))||"Error desconocido";
+    show("vError");
+  }
 
-          var top = document.createElement('div');
-          top.className = 'pick-card-top';
+  function cargar(){
+    show("vLoad");
+    google.script.run
+      .withSuccessHandler(pintarPanel)
+      .withFailureHandler(mostrarError)
+      .getMetricasPanel();
+  }
 
-          var fecha = document.createElement('span');
-          fecha.className = 'pick-fecha';
-          fecha.textContent = p.fechaLabel;
-          top.appendChild(fecha);
+  $("btnRetry").addEventListener("click",cargar);
+  $("btnMore").addEventListener("click",function(){ st.shown+=PAGE; renderRows(); });
+  $("segGran").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    st.gran=b.getAttribute("data-g");
+    [].forEach.call(this.querySelectorAll("button"),function(x){ x.setAttribute("aria-pressed", String(x===b)); });
+    drawChart();
+  });
+  $("seg").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    st.filter=b.getAttribute("data-f"); st.shown=PAGE;
+    [].forEach.call(this.querySelectorAll("button"),function(x){ x.setAttribute("aria-pressed", String(x===b)); });
+    renderRows();
+  });
+  var rt; window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(drawChart,120); });
+  bindChart();
 
-          var resultado = document.createElement('span');
-          resultado.className = 'pick-resultado ' + (positivo ? 'positivo' : 'negativo');
-          var flecha = document.createElement('span');
-          flecha.textContent = positivo ? '▲' : '▼';
-          resultado.appendChild(flecha);
-          resultado.appendChild(document.createTextNode(formatearUnidades(p.unidades)));
-          top.appendChild(resultado);
-
-          card.appendChild(top);
-
-          var meta = document.createElement('div');
-          meta.className = 'pick-card-meta';
-
-          var lugar = document.createElement('span');
-          lugar.className = 'pick-lugar';
-          var textoLugar = [p.canodromo, p.galgo].filter(Boolean).join(' · ');
-          lugar.textContent = textoLugar;
-          meta.appendChild(lugar);
-
-          var cuota = document.createElement('span');
-          cuota.className = 'pick-cuota';
-          cuota.textContent = 'Cuota ' + p.cuota.toFixed(2);
-          meta.appendChild(cuota);
-
-          card.appendChild(meta);
-          card.appendChild(crearBloqueMensaje(p.mensaje, bloquesParaComprobar));
-
-          lista.appendChild(card);
-        });
-      }
-
-      function pintarTablaHistorico(picks, bloquesParaComprobar) {
-        var cuerpo = document.getElementById('cuerpoHistorico');
-        cuerpo.replaceChildren();
-
-        picks.forEach(function (p) {
-          var fila = document.createElement('tr');
-
-          var celdaFecha = document.createElement('td');
-          celdaFecha.textContent = p.fechaLabel;
-          celdaFecha.className = 'celda-fecha';
-
-          var celdaCanodromo = document.createElement('td');
-          celdaCanodromo.textContent = p.canodromo || '';
-
-          var celdaGalgo = document.createElement('td');
-          celdaGalgo.textContent = p.galgo || '';
-
-          var celdaCuota = document.createElement('td');
-          celdaCuota.textContent = p.cuota.toFixed(2);
-
-          var celdaUnidades = document.createElement('td');
-          celdaUnidades.textContent = formatearUnidades(p.unidades);
-          celdaUnidades.className = 'celda-unidades ' + (p.unidades >= 0 ? 'positivo' : 'negativo');
-
-          var celdaMensaje = document.createElement('td');
-          celdaMensaje.className = 'celda-mensaje';
-          celdaMensaje.appendChild(crearBloqueMensaje(p.mensaje, bloquesParaComprobar));
-
-          fila.appendChild(celdaFecha);
-          fila.appendChild(celdaCanodromo);
-          fila.appendChild(celdaGalgo);
-          fila.appendChild(celdaCuota);
-          fila.appendChild(celdaUnidades);
-          fila.appendChild(celdaMensaje);
-          cuerpo.appendChild(fila);
-        });
-      }
-
-      function mostrarError(error) {
-        ocultarTodosLosEstados_();
-        document.getElementById('textoError').textContent = error && error.message ? error.message : String(error);
-        document.getElementById('estadoError').hidden = false;
-      }
-    </script>
-  </body>
+  cargar();
+})();
+</script>
+</body>
 </html>

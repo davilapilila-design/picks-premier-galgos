@@ -3,6 +3,52 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Panel v9: rediseño completo con Claude Design, identidad de marca de la landing, gráfico SVG propio (sin Google Charts)
+El dueño pidió delegar el rediseño visual a Claude Design (herramienta aparte, sin acceso a
+este repo) en vez de seguir iterando aquí. Se le generó un prompt autocontenido (contrato
+exacto de `getMetricasPanel()`, restricciones del sandbox de `HtmlService`, y el HTML completo
+de la landing de Premier Galgos como referencia de marca) para que investigara, decidiera el
+mejor enfoque y entregara HTML/CSS/JS final + un README con lo que hiciera falta cambiar en
+Apps Script.
+
+- **Resultado**: sustituido `src/Panel.html` entero por el entregable. Misma identidad visual
+  que la landing (fondo `#0a0e13`, verde `#39FF14`, `Inter Tight`/`Inter`, tarjetas con el mismo
+  gradiente sutil). Cambios de fondo respecto a la v8:
+  - "Registro" en vez de dashboard: cifra hero de beneficio neto con el gráfico incrustado,
+    métricas secundarias, e historial como filas desplegables con el mensaje original del
+    tipster en monoespaciada ("PUBLICADO EN TELEGRAM") - no una tabla.
+  - Gráfico de evolución reescrito en **SVG propio** (línea con halo, área en degradado,
+    tooltip, segmentado día/semana/mes) - **ya NO depende de Google Charts**, una dependencia
+    externa menos en el sandbox.
+  - Paginado en cliente de 20 en 20 (el histórico puede tener cientos de filas) + filtro
+    Todos/Ganados/Perdidos.
+  - Estados de carga/vacío/error rehechos con la misma identidad, uno de ellos con botón
+    "Reintentar" que repite la llamada a `getMetricasPanel()`.
+- **Cero cambios en el contrato de datos ni en `Dashboard.gs`**: el README del entregable
+  confirmaba que el cliente consume exactamente los mismos campos que ya expone
+  `getMetricasPanel()` - verificado por el propio dueño de esta sesión comparando campo a
+  campo antes de integrar, no solo tomando la palabra del README.
+- **2 ediciones mecánicas al integrar** (pedidas explícitamente por el README del propio
+  entregable): borrada la función `MOCK()` (datos falsos para previsualizar fuera de Apps
+  Script) y simplificado `cargar()` para llamar siempre a `google.script.run` sin la rama de
+  respaldo.
+- **Revisión de calidad antes de desplegar** (dado el tamaño del cambio - sustituye toda la
+  página): verificado que el historial construye las filas con `innerHTML` + una función `esc()`
+  propia (en vez de `textContent`/`createElement` como la v8) - trazado que `esc()` se aplica a
+  los 4 campos de texto no confiable (`fechaLabel`/`canodromo`/`galgo`/`mensaje`, este último el
+  mensaje libre del tipster) y que en los 4 casos el resultado cae siempre en posición de texto,
+  nunca dentro de un atributo - seguro tal y como está, aunque `esc()` no escapa comillas (no
+  hace falta en ese contexto). Confirmado que no se coló ninguna dependencia externa aparte de
+  Google Fonts. 2 fixes menores aplicados tras la revisión: recuperado `<base target="_top">`
+  (se había perdido en el rediseño; importante porque el panel se incrusta en un iframe de
+  WordPress - sin esto, un enlace futuro sin `target` explícito navegaría dentro del iframe en
+  vez de abrir la pestaña de arriba) y corregido un `style.cssText +=` que se acumulaba sin
+  límite en cada reintento tras un error (cambiado a asignación directa de propiedades).
+- Verificado con `curl` contra la URL real en producción que el HTML servido es el nuevo diseño
+  (no una versión en caché), antes de dar el despliegue por bueno.
+- Redesplegado sobre el mismo deployment (v19).
+- Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Panel enmarcable en iframe, a petición del dueño (quiere meterlo en su web de WordPress)
 El dueño quiere el panel dentro de su propia web (WordPress, autoalojado)
 en vez de que la gente tenga que ir a la URL de Google. Decidió, tras
