@@ -3,6 +3,85 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Panel v5: rediseño visual a fondo (encargado a un agente en worktree aislado, sin backend nuevo)
+El dueño calificó el diseño de la v4 de "absoluta basura" y pidió un salto
+de calidad real, no otro retoque de colores, delegando el criterio visual
+por completo ("investiga, decide tú"). Trabajo hecho en la rama
+`worktree-agent-aa4063ea4f58fe9a8` (worktree aislado), sin `clasp push`/
+`clasp deploy` - pendiente de revisión y merge por otra sesión antes de
+publicar, porque este proyecto no tiene entorno de pruebas separado (todo
+`clasp deploy` va contra el Apps Script real).
+
+- **Investigación previa**: 4 búsquedas web sobre dashboards fintech/
+  trading actuales (Stripe, Revolut, Robinhood, patrones genéricos 2026) +
+  la skill `dataviz` (validador de paleta + specs de marcas/figuras). Del
+  dashboard de Stripe: jerarquía por tipografía en vez de por color ("one
+  hero metric visualized, everything else numeric"), tabular-nums solo en
+  columnas de cifras alineadas. De Revolut: superficies "un escalón más
+  claras" para elevar la cifra más importante. Del patrón de listas de
+  transacciones bancarias: tarjeta apilada por fila en móvil en vez de
+  tabla con scroll horizontal, con tabla clásica reservada para pantallas
+  con hueco real.
+- **Dirección elegida**: jerarquía tipográfica "hero + secundarias" (1
+  tarjeta hero para "ganancia neta", con el gráfico de evolución
+  incrustado como su visualización, + 4 tarjetas secundarias más pequeñas
+  debajo) en vez de 5 tarjetas iguales compitiendo por atención; historial
+  de picks como lista de tarjetas en móvil (con mensaje del tipster
+  recortado a 3 líneas + botón "ver mensaje completo") que pasa a tabla
+  clásica solo a partir de 720px de ancho (punto de corte propio, distinto
+  del de las tarjetas de estadísticas, porque una tabla de 6 columnas
+  necesita más hueco real). Descartado un layout tipo "bento grid" /
+  multi-panel (Grafana/Vercel) por sobredimensionado para 5 métricas + 1
+  gráfico + 1 tabla; descartado también un dashboard con filtros/exportado
+  interactivo (patrón "progressive disclosure" de fintech 2026) por no
+  encajar en una página estática sin backend propio ni llamadas nuevas a
+  `google.script.run`.
+- **`src/Panel.html`** reescrito de fondo (único archivo tocado -
+  `src/Dashboard.gs` y `src/Config.gs` sin cambios, mismo contrato exacto
+  de `getMetricasPanel()`):
+  - Misma paleta de color ya validada (hex sin cambios); revalidada con
+    `scripts/validate_palette.js --mode dark` de la skill `dataviz` - el
+    par bueno/crítico falla la separación CVD en aislamiento pero está
+    permitido explícitamente cuando lleva señal secundaria, que aquí
+    siempre la lleva (flecha ▲/▼ +, en las cifras que pueden ser
+    negativas, también signo +/- en el propio texto, no solo en la
+    flecha).
+  - Fix de accesibilidad de color: "Total jugado" y "% de aciertos" ya no
+    se pintan en verde fijo (`positivo=true` hardcodeado en la v4) - no son
+    una señal binaria bien/mal (un 20% de aciertos no es "malo" per se en
+    value-betting), así que quedan en el tono de texto neutro. Solo
+    ganancia neta, unidades y ROI llevan color dinámico + flecha, que son
+    las que sí tienen un sentido real de ganancia/pérdida.
+  - Fix de inconsistencia: `formatearEur` no anteponía "+" en positivo
+    (`formatearUnidades` sí) - ahora ambas cifras en euros que pueden ser
+    negativas llevan signo textual explícito, no solo color/flecha.
+  - Estados de carga/vacío/error rehechos: esqueleto con shimmer en vez de
+    un spinner+texto suelto, estado vacío y estado de error ahora
+    visualmente distintos (antes compartían el mismo `<div id="mensaje">`
+    genérico).
+  - Sin ningún `innerHTML` en todo el archivo (la v4 ya usaba
+    `textContent`/`createElement` para el mensaje del tipster, pero tenía
+    un `innerHTML` residual con contenido siempre estático en `setValor` -
+    se quitó igualmente, por rigor, aunque no era explotable).
+- **Verificación sin navegador** (no se puede probar en vivo, el único
+  Apps Script es el real): revisión manual de que cada id usado en el JS
+  existe en el HTML y viceversa, y de que cada campo leído en el cliente
+  (`fechaLabel`/`cuota`/`unidades`/`canodromo`/`galgo`/`mensaje`,
+  `unidadesNetasEur`/`unidadesNetas`/`stakeTotalEur`/`roiPct`/
+  `pctAciertos`/`evolucion`) coincide exactamente con lo que devuelve
+  `getMetricasPanel()`. Además, verificación automática con Node: el
+  bloque `<script>` se parseó con `new Function()` (sin errores de
+  sintaxis) y se comprobó el balance de etiquetas HTML y de llaves CSS con
+  dos scripts ad-hoc.
+- Pendiente real (no de esta tarea, gap preexistente): `getMetricasPanel()`
+  llama a `getSheet_`/`getHeaderIndex_`, que no están definidas en ningún
+  `.gs` del repo todavía - `Main.gs`/`Setup.gs`/`AI.gs` (mencionados en
+  comentarios y en `docs/BITACORA.md` como ya escritos) no están en este
+  worktree. No se ha tocado por ir fuera del alcance de un rediseño visual
+  y no ser un bug introducido aquí.
+- Commits: (este commit, rama `worktree-agent-aa4063ea4f58fe9a8` - pendiente
+  de revisión y merge a `main`).
+
 ## 2026-08-27 — Panel v4: revertida la ventana de 30 días ("no me cuadran los números"), tabla de últimos picks sustituida por el historial completo con canódromo/galgo/mensaje, tarjeta nueva de unidades en crudo
 El dueño reportó que los números del panel no le cuadraban con la ventana
 de 30 días de la v2/v3, y pidió tres cosas directas: (1) volver a todo el
