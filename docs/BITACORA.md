@@ -3,6 +3,32 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Mergeado el rediseño v5 del panel (worktree en segundo plano) + bug real encontrado por el dueño en móvil: avisos de vacío/error apilados encima de datos correctos
+- El rediseño v5 (jerarquía hero + historial en tarjetas apiladas en
+  móvil, ver entrada anterior "rediseño a fondo del panel v5") se lanzó en
+  un worktree aislado en segundo plano, sin tocar `main` ni desplegar.
+  Revisado el código a mano (correspondencia de ids, nombres de campo
+  contra `getMetricasPanel()`, patrón `textContent`/`createElement` sin
+  `innerHTML`) y mergeado a `main` sin conflictos (la rama solo tocaba
+  `Panel.html`/`BITACORA.md`, `main` no había vuelto a tocar esos
+  archivos desde el punto común). Redesplegado (v15).
+- **Bug real encontrado por el dueño nada más verlo en el móvil**: el
+  panel mostraba a la vez el aviso de "sin datos todavía", el aviso de
+  "error cargando el panel" Y el contenido real (107 picks, cifras
+  correctas) - los tres superpuestos. Causa: `pintarPanel`/`mostrarError`
+  nunca ocultaban los OTROS estados antes de mostrar el suyo propio - si
+  el navegador llega a ejecutar el script más de una vez (visto en real en
+  móvil, probablemente un parpadeo de red estableciendo el puente de
+  `google.script.run` con el iframe de Apps Script en la conexión inicial),
+  cada aviso que se mostraba se quedaba ahí para siempre, apilándose en
+  vez de sustituirse.
+- Fix: `ocultarTodosLosEstados_()` nueva, llamada al principio de
+  `pintarPanel` y `mostrarError` antes de decidir qué mostrar - los 4
+  estados (carga/vacío/error/contenido) pasan a ser mutuamente excluyentes
+  de verdad, el resultado final ya no depende de cuántas veces se haya
+  llamado antes, solo de la última. Redesplegado (v16).
+- Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Panel v5: rediseño visual a fondo (encargado a un agente en worktree aislado, sin backend nuevo)
 El dueño calificó el diseño de la v4 de "absoluta basura" y pidió un salto
 de calidad real, no otro retoque de colores, delegando el criterio visual

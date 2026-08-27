@@ -562,8 +562,26 @@
         .withFailureHandler(mostrarError)
         .getMetricasPanel();
 
-      function pintarPanel(metricas) {
+      // Los 4 estados (carga/vacío/error/contenido) son mutuamente
+      // excluyentes, pero antes nada los ocultaba entre sí - si por lo que
+      // sea el navegador llega a ejecutar el script más de una vez (visto
+      // en real en móvil: parpadeo de red al establecer el puente de
+      // google.script.run con el iframe de Apps Script), los avisos se
+      // quedaban apilados unos encima de otros en vez de sustituirse.
+      // Se llama al principio de pintarPanel/mostrarError, antes de
+      // decidir cuál mostrar - así el resultado final nunca depende de
+      // cuántas veces se haya llamado antes, solo de la última.
+      function ocultarTodosLosEstados_() {
         document.getElementById('estadoCarga').hidden = true;
+        document.getElementById('estadoVacio').hidden = true;
+        document.getElementById('estadoError').hidden = true;
+        var contenido = document.getElementById('contenido');
+        contenido.hidden = true;
+        contenido.classList.remove('visible');
+      }
+
+      function pintarPanel(metricas) {
+        ocultarTodosLosEstados_();
 
         if (!metricas || !metricas.hayDatos) {
           document.getElementById('estadoVacio').hidden = false;
@@ -817,7 +835,7 @@
       }
 
       function mostrarError(error) {
-        document.getElementById('estadoCarga').hidden = true;
+        ocultarTodosLosEstados_();
         document.getElementById('textoError').textContent = error && error.message ? error.message : String(error);
         document.getElementById('estadoError').hidden = false;
       }
