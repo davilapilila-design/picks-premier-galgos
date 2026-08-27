@@ -15,8 +15,19 @@ const SHEET_APUESTAS = 'apuestas';
 const SHEET_APUESTAS_PATAS = 'apuestas_patas';
 const SHEET_RESULTADOS_GALGOS = 'resultados_galgos';
 
+// `fecha_forward`: si el mensaje es un reenvío del propio tipster (picks
+// antiguos que resenvía en bloque), aquí va la fecha ORIGINAL de la
+// publicación (`msg.forward_date`/`msg.forward_origin.date`), no la de
+// llegada al bot - vacío si no es un reenvío. Bug real encontrado
+// 2026-08-26: sin esto, un mensaje que erroraba por cuota de Gemini
+// agotada y se reintentaba luego (`reintentarMensajesConError`) perdía
+// esa información para siempre (no había dónde leerla) y se le ponía la
+// fecha de llegada como `fecha_pick` - con una carrera real coincidiendo
+// por casualidad en el mismo hipódromo+hora+trampa ese mismo día, el
+// fallback de "trampa ganadora" podía dar un resultado FALSO (comparando
+// contra un galgo completamente distinto). Ver docs/BITACORA.md.
 const COLUMNAS_MENSAJES_CRUDOS = [
-  'message_id', 'fecha_recibido', 'contenido', 'foto_file_id', 'estado',
+  'message_id', 'fecha_recibido', 'contenido', 'foto_file_id', 'estado', 'fecha_forward',
 ];
 
 // Rediseño 2026-08-26 (v2): antes `apuestas` tenía columnas fijas
