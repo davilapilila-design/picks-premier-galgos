@@ -137,6 +137,18 @@
         line-height: 1.5;
       }
 
+      /* CAUSA REAL del bug reportado 2026-08-27 (avisos de "sin datos"/
+         "error" visibles siempre, superpuestos al contenido real): el
+         atributo `hidden` de HTML oculta un elemento poniendo
+         `display:none` por defecto, pero SOLO si ningún CSS del autor le
+         pone otro `display` - la regla de arriba (`display: flex`) le
+         ganaba siempre a `hidden`, así que `elemento.hidden = true` desde
+         JS no hacía nada visualmente. El fix de ayer (ocultarTodosLosEstados_)
+         era necesario pero no suficiente - esta línea es la que faltaba.
+         Selector con más especificidad que `.estado-especial` sola, para
+         que gane siempre que `hidden` esté puesto. */
+      .estado-especial[hidden] { display: none; }
+
       .estado-icono {
         flex-shrink: 0;
         width: 26px;

@@ -3,6 +3,41 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Causa REAL de los avisos "sin datos"/"error" pegados: `display:flex` en CSS anulaba el atributo `hidden`, no un problema de JS
+- El fix anterior (`ocultarTodosLosEstados_`, ver entrada previa) no
+  resolvió el problema - el dueño lo siguió viendo tras redesplegar,
+  incluso en incógnito (descartando caché) y con la URL limpia sin `/u/2/`
+  (descartando el tema de cuentas de Google, que sí era un problema real
+  aparte - ver más abajo).
+- **Diagnóstico verificado, no supuesto**: en vez de seguir adivinando,
+  se comprobó el HTML servido de verdad con `curl` directamente contra la
+  URL de producción (saltándose el móvil y el caché del navegador por
+  completo). El JS del fix anterior SÍ estaba publicado y SÍ se ejecutaba
+  bien - el bug no estaba ahí.
+- **Causa real**: `.estado-especial { display: flex; ... }` (la clase que
+  comparten los avisos de "sin datos" y "error") le ganaba siempre al
+  atributo HTML `hidden` - `hidden` solo oculta un elemento poniendo
+  `display:none` por defecto, pero CUALQUIER regla CSS propia que fije
+  `display` en ese elemento anula ese comportamiento por defecto. Como
+  resultado, `elemento.hidden = true` desde JavaScript nunca ocultaba
+  estos dos avisos en la práctica, sin importar cuántas veces se llamara
+  ni en qué orden - se veían siempre, superpuestos al contenido real.
+  `#contenido` y `#estadoCarga` no tenían este problema porque ninguna
+  regla CSS les fija `display` explícitamente.
+- Fix real: `.estado-especial[hidden] { display: none; }` - selector con
+  más especificidad que `.estado-especial` sola, para que gane siempre que
+  el atributo esté puesto. Verificado en el HTML servido en producción con
+  `curl` (no solo "debería funcionar") antes de darlo por cerrado.
+  Redesplegado (v17).
+- **Aparte, un problema real distinto** que el dueño encontró de camino:
+  el enlace no abría en Opera ni Chrome del móvil - la URL llevaba
+  `/u/2/` (Google intentando enrutar por una cuenta de Google concreta del
+  navegador) y además la VPN propia de Opera estaba activada, dando un
+  error de Google Drive con esa cuenta en vez de servir el panel público.
+  Resuelto identificando ambas causas; el dueño confirmó que en incógnito
+  (sin cuentas ni VPN de por medio) sí cargaba.
+- Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Mergeado el rediseño v5 del panel (worktree en segundo plano) + bug real encontrado por el dueño en móvil: avisos de vacío/error apilados encima de datos correctos
 - El rediseño v5 (jerarquía hero + historial en tarjetas apiladas en
   móvil, ver entrada anterior "rediseño a fondo del panel v5") se lanzó en
