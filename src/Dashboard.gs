@@ -259,5 +259,10 @@ function getMetricasPanel() {
 function doGet(e) {
   return HtmlService.createTemplateFromFile('Panel')
     .evaluate()
-    .setTitle('Panel de métricas - Picks Premier Galgos');
+    .setTitle('Panel de métricas - Picks Premier Galgos')
+    // Permite que el panel se incruste en un <iframe> desde otro dominio
+    // (petición del dueño: quiere el panel dentro de su web de WordPress).
+    // Por defecto Apps Script solo deja enmarcarlo desde el propio Google -
+    // sin esto, el iframe de WordPress se quedaría en blanco/bloqueado.
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }

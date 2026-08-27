@@ -3,6 +3,32 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Panel enmarcable en iframe, a petición del dueño (quiere meterlo en su web de WordPress)
+El dueño quiere el panel dentro de su propia web (WordPress, autoalojado)
+en vez de que la gente tenga que ir a la URL de Google. Decidió, tras
+preguntarle, incrustarlo con un `<iframe>` (no una simple redirección).
+
+- **`src/Dashboard.gs`, `doGet()`**: añadido
+  `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)`. Por
+  defecto Apps Script solo deja enmarcar sus páginas desde el propio
+  Google - sin esto, el iframe de WordPress se habría quedado en blanco o
+  bloqueado.
+- Verificado con `curl -D -` contra la URL real en producción: la
+  respuesta no lleva ninguna cabecera `X-Frame-Options` ni
+  `Content-Security-Policy` que bloquee el enmarcado - nada del lado del
+  servidor lo impide. La prueba definitiva (que WordPress lo cargue de
+  verdad dentro del iframe anidado de Apps Script) queda pendiente de que
+  el dueño lo pruebe en su web.
+- Redesplegado sobre el mismo deployment (v18).
+- Se le da al dueño un snippet HTML listo (bloque "HTML personalizado" de
+  WordPress, sin plugin) con altura fija (`85vh`) y scroll propio - el
+  histórico de picks crece sin límite, así que una altura dinámica exigiría
+  `postMessage` entre el iframe y la página (fuera de alcance por ahora,
+  YAGNI). Avisado también de que el aviso azul de Google ("Esta aplicación
+  la ha creado un usuario de Google Apps Script") seguirá viéndose dentro
+  del iframe, no se puede quitar desde el código del panel.
+- Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Causa REAL de los avisos "sin datos"/"error" pegados: `display:flex` en CSS anulaba el atributo `hidden`, no un problema de JS
 - El fix anterior (`ocultarTodosLosEstados_`, ver entrada previa) no
   resolvió el problema - el dueño lo siguió viendo tras redesplegar,
