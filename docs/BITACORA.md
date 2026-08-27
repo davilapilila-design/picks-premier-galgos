@@ -3,6 +3,101 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-27 (cont.) — Panel v10: logo real en la cabecera (sustituye el monograma CSS "PG")
+El dueño mandó el logo circular real de Premier Galgos (JPEG). Redimensionado a 128×128
+(el original era 640×640, innecesario para un logo que se ve a 38-46px - habría inflado el
+HTML sin motivo) y **embebido como `data:` URI en base64 dentro del propio `src/Panel.html`**,
+en vez de subirlo a un hosting externo: coherente con que el panel es una página 100%
+autocontenida (la única dependencia externa permitida son Google Fonts) y evita depender de
+que una URL de WordPress siga viva o permita hotlinking. Sustituye `<div class="logo-mark">PG</div>`
+por `<div class="logo-mark"><img src="data:image/jpeg;base64,...) alt="Premier Galgos"></div>` -
+el CSS `.logo-mark img{...object-fit:cover...}` ya existía preparado para esto (nota del propio
+README del rediseño de Claude Design: "si se quiere la foto real, sustituir el div por el img").
+Verificado sintaxis JS con `node -e "new Function(...)"` y con `curl` en producción antes de
+dar el despliegue por bueno (v20).
+
+Pendiente en paralelo (otra sesión con DevTools): diagnosticar por qué el iframe con
+`position:fixed` en la página de WordPress no cubre pantalla completa - descartado por `curl`
+que sea el HTML servido, un iframe duplicado, caché, o una regla CSS del tema que mencione
+`iframe`; queda pendiente inspeccionar estilos computados en un navegador real.
+
+Commits: (pendiente)
+
+## 2026-08-27 — Iframe del panel en WordPress no cubría pantalla completa (`position:fixed` se comportaba como `static`)
+- El bloque HTML personalizado en `https://premiergalgos.com/?page_id=9` incrusta el panel
+  (`Panel.html` vía Apps Script) en un `<iframe>` con `position:fixed; inset:0` pensado para tapar
+  la cabecera/menú/footer del tema (Twenty Twenty-Five). En todos los navegadores/dispositivos
+  probados se veía como una caja normal dentro del flujo, con la cabecera arriba y el footer
+  debajo - como si `position:fixed` no se aplicase.
+- Descartado por el usuario con `curl`: el HTML servido tenía el CSS correcto, sin iframe
+  duplicado, sin ninguna regla del tema mencionando `iframe`, sin `transform/filter/will-change/
+  contain` en ningún ancestro, sin caché de navegador (incógnito, varios navegadores).
+- Investigado más a fondo contra la página real: sin cabecera ni meta `Content-Security-Policy`
+  (habría anulado el `style=""` inline), sin ninguna regla `position:` que apunte a `iframe` o a un
+  wildcard con `!important`, ampliada la lista de propiedades que rompen el containing block de
+  `position:fixed` (añadidas `perspective`, `backdrop-filter`, `content-visibility` - ninguna
+  presente), y confirmado que el sitio **no tiene ningún plugin de WordPress activo** (solo JS core
+  de emoji + interactividad del menú) - descarta un plugin de cookies/lazy-load reescribiendo el
+  iframe por JS, la sospecha más probable para este síntoma.
+- **Causa raíz no identificada con certeza** (no hubo acceso a DevTools real para ver el DOM/
+  estilos computados en vivo - el HTML/CSS servido por el servidor estaba limpio).
+- **Arreglado** con una solución robusta independiente de la causa: mover el `<iframe>` a ser
+  hijo directo de `<body>` por JavaScript nada más cargar (`document.body.appendChild(...)`),
+  escapando así de cualquier ancestro problemático presente o futuro. Confirmado por el dueño que
+  soluciona el problema.
+- Sin commits (snippet suelto pegado a mano en WordPress, fuera de este repo).
+
+## 2026-08-27 — Bug real: `vm_job_dog_forms.py` se quedaba colgado 15 min y lo mataba el timeout de systemd, sin procesar nada - faltaba timeout de red
+- El usuario reportó que seguía sin aparecer `cuota_final`/`dog_id` en
+  varios picks (puso de ejemplo `message_id 30`, Hollyoak Ethel).
+- Investigado con SSH (Tailscale había caducado otra vez, reautorizado):
+  `picks-dog-forms.service` llevaba **dos ejecuciones seguidas fallando
+  por timeout** - ayer 2026-08-26 16:32-16:47 (el intento manual de esa
+  sesión) y hoy 2026-08-27 04:01-04:16 (la pasada diaria programada,
+  06:00 Madrid). Ambas veces: matado por `TimeoutStartSec=15m` de
+  systemd, habiendo consumido solo **1,1s de CPU real en 15 minutos de
+  reloj** - la firma clásica de un proceso bloqueado esperando una
+  respuesta de red que nunca llega, no calculando nada.
+- **Causa raíz**: el cliente HTTP que usan `gspread`/`google-auth` no
+  pone ningún timeout por defecto en sus peticiones - si la llamada a la
+  API de Google Sheets (o al endpoint de OAuth para renovar el token) se
+  queda colgada, el proceso espera indefinidamente en vez de fallar
+  rápido. Sin nada que lo pare antes, solo el timeout duro de systemd
+  (pensado como red de seguridad, no como mecanismo normal) lo corta - y
+  para entonces ya se ha perdido la pasada entera sin haber tocado ni un
+  solo pick.
+- Confirmado que no era contención con otro job pesado corriendo a la
+  vez: la pasada de hoy (04:01 UTC) no coincidía con ninguna ejecución de
+  `galgos-poll-results` (`journalctl` sin entradas en esa franja) - el
+  cuelgue es intrínseco a la propia llamada de red, no un efecto de carga
+  de la VM.
+- **Arreglado**: `socket.setdefaulttimeout(60)` al principio de
+  `scripts/vm_job_dog_forms.py` (y también en
+  `scripts/vm_job_resultados_galgos.py` de forma preventiva, mismo patrón
+  de llamada a gspread aunque no se le haya visto colgar todavía - solo
+  ha dado un `503` rápido una vez). Con esto, cualquier llamada de red que
+  se quede colgada falla a los 60s en vez de nunca, y la siguiente pasada
+  (diaria o cada 20 min según el job) lo reintenta sola sin perder una
+  ejecución entera de 15 minutos por nada.
+- Desplegado a la VM y ejecutado a mano para vaciar el atasco acumulado:
+  de **9 patas pendientes de `cuota_final`** (las 4 de antes + 4 picks
+  nuevos de ayer que nunca habían tenido ni un primer intento, por el
+  cuelgue) bajó a **8** en una sola pasada limpia (resuelta 1 en vivo). El
+  resto sigue esperando legítimamente a que su galgo vuelva a correr, más
+  `message_id 30` (Hollyoak Ethel) que sigue sin `dog_id` por el
+  emparejamiento por nombre exacto (lleva pegada la anotación "SIN el
+  favorito" - limitación conocida y documentada, no relacionada con este
+  bug).
+- **De propina, arreglada también esa limitación**: el emparejamiento por
+  nombre en `vm_job_dog_forms.py` ahora prueba, si no hay coincidencia
+  exacta, si el nombre real del galgo (según la card) es un PREFIJO del
+  texto del tipster - así "Hollyoak Ethel SIN el favorito" encuentra a
+  "Hollyoak Ethel" sin arriesgar falsos positivos (nunca al revés).
+  Verificado: tras el cambio, las 8 patas pendientes encuentran su
+  `dog_id` (antes 1 no lo encontraba) - ninguna se resolvió más porque
+  ninguno de esos galgos ha vuelto a correr todavía, esperado.
+- Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Panel v9: rediseño completo con Claude Design, identidad de marca de la landing, gráfico SVG propio (sin Google Charts)
 El dueño pidió delegar el rediseño visual a Claude Design (herramienta aparte, sin acceso a
 este repo) en vez de seguir iterando aquí. Se le generó un prompt autocontenido (contrato
