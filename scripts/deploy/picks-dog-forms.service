@@ -1,0 +1,15 @@
+[Unit]
+Description=Picks Premier Galgos: enriquecer patas fuera de podio (cards + forms + una peticion en vivo con enfriamiento de 2 dias)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/picks-premier-galgos
+Environment="TZ=Europe/Madrid"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/opt/galgos/repo/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/opt/galgos/repo/venv/bin/python /opt/picks-premier-galgos/vm_job_dog_forms.py
+TimeoutStartSec=15m
+StandardOutput=append:/var/log/picks-dog-forms.log
+StandardError=append:/var/log/picks-dog-forms.log

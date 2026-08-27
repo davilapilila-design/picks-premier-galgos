@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: Picks Premier Galgos enriquecer patas fuera de podio (1 vez al dia)
+
+[Timer]
+OnCalendar=*-*-* 06:00 Europe/Madrid
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

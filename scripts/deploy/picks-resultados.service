@@ -1,0 +1,15 @@
+[Unit]
+Description=Picks Premier Galgos: push resultados_galgos desde el parquet local
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/picks-premier-galgos
+Environment="TZ=Europe/Madrid"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/opt/galgos/repo/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/opt/galgos/repo/venv/bin/python /opt/picks-premier-galgos/vm_job_resultados_galgos.py
+TimeoutStartSec=10m
+StandardOutput=append:/var/log/picks-resultados.log
+StandardError=append:/var/log/picks-resultados.log

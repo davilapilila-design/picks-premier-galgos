@@ -2,3 +2,9 @@ config.php
 .env
 vendor/
 *.log
+service_account.json
+picks-premier-galgos-*.json
+data/
+.claude/worktrees/
+__pycache__/
+*.pyc

@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer: Picks Premier Galgos resultados_galgos (cada 20min, 5min despues de galgos-poll-results)
+
+[Timer]
+OnCalendar=*-*-* 10:35 Europe/Madrid
+OnCalendar=*-*-* 11..23:15,35,55:00 Europe/Madrid
+Persistent=true
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target
