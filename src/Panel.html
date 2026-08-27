@@ -6,10 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
       /* Tokens de color (dark, único tema - el panel siempre se ve en
-         fondo oscuro). Del sistema de diseño validado por la skill
-         dataviz: contraste >=3:1 sobre superficie oscura comprobado con
-         el validador, línea del gráfico separada de los colores de
-         estado para que nunca se confundan. */
+         fondo oscuro, decisión ya tomada, no sigue el tema del sistema).
+         Mismos hex que la v4 - ya pasaron el validador de la skill dataviz
+         (contraste >=3:1 sobre superficie oscura; el par bueno/critico
+         falla la separación CVD categórica en aislamiento, pero eso está
+         permitido explícitamente cuando va con una señal secundaria - aquí
+         siempre acompañado de ▲/▼ y, en las cifras que pueden ser
+         negativas, también del signo +/- en el propio texto, nunca solo
+         color). Los tokens *-wash de abajo son variantes alfa de esos
+         mismos hex validados (mismo canal RGB, solo transparencia) para
+         los fondos de las píldoras de resultado - no son colores nuevos,
+         así que no hace falta re-validar contraste de texto por ellos. */
       :root {
         --pagina: #0d0d0d;
         --superficie: #1a1a19;
@@ -19,28 +26,53 @@
         --texto-mudo: #898781;
         --linea-grafico: #3987e5;
         --bueno: #0ca30c;
+        --bueno-wash: rgba(12, 163, 12, 0.14);
         --critico: #d03b3b;
+        --critico-wash: rgba(208, 59, 59, 0.14);
         --borde: rgba(255, 255, 255, 0.08);
         --sombra: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+        --radio: 14px;
+        --transicion: 220ms ease;
       }
 
       * { box-sizing: border-box; }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
 
       body {
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
         background: var(--pagina);
         color: var(--texto);
         margin: 0;
-        padding: 20px 16px 40px;
+        padding: 20px 16px 48px;
         -webkit-font-smoothing: antialiased;
       }
 
-      .cabecera {
-        margin-bottom: 22px;
+      .pagina { max-width: 100%; }
+
+      /* Utilidad estándar para texto que solo debe existir para lectores
+         de pantalla (encabezados de sección sin equivalente visual, aquí
+         "Resumen de resultados" - la jerarquía visual ya la da el tamaño
+         de la cifra hero, pero un lector de pantalla necesita el landmark). */
+      .solo-lectores {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
 
+      .cabecera { margin-bottom: 24px; }
+
       h1 {
-        font-size: 19px;
+        font-size: 20px;
         font-weight: 700;
         letter-spacing: -0.01em;
         margin: 0 0 4px;
@@ -57,96 +89,324 @@
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        margin: 28px 0 12px;
+        margin: 0;
         color: var(--texto-mudo);
       }
 
-      /* Mobile-first: 2 columnas por defecto - caben cómodas en una
-         pantalla estrecha sin dejar demasiado hueco vertical. */
-      .tarjetas {
+      /* ---------- Estados especiales (carga / vacío / error) ---------- */
+
+      .shimmer {
+        background: linear-gradient(100deg, var(--superficie) 30%, var(--superficie-alt) 50%, var(--superficie) 70%);
+        background-size: 240% 100%;
+        animation: desplazar-shimmer 1.6s ease-in-out infinite;
+        border-radius: var(--radio);
+      }
+
+      @keyframes desplazar-shimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: -60% 0; }
+      }
+
+      .esqueleto-hero { height: 168px; margin-bottom: 12px; }
+
+      .esqueleto-tarjetas {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
         margin-bottom: 20px;
       }
 
-      /* 5 tarjetas en un grid de 2 columnas dejan la última huérfana en su
-         propia fila - que ocupe las 2 columnas en vez de quedar pegada a
-         la izquierda con hueco vacío al lado. */
-      .tarjetas .tarjeta:nth-child(5) { grid-column: span 2; }
+      .esqueleto-tarjetas > div { height: 74px; }
+
+      .esqueleto-picks > div {
+        height: 84px;
+        margin-bottom: 10px;
+      }
+
+      .estado-especial {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--superficie);
+        border: 1px solid var(--borde);
+        border-radius: var(--radio);
+        padding: 18px;
+        box-shadow: var(--sombra);
+        color: var(--texto-secundario);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .estado-icono {
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        background: var(--superficie-alt);
+        color: var(--texto-secundario);
+      }
+
+      .estado-error .estado-icono {
+        background: var(--critico-wash);
+        color: var(--critico);
+      }
+
+      /* ---------- Contenido ---------- */
+
+      #contenido {
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity var(--transicion), transform var(--transicion);
+      }
+
+      #contenido.visible { opacity: 1; transform: translateY(0); }
+
+      /* Panel hero: la cifra que más importa (ganancia neta) más el
+         gráfico que la visualiza, agrupados en una sola tarjeta elevada -
+         "un único hero, todo lo demás es numérico" (patrón visto en el
+         dashboard de Stripe), en vez de que la ganancia neta compita
+         visualmente con las otras 4 cifras como una tarjeta más. Usa
+         --superficie-alt (ya en la paleta, antes solo para las filas cebra
+         de la tabla) para quedar "un escalón por encima" de las tarjetas
+         secundarias sin inventar un tono nuevo. */
+      .panel-hero {
+        background: var(--superficie-alt);
+        border: 1px solid var(--borde);
+        border-radius: var(--radio);
+        padding: 18px 16px 10px;
+        box-shadow: var(--sombra);
+        margin-bottom: 12px;
+      }
+
+      .hero-cabecera { margin-bottom: 4px; }
+
+      .hero-etiqueta {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--texto-mudo);
+        margin-bottom: 6px;
+      }
+
+      /* Tamaño fluido: apunta a >=48px (cifra hero, regla de la skill
+         dataviz) en pantallas con sitio de sobra, pero se reduce en
+         móviles estrechos para que "1.234,56 €" no se parta en dos líneas
+         ni se salga del padding en un viewport de 320px. */
+      .hero-valor {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        font-size: clamp(2.1rem, 6vw + 1rem, 3.4rem);
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        font-variant-numeric: normal;
+      }
+
+      .hero-valor .signo { font-size: 0.42em; }
+
+      .hero-grafico { margin-top: 6px; }
+
+      #grafico {
+        width: 100%;
+        height: 220px;
+      }
+
+      /* Grid de las 4 tarjetas secundarias - mobile-first: 2 columnas,
+         suficiente para no dejar demasiado hueco vertical en una pantalla
+         estrecha. */
+      .tarjetas-secundarias {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 26px;
+      }
 
       .tarjeta {
         background: var(--superficie);
         border: 1px solid var(--borde);
         border-radius: 12px;
-        padding: 14px 16px;
+        padding: 13px 14px;
         box-shadow: var(--sombra);
       }
 
       .tarjeta .etiqueta {
+        display: block;
         font-size: 11px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: var(--texto-mudo);
-        margin-bottom: 8px;
+        margin-bottom: 7px;
       }
 
+      /* Cifras en columna dentro del grid -> tabular-nums para que los
+         dígitos alineen entre tarjetas (la cifra hero de arriba, en
+         cambio, es un valor suelto y usa el ancho proporcional por
+         defecto - más legible a tamaño grande, regla de la skill dataviz). */
       .tarjeta .valor {
-        font-size: 21px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        letter-spacing: -0.01em;
         display: flex;
         align-items: baseline;
         gap: 4px;
+        font-size: 19px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
       }
 
-      .valor .signo { font-size: 0.7em; }
+      .valor .signo { font-size: 0.68em; }
 
+      /* Solo las cifras con un sentido real de "bien/mal" (ganancia,
+         unidades, ROI) llevan color dinámico. Total jugado y % de
+         aciertos son informativas, no una señal binaria positiva/negativa
+         - forzarlas siempre en verde sería usar el color de forma
+         engañosa (un 20% de aciertos no es "bueno" solo porque comparta
+         estilo con un 90%; en value-betting el acierto bajo con cuotas
+         altas puede ser rentable). Se quedan en el tono de texto normal. */
+      .valor.neutro { color: var(--texto); }
       .positivo { color: var(--bueno); }
       .negativo { color: var(--critico); }
 
-      .grafico-envoltorio {
+      /* ---------- Historial de picks ---------- */
+
+      .historico-cabecera {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .historico-contador {
+        font-size: 12px;
+        color: var(--texto-mudo);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* --- Vista móvil: lista de tarjetas apiladas ---
+         Una tabla ancha con scroll horizontal es el síntoma de un mal
+         mobile-first, no la solución: en una pantalla estrecha nadie
+         desliza una tabla de 6 columnas a propósito, y "fecha" y "mensaje"
+         acaban fuera de la vista inicial. Cada pick como tarjeta,
+         ordenado por lo que se escanea primero (fecha+resultado), luego
+         contexto (pista/galgo/cuota) y el mensaje original al final,
+         recortado con "ver más" - mismo patrón que una lista de
+         transacciones de una app bancaria. */
+      .historico-cards { display: block; }
+
+      .pick-card {
         background: var(--superficie);
         border: 1px solid var(--borde);
         border-radius: 12px;
-        padding: 12px 8px 4px;
+        padding: 13px 14px;
         box-shadow: var(--sombra);
+        margin-bottom: 10px;
       }
 
-      #grafico {
-        width: 100%;
-        height: 230px;
-      }
-
-      #mensaje {
+      .pick-card-top {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .pick-fecha {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--texto);
+      }
+
+      .pick-resultado {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .pick-resultado.positivo { background: var(--bueno-wash); color: var(--bueno); }
+      .pick-resultado.negativo { background: var(--critico-wash); color: var(--critico); }
+
+      .pick-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 10px;
+        font-size: 13px;
+        color: var(--texto-secundario);
+        margin-bottom: 8px;
+      }
+
+      .pick-lugar { min-width: 0; overflow-wrap: anywhere; }
+      .pick-cuota { color: var(--texto-mudo); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+      .bloque-mensaje { border-top: 1px solid var(--borde); padding-top: 8px; }
+
+      .mensaje-texto {
+        margin: 0 0 4px;
+        font-size: 12.5px;
+        line-height: 1.5;
         color: var(--texto-mudo);
-        font-size: 14px;
-        padding: 32px 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
 
-      .girando {
-        width: 16px;
-        height: 16px;
-        border: 2px solid var(--borde);
-        border-top-color: var(--linea-grafico);
-        border-radius: 50%;
-        animation: girar 0.7s linear infinite;
-        flex-shrink: 0;
+      .mensaje-texto.expandido {
+        -webkit-line-clamp: unset;
+        line-clamp: unset;
+        overflow: visible;
       }
 
-      @keyframes girar { to { transform: rotate(360deg); } }
+      .btn-expandir {
+        appearance: none;
+        border: none;
+        background: none;
+        color: var(--linea-grafico);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px 0;
+        cursor: pointer;
+      }
+
+      .btn-expandir:hover { text-decoration: underline; }
+
+      button:focus-visible,
+      .pick-card:focus-within {
+        outline: 2px solid var(--linea-grafico);
+        outline-offset: 2px;
+      }
+
+      /* --- Vista de escritorio: tabla clásica ---
+         Solo aparece a partir de 720px (ver media query más abajo). No es
+         "la misma tarjeta con más columnas": una tabla necesita hueco de
+         verdad para que Canódromo/Galgo/Mensaje quepan sin apretarse, así
+         que la lista de tarjetas sigue siendo la vista real hasta que ese
+         hueco existe. Ambas vistas se pintan siempre (mismos datos, sin
+         llamada de red extra) y CSS decide cuál se muestra - así no hace
+         falta escuchar el resize para redecidir el layout. */
+      .historico-tabla { display: none; }
 
       .tabla-envoltorio {
-        overflow-x: auto;
         background: var(--superficie);
         border: 1px solid var(--borde);
-        border-radius: 12px;
+        border-radius: var(--radio);
         box-shadow: var(--sombra);
+        overflow: hidden;
       }
 
       table {
@@ -158,15 +418,10 @@
       th, td {
         text-align: left;
         padding: 11px 14px;
-        white-space: nowrap;
+        vertical-align: top;
       }
 
-      th.col-mensaje, td.celda-mensaje {
-        white-space: pre-wrap;
-        min-width: 220px;
-        max-width: 360px;
-        word-break: break-word;
-      }
+      th.col-mensaje, td.celda-mensaje { min-width: 260px; max-width: 420px; }
 
       th {
         color: var(--texto-mudo);
@@ -175,6 +430,7 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
         border-bottom: 1px solid var(--borde);
+        white-space: nowrap;
       }
 
       td {
@@ -185,64 +441,121 @@
       tbody tr:nth-child(even) { background: var(--superficie-alt); }
       tbody tr:hover { background: var(--superficie-alt); }
 
-      td.celda-fecha { color: var(--texto); }
+      td.celda-fecha { color: var(--texto); white-space: nowrap; }
       th.col-unidades, td.celda-unidades { text-align: right; font-weight: 700; }
-      td.celda-mensaje { color: var(--texto-mudo); font-size: 12px; line-height: 1.5; }
+      td.celda-mensaje .mensaje-texto { color: var(--texto-mudo); font-size: 12.5px; -webkit-line-clamp: 2; line-clamp: 2; }
 
-      /* A partir de aquí, más espacio: tarjetas en una sola fila y tipos
-         algo mayores. La base de arriba ya es completamente usable en
-         móvil - esto es una mejora, no un layout distinto. */
+      /* A partir de aquí, más espacio: la base de arriba ya es
+         completamente usable en móvil - esto es una mejora, no un layout
+         distinto. */
       @media (min-width: 640px) {
         body { padding: 32px; }
-        h1 { font-size: 22px; }
-        .tarjetas { grid-template-columns: repeat(5, 1fr); gap: 16px; }
-        .tarjetas .tarjeta:nth-child(5) { grid-column: span 1; }
-        .tarjeta { padding: 18px 20px; }
-        .tarjeta .valor { font-size: 26px; }
-        #grafico { height: 340px; }
+        h1 { font-size: 23px; }
+        .panel-hero { padding: 24px 26px 16px; }
+        #grafico { height: 320px; }
+        .tarjetas-secundarias { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .tarjeta { padding: 16px 18px; }
+        .tarjeta .valor { font-size: 22px; }
+      }
+
+      /* Punto de corte propio para el historial (no el mismo que el de
+         las tarjetas de arriba): una tabla de 6 columnas con una de texto
+         libre necesita más ancho real que un grid de estadísticas antes
+         de dejar de sentirse apretada. */
+      @media (min-width: 720px) {
+        .historico-cards { display: none; }
+        .historico-tabla { display: block; }
       }
 
       @media (min-width: 960px) {
-        body { max-width: 1080px; margin: 0 auto; }
+        .pagina { max-width: 1080px; margin: 0 auto; }
       }
     </style>
   </head>
   <body>
-    <div class="cabecera">
-      <h1>Picks Premier Galgos</h1>
-      <p class="subtitulo">Todo el histórico</p>
-    </div>
+    <div class="pagina">
+      <header class="cabecera">
+        <h1>Picks Premier Galgos</h1>
+        <p class="subtitulo">Todo el histórico</p>
+      </header>
 
-    <div id="mensaje"><span class="girando"></span>Cargando...</div>
-    <div id="contenido" style="display:none;">
-      <div class="tarjetas">
-        <div class="tarjeta"><div class="etiqueta">Ganancia neta</div><div class="valor" id="valUnidadesNetas">-</div></div>
-        <div class="tarjeta"><div class="etiqueta">Unidades ganadas</div><div class="valor" id="valUnidades">-</div></div>
-        <div class="tarjeta"><div class="etiqueta">Total jugado</div><div class="valor" id="valStakeTotal">-</div></div>
-        <div class="tarjeta"><div class="etiqueta">ROI / Yield</div><div class="valor" id="valRoi">-</div></div>
-        <div class="tarjeta"><div class="etiqueta">% de aciertos</div><div class="valor" id="valAciertos">-</div></div>
+      <div id="estadoCarga" role="status" aria-live="polite" aria-busy="true">
+        <span class="solo-lectores">Cargando el panel de métricas…</span>
+        <div class="shimmer esqueleto-hero"></div>
+        <div class="esqueleto-tarjetas">
+          <div class="shimmer"></div><div class="shimmer"></div>
+          <div class="shimmer"></div><div class="shimmer"></div>
+        </div>
+        <div class="esqueleto-picks">
+          <div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div>
+        </div>
       </div>
-      <div class="grafico-envoltorio"><div id="grafico"></div></div>
-    </div>
 
-    <div id="seccionHistorico" style="display:none;">
-      <h2>Historial de picks</h2>
-      <div class="tabla-envoltorio">
-        <table>
-          <thead>
-            <tr>
-              <th>Fecha</th><th>Canódromo</th><th>Galgo</th><th>Cuota</th>
-              <th class="col-unidades">Unidades</th><th class="col-mensaje">Mensaje</th>
-            </tr>
-          </thead>
-          <tbody id="cuerpoHistorico"></tbody>
-        </table>
+      <div id="estadoVacio" class="estado-especial" hidden>
+        <span class="estado-icono" aria-hidden="true">–</span>
+        <p>Todavía no hay picks resueltos y visibles. En cuanto se marque el
+          primer resultado (manual o automático), las métricas aparecerán aquí.</p>
       </div>
+
+      <div id="estadoError" class="estado-especial estado-error" hidden>
+        <span class="estado-icono" aria-hidden="true">!</span>
+        <p>Error cargando el panel: <span id="textoError"></span></p>
+      </div>
+
+      <main id="contenido" hidden>
+        <h2 class="solo-lectores">Resumen de resultados</h2>
+
+        <section class="panel-hero" aria-labelledby="etiquetaHero">
+          <div class="hero-cabecera">
+            <span class="hero-etiqueta" id="etiquetaHero">Ganancia neta</span>
+            <div class="hero-valor" id="valUnidadesNetas">—</div>
+          </div>
+          <div class="hero-grafico"><div id="grafico"></div></div>
+        </section>
+
+        <section class="tarjetas-secundarias" aria-label="Métricas adicionales">
+          <div class="tarjeta"><span class="etiqueta">Unidades ganadas</span><div class="valor" id="valUnidades">—</div></div>
+          <div class="tarjeta"><span class="etiqueta">Total jugado</span><div class="valor neutro" id="valStakeTotal">—</div></div>
+          <div class="tarjeta"><span class="etiqueta">ROI / Yield</span><div class="valor" id="valRoi">—</div></div>
+          <div class="tarjeta"><span class="etiqueta">% de aciertos</span><div class="valor neutro" id="valAciertos">—</div></div>
+        </section>
+
+        <section id="seccionHistorico" hidden>
+          <div class="historico-cabecera">
+            <h2>Historial de picks</h2>
+            <span class="historico-contador" id="contadorPicks"></span>
+          </div>
+
+          <div class="historico-cards" id="historicoCards"></div>
+
+          <div class="historico-tabla">
+            <div class="tabla-envoltorio">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th><th>Canódromo</th><th>Galgo</th><th>Cuota</th>
+                    <th class="col-unidades">Unidades</th><th class="col-mensaje">Mensaje</th>
+                  </tr>
+                </thead>
+                <tbody id="cuerpoHistorico"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
 
     <script src="https://www.gstatic.com/charts/loader.js"></script>
     <script>
       google.charts.load('current', { packages: ['corechart'] });
+
+      // Guarda la evolución pintada la última vez para poder re-dibujar el
+      // gráfico si el usuario gira el móvil o redimensiona la ventana -
+      // Google Charts no se reajusta solo, y sin esto el gráfico se queda
+      // con las proporciones del ancho antiguo tras un giro de pantalla.
+      var ultimaEvolucion = null;
+      var graficoListo = false;
+      var timerRedimension = null;
 
       google.script.run
         .withSuccessHandler(pintarPanel)
@@ -250,97 +563,248 @@
         .getMetricasPanel();
 
       function pintarPanel(metricas) {
-        if (metricas.hayDatos) {
-          document.getElementById('mensaje').style.display = 'none';
-          document.getElementById('contenido').style.display = 'block';
+        document.getElementById('estadoCarga').hidden = true;
 
-          setValor('valUnidadesNetas', formatearEur(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0, true);
-          setValor('valUnidades', formatearUnidades(metricas.unidadesNetas), metricas.unidadesNetas >= 0, false);
-          setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true, false);
-          setValor('valRoi', metricas.roiPct.toFixed(1) + ' %', metricas.roiPct >= 0, true);
-          setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true, false);
-
-          google.charts.setOnLoadCallback(function () { pintarGrafico(metricas.evolucion); });
-        } else {
-          document.getElementById('mensaje').textContent = 'Sin datos todavía.';
+        if (!metricas || !metricas.hayDatos) {
+          document.getElementById('estadoVacio').hidden = false;
+          return;
         }
 
-        pintarTablaHistorico(metricas.historicoPicks || []);
+        setValor('valUnidadesNetas', formatearEurConSigno(metricas.unidadesNetasEur), metricas.unidadesNetasEur >= 0, true, true);
+        setValor('valUnidades', formatearUnidades(metricas.unidadesNetas), metricas.unidadesNetas >= 0, true, false);
+        setValor('valStakeTotal', formatearEur(metricas.stakeTotalEur), true, false, false);
+        setValor('valRoi', formatearPctConSigno(metricas.roiPct), metricas.roiPct >= 0, true, false);
+        setValor('valAciertos', metricas.pctAciertos.toFixed(1) + ' %', true, false, false);
+
+        var contenido = document.getElementById('contenido');
+        contenido.hidden = false;
+        // Doble rAF: hidden->visible necesita al menos un frame pintado con
+        // opacity:0 antes de añadir la clase que dispara la transición, si
+        // no el navegador colapsa los dos estados y no se ve la entrada.
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () { contenido.classList.add('visible'); });
+        });
+
+        ultimaEvolucion = metricas.evolucion || [];
+        google.charts.setOnLoadCallback(function () {
+          graficoListo = true;
+          pintarGrafico(ultimaEvolucion);
+        });
+
+        pintarHistorico(metricas.historicoPicks || []);
       }
 
-      // conSigno=true añade una flechita (▲/▼) antes del número - el
-      // color nunca es la única pista de si es positivo o negativo
-      // (regla de accesibilidad de la skill dataviz).
-      function setValor(id, texto, positivo, conSigno) {
-        const el = document.getElementById(id);
-        el.className = 'valor ' + (positivo ? 'positivo' : 'negativo');
-        el.innerHTML = conSigno
-          ? '<span class="signo">' + (positivo ? '▲' : '▼') + '</span>' + texto
-          : texto;
+      // positivo controla el color; conSigno añade además una flechita
+      // (▲/▼) delante del número - el color nunca es la única pista de si
+      // algo es bueno o malo (regla de accesibilidad de la skill dataviz).
+      // signoEnTexto añade también un "+"/"-" textual (además del glyph de
+      // la flecha) en las cifras que pueden ser negativas, para que un
+      // lector de pantalla que no verbalice bien ▲/▼ no se quede sin la
+      // señal - "Total jugado" y "% de aciertos" no la llevan porque
+      // nunca son negativos, no hace falta.
+      function setValor(id, texto, positivo, conSigno, esHero) {
+        var el = document.getElementById(id);
+        el.textContent = '';
+        el.className = (esHero ? 'hero-valor' : 'valor') + ' ' + (conSigno ? (positivo ? 'positivo' : 'negativo') : 'neutro');
+        if (conSigno) {
+          var signo = document.createElement('span');
+          signo.className = 'signo';
+          signo.textContent = positivo ? '▲' : '▼';
+          el.appendChild(signo);
+        }
+        el.appendChild(document.createTextNode(texto));
       }
 
       function formatearEur(valor) {
         return valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
       }
 
+      // A diferencia de formatearEur, antepone "+" cuando el valor es
+      // positivo (el signo "-" de un negativo ya lo pone toLocaleString
+      // solo) - mismo criterio que formatearUnidades, para que la cifra
+      // hero (que sí puede ser negativa) nunca dependa solo del color/
+      // flecha para decir "esto es una pérdida".
+      function formatearEurConSigno(valor) {
+        var signo = valor > 0 ? '+' : '';
+        return signo + formatearEur(valor);
+      }
+
       function formatearUnidades(valor) {
-        const signo = valor > 0 ? '+' : '';
+        var signo = valor > 0 ? '+' : '';
         return signo + valor.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u';
       }
 
+      function formatearPctConSigno(valor) {
+        var signo = valor > 0 ? '+' : '';
+        return signo + valor.toFixed(1) + ' %';
+      }
+
       function pintarGrafico(evolucion) {
-        const datos = new google.visualization.DataTable();
+        if (!graficoListo || !evolucion || !evolucion.length) return;
+
+        var datos = new google.visualization.DataTable();
         datos.addColumn('string', 'Fecha');
         datos.addColumn('number', 'Ganancia acumulada (€)');
         evolucion.forEach(function (p) { datos.addRow([p.fechaLabel, p.acumuladoEur]); });
 
-        const grafico = new google.visualization.LineChart(document.getElementById('grafico'));
+        var grafico = new google.visualization.LineChart(document.getElementById('grafico'));
         grafico.draw(datos, {
           backgroundColor: 'transparent',
           colors: ['#3987e5'],
-          lineWidth: 3,
+          lineWidth: 2,
           pointSize: 0,
           curveType: 'none',
           legend: { position: 'none' },
+          focusTarget: 'category',
+          tooltip: { textStyle: { fontSize: 12 } },
           hAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: 'transparent' }, baselineColor: '#2c2c2a' },
           vAxis: { textStyle: { color: '#898781', fontSize: 11 }, gridlines: { color: '#2c2c2a', count: 4 }, baseline: 0, baselineColor: '#2c2c2a' },
-          chartArea: { left: 44, right: 12, top: 12, bottom: 28 },
+          chartArea: { left: 46, right: 12, top: 12, bottom: 28 },
         });
       }
 
-      function pintarTablaHistorico(picks) {
-        const seccion = document.getElementById('seccionHistorico');
+      window.addEventListener('resize', function () {
+        clearTimeout(timerRedimension);
+        timerRedimension = setTimeout(function () { pintarGrafico(ultimaEvolucion); }, 200);
+      });
+
+      function pintarHistorico(picks) {
+        var seccion = document.getElementById('seccionHistorico');
         if (!picks.length) {
-          seccion.style.display = 'none';
+          seccion.hidden = true;
           return;
         }
-        seccion.style.display = 'block';
+        seccion.hidden = false;
 
-        const cuerpo = document.getElementById('cuerpoHistorico');
-        cuerpo.innerHTML = '';
+        var contador = document.getElementById('contadorPicks');
+        contador.textContent = picks.length === 1 ? '1 pick' : (picks.length + ' picks');
+
+        // Los bloques de mensaje se recortan a N líneas por CSS
+        // (line-clamp) y solo se muestra el botón "ver más" si el texto
+        // realmente desborda - eso solo se puede medir una vez que el
+        // párrafo ya tiene layout real, así que se comprueban todos juntos
+        // en un único rAF tras insertar ambas vistas (evita ir midiendo
+        // fila a fila, que fuerza reflow en cada iteración).
+        var bloquesParaComprobar = [];
+
+        pintarListaTarjetas(picks, bloquesParaComprobar);
+        pintarTablaHistorico(picks, bloquesParaComprobar);
+
+        requestAnimationFrame(function () {
+          bloquesParaComprobar.forEach(function (b) {
+            if (b.parrafo.scrollHeight > b.parrafo.clientHeight + 1) {
+              b.boton.hidden = false;
+            }
+          });
+        });
+      }
+
+      // Construye el bloque de mensaje (párrafo recortado + botón "ver
+      // más/ver menos") compartido entre la tarjeta móvil y la celda de la
+      // tabla de escritorio. El mensaje del tipster es texto libre real
+      // (puede traer cualquier cosa) - textContent siempre, nunca innerHTML.
+      function crearBloqueMensaje(mensaje, bloquesParaComprobar) {
+        var contenedor = document.createElement('div');
+        contenedor.className = 'bloque-mensaje';
+
+        var parrafo = document.createElement('p');
+        parrafo.className = 'mensaje-texto';
+        parrafo.textContent = mensaje || '(mensaje original no disponible)';
+        contenedor.appendChild(parrafo);
+
+        var boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'btn-expandir';
+        boton.textContent = 'Ver mensaje completo';
+        boton.setAttribute('aria-expanded', 'false');
+        boton.hidden = true;
+        boton.addEventListener('click', function () {
+          var expandido = parrafo.classList.toggle('expandido');
+          boton.textContent = expandido ? 'Ver menos' : 'Ver mensaje completo';
+          boton.setAttribute('aria-expanded', expandido ? 'true' : 'false');
+        });
+        contenedor.appendChild(boton);
+
+        bloquesParaComprobar.push({ parrafo: parrafo, boton: boton });
+        return contenedor;
+      }
+
+      function pintarListaTarjetas(picks, bloquesParaComprobar) {
+        var lista = document.getElementById('historicoCards');
+        lista.replaceChildren();
+
         picks.forEach(function (p) {
-          const fila = document.createElement('tr');
+          var positivo = p.unidades >= 0;
 
-          const celdaFecha = document.createElement('td');
+          var card = document.createElement('article');
+          card.className = 'pick-card';
+
+          var top = document.createElement('div');
+          top.className = 'pick-card-top';
+
+          var fecha = document.createElement('span');
+          fecha.className = 'pick-fecha';
+          fecha.textContent = p.fechaLabel;
+          top.appendChild(fecha);
+
+          var resultado = document.createElement('span');
+          resultado.className = 'pick-resultado ' + (positivo ? 'positivo' : 'negativo');
+          var flecha = document.createElement('span');
+          flecha.textContent = positivo ? '▲' : '▼';
+          resultado.appendChild(flecha);
+          resultado.appendChild(document.createTextNode(formatearUnidades(p.unidades)));
+          top.appendChild(resultado);
+
+          card.appendChild(top);
+
+          var meta = document.createElement('div');
+          meta.className = 'pick-card-meta';
+
+          var lugar = document.createElement('span');
+          lugar.className = 'pick-lugar';
+          var textoLugar = [p.canodromo, p.galgo].filter(Boolean).join(' · ');
+          lugar.textContent = textoLugar;
+          meta.appendChild(lugar);
+
+          var cuota = document.createElement('span');
+          cuota.className = 'pick-cuota';
+          cuota.textContent = 'Cuota ' + p.cuota.toFixed(2);
+          meta.appendChild(cuota);
+
+          card.appendChild(meta);
+          card.appendChild(crearBloqueMensaje(p.mensaje, bloquesParaComprobar));
+
+          lista.appendChild(card);
+        });
+      }
+
+      function pintarTablaHistorico(picks, bloquesParaComprobar) {
+        var cuerpo = document.getElementById('cuerpoHistorico');
+        cuerpo.replaceChildren();
+
+        picks.forEach(function (p) {
+          var fila = document.createElement('tr');
+
+          var celdaFecha = document.createElement('td');
           celdaFecha.textContent = p.fechaLabel;
           celdaFecha.className = 'celda-fecha';
 
-          const celdaCanodromo = document.createElement('td');
+          var celdaCanodromo = document.createElement('td');
           celdaCanodromo.textContent = p.canodromo || '';
 
-          const celdaGalgo = document.createElement('td');
+          var celdaGalgo = document.createElement('td');
           celdaGalgo.textContent = p.galgo || '';
 
-          const celdaCuota = document.createElement('td');
+          var celdaCuota = document.createElement('td');
           celdaCuota.textContent = p.cuota.toFixed(2);
 
-          const celdaUnidades = document.createElement('td');
+          var celdaUnidades = document.createElement('td');
           celdaUnidades.textContent = formatearUnidades(p.unidades);
           celdaUnidades.className = 'celda-unidades ' + (p.unidades >= 0 ? 'positivo' : 'negativo');
 
-          const celdaMensaje = document.createElement('td');
-          celdaMensaje.textContent = p.mensaje || '';
+          var celdaMensaje = document.createElement('td');
           celdaMensaje.className = 'celda-mensaje';
+          celdaMensaje.appendChild(crearBloqueMensaje(p.mensaje, bloquesParaComprobar));
 
           fila.appendChild(celdaFecha);
           fila.appendChild(celdaCanodromo);
@@ -353,7 +817,9 @@
       }
 
       function mostrarError(error) {
-        document.getElementById('mensaje').textContent = 'Error cargando el panel: ' + error.message;
+        document.getElementById('estadoCarga').hidden = true;
+        document.getElementById('textoError').textContent = error && error.message ? error.message : String(error);
+        document.getElementById('estadoError').hidden = false;
       }
     </script>
   </body>
