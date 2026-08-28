@@ -36,6 +36,7 @@ no hace falta: primero se calcula qué patas están "pendientes" (no
 cubiertas todavía Y ya deberían haber corrido) con solo lo leído de
 Sheets - si no hay ninguna, el job termina ahí, sin tocar el parquet.
 """
+import socket
 import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -43,6 +44,13 @@ from zoneinfo import ZoneInfo
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+
+# Ver el mismo timeout en vm_job_dog_forms.py (docs/BITACORA.md 2026-08-27):
+# gspread/google-auth no ponen timeout de red por defecto - sin esto, una
+# llamada colgada bloquearia el job entero hasta el TimeoutStartSec de
+# systemd en vez de fallar rapido y dejar que la siguiente pasada (20 min
+# despues) lo reintente.
+socket.setdefaulttimeout(60)
 
 SERVICE_ACCOUNT_FILE = "/root/.config/picks-premier-galgos/service_account.json"
 SHEET_ID = "1axZnIIIXBpqVhhb6RVGawNaWpSLVLBwXK079MxcOfF4"

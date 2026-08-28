@@ -35,6 +35,7 @@ salta.
 """
 import json
 import re
+import socket
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -44,6 +45,18 @@ import gspread
 import pandas as pd
 import pyarrow.parquet as pq
 from google.oauth2.service_account import Credentials
+
+# Bug real visto dos veces seguidas (2026-08-26 16:32 y 2026-08-27 04:01,
+# ver docs/BITACORA.md): el cliente HTTP que usan gspread/google-auth no
+# pone timeout por defecto - si la llamada a la API de Sheets se queda
+# colgada (red lenta/estancada un instante), el proceso se queda esperando
+# sin límite hasta que systemd lo mata a los 15 min (TimeoutStartSec),
+# sin haber consumido apenas CPU real (1s de CPU en 15 min de reloj - la
+# firma de estar bloqueado en I/O, no calculando nada). Poniendo un
+# timeout por defecto a nivel de socket, cualquier llamada de red que se
+# quede colgada falla a los 60s en vez de nunca - la siguiente pasada
+# diaria ya lo reintenta solo.
+socket.setdefaulttimeout(60)
 
 SERVICE_ACCOUNT_FILE = "/root/.config/picks-premier-galgos/service_account.json"
 SHEET_ID = "1axZnIIIXBpqVhhb6RVGawNaWpSLVLBwXK079MxcOfF4"
@@ -217,7 +230,15 @@ def main():
         fecha_iso = f"{y}-{m}-{d}"
 
         scope = master[(master["Canodromo_norm"] == leg["hipodromo"].lower()) & (master["Fecha_str"] == fecha_iso)]
-        match = scope[scope["Nombre_norm"] == leg["seleccion"].lower()]
+        seleccion_norm = leg["seleccion"].lower()
+        match = scope[scope["Nombre_norm"] == seleccion_norm]
+        if match.empty:
+            # El tipster a veces pega una anotación al nombre real del
+            # galgo ("Hollyoak Ethel SIN el favorito" - visto 2026-08-26,
+            # ver docs/BITACORA.md) - si no hay coincidencia exacta, se
+            # prueba si el nombre real de la card es un PREFIJO del texto
+            # del tipster (nunca al revés, para no matchear de más).
+            match = scope[scope["Nombre_norm"].apply(lambda n: bool(n) and seleccion_norm.startswith(n))]
         if match.empty:
             sin_dog_id += 1
             continue

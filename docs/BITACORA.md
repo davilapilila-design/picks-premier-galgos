@@ -3,6 +3,93 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-08-28 (cont.) — Auditoría: excepciones confirmadas + comprobación de galgo distinto
+Dos ajustes más a `src/Auditoria.gs` a partir de la sesión de auditoría de esta misma tarde:
+- **Excepciones confirmadas para `fecha_pick_inconsistente`**: los 15 `message_id` restantes de la
+  segunda tanda de importación manual (115, 116, 123, 127-130, 135, 136, 139, 140, 143, 144, 147,
+  148) quedaron verificados uno a uno contra el texto original de 3 de ellos (fechas distintas
+  dentro del lote) - `fecha_pick` es correcta, `fecha_recibido` de `mensajes_crudos` solo refleja
+  el día de la carga manual. Añadida una lista explícita `MESSAGE_IDS_CARGA_MANUAL_CONFIRMADOS_`
+  (documentada con el motivo) para que dejen de salir en la auditoría sin debilitar el check para
+  picks reales futuros del bot.
+- **Comprobación nueva, `posible_galgo_distinto`**: el dueño preguntó cómo validar que el
+  automatismo no solo aplica bien la fórmula, sino que encuentra la carrera/galgo CORRECTOS de
+  verdad (algo que comparar fórmulas entre sí no puede detectar, porque un dato de origen erróneo
+  en `resultados_galgos` produciría el mismo resultado en ambos lados). Se añadió el cruce del
+  nombre de galgo que puso el tipster (`apuestas_patas.seleccion`) contra el que registró la VM
+  para la trampa/carrera que se dio por buena (`resultados_galgos.nombre`) - si no se parecen
+  (tras ignorar mayúsculas/tildes/paréntesis tipo "(Res)"), es señal de que esa trampa cambió de
+  corredor (reserva/no corredor sustituido) y `resultado_pata` podría estar comparando contra un
+  perro distinto al apostado.
+- **Ejecutado y revisado**: sobre 113 apuestas / 118 patas / 388 filas de `resultados_galgos`, un
+  único aviso (`message_id 81`, fila 82: "Sccoby Mustang" del tipster vs "Scooby Mustang" en
+  `resultados_galgos`). El dueño confirmó que es un error tipográfico de captura al registrar la
+  selección, no un galgo distinto de verdad - el cruce trampa+carrera es correcto. Cero
+  discrepancias reales; agregados recalculados de cero coinciden con el panel (ganancia neta
+  +57,15 unidades, stake 520, ROI 10,99%, 35,71% de aciertos sobre 112 picks resueltos visibles).
+
+Commits: (pendiente)
+
+## 2026-08-28 — Auditoría ejecutada: sistema de cálculo sano, sin bugs de cálculo encontrados
+El dueño ejecutó `auditarSistema()` (ver entrada de abajo, 2026-08-27) contra la hoja real: 112
+apuestas, 117 patas, 385 filas de `resultados_galgos`. **Cero discrepancias** en `resultado_pata`,
+`resultado_final`, `retorno_real` y `unidades_netas` - el motor de cálculo reimplementado desde
+cero coincide con las fórmulas de la hoja en todas las filas. Cero problemas estructurales
+(sin `message_id` duplicados, sin patas huérfanas, sin descuadres de número de patas vs
+`tipo_apuesta`, sin cuotas/stakes inválidos, sin celdas en error, sin trampas duplicadas ni
+"varios ganadores" en `resultados_galgos`). Agregados del panel (ganancia neta +61,15 unidades,
+stake total 516, ROI 11,85%, 36,04% de aciertos sobre 111 picks resueltos y visibles) coinciden
+con `getMetricasPanel()`.
+
+Durante la revisión salieron dos categorías de aviso, ambas descartadas como bug real:
+- **2 "agregado" (ROI%/% aciertos) en la primera ejecución**: falso positivo del propio script de
+  auditoría, no del sistema - comparaba el valor recalculado sin redondear contra el de
+  `getMetricasPanel()` (que sí redondea a 1 decimal) con una tolerancia demasiado ajustada.
+  Corregido redondeando ambos lados antes de comparar.
+- **102 "fecha_pick_inconsistente" en la primera ejecución (87 + 15 tras el ajuste de abajo)**: el
+  dueño confirmó que corresponden a dos tandas de importación manual de picks históricos
+  anteriores a que el bot estuviera operativo (no pasaron por `Main.gs`), donde `fecha_recibido`
+  de `mensajes_crudos` solo refleja el momento de la carga a mano, no la fecha real del pick -
+  `fecha_pick` en `apuestas`/`apuestas_patas` (la que de verdad se usa para cruzar contra
+  `resultados_galgos`) es correcta. Verificado a mano contra el texto original de 3 picks
+  concretos de fechas distintas (`message_id` 115, 140, 147) antes de descartarlo. Durante esta
+  revisión se detectó y corrigió un fallo en la propia heurística del script (agrupaba por DÍA de
+  `fecha_recibido` para detectar cargas masivas; se cambió a agrupar por el INSTANTE EXACTO,
+  porque agrupar por día habría podido ocultar también días reales de mucha actividad del bot,
+  justo donde más importa vigilar el bug de reintentos/forward).
+
+Conclusión: no hace falta ningún fix de código a raíz de esta auditoría. El sistema de cálculo de
+apuestas está verificado como correcto sobre los datos reales actuales.
+
+Commits: (pendiente)
+
+## 2026-08-27 — Auditoría independiente de todo el cálculo de apuestas (`src/Auditoria.gs`)
+El dueño pidió verificar que las fórmulas de `apuestas`/`apuestas_patas` (resultado_pata,
+resultado_final, retorno_real, unidades_netas) y los agregados del panel público
+(`getMetricasPanel()`) son correctos, dado que ya se han encontrado bugs reales de cálculo antes
+en este proyecto (comparación número/texto sin coaccionar, `fecha_forward` perdida en
+reintentos...) y el panel es público sin login. Sin credenciales de la API de Sheets en este
+entorno (viven solo en la VM, ver `CLAUDE.md`) y sin `clasp run` funcional en este proyecto
+("NOT_FOUND"), la única vía es una función de Apps Script que el dueño ejecuta a mano desde el
+editor - mismo patrón que `setupSheet`/`checkConfig`.
+
+Añadida `auditarSistema()` (+ helpers de normalización y `test_reglasAuditoria_` con casos de
+mano, mismo patrón que `test_calcularMetricas_` en `Dashboard.gs`): reimplementa desde cero -sin
+leer ninguna fórmula ni fiarse de valores ya calculados- las reglas de `resultado_pata` (match
+exacto canódromo+fecha+hora+trampa; si no, "trampa ganadora" de la carrera como fallback),
+`resultado_final` (manual > tipo no soportado > alguna pata perdida > todas ganan > pendiente),
+`retorno_real` y `unidades_netas`, y compara el resultado contra lo que la hoja tiene ahora mismo
+en esas columnas, fila a fila. También revisa consistencia estructural (message_id duplicados,
+patas huérfanas, número de patas vs `tipo_apuesta`, celdas en error, cuotas/stakes inválidos,
+`fecha_pick` vs `fecha_forward`/`fecha_recibido` de `mensajes_crudos`, trampas duplicadas o
+varios "ganadores" en la misma carrera dentro de `resultados_galgos`) y recalcula los agregados
+del panel (ganancia neta, stake total, ROI%, % de aciertos) para compararlos contra
+`getMetricasPanel()`. Solo lectura sobre las pestañas de datos; escribe el detalle en una pestaña
+nueva `auditoria` además de en el Registro de ejecución. No se ha ejecutado todavía (pendiente de
+que el dueño la corra desde el editor y comparta el resultado).
+
+Commits: (pendiente)
+
 ## 2026-08-27 (cont.) — Panel v10: logo real en la cabecera (sustituye el monograma CSS "PG")
 El dueño mandó el logo circular real de Premier Galgos (JPEG). Redimensionado a 128×128
 (el original era 640×640, innecesario para un logo que se ve a 38-46px - habría inflado el
