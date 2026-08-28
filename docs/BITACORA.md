@@ -28,7 +28,7 @@ Dos ajustes más a `src/Auditoria.gs` a partir de la sesión de auditoría de es
   discrepancias reales; agregados recalculados de cero coinciden con el panel (ganancia neta
   +57,15 unidades, stake 520, ROI 10,99%, 35,71% de aciertos sobre 112 picks resueltos visibles).
 
-Commits: (pendiente)
+Commits: ca3d056
 
 ## 2026-08-28 — Auditoría ejecutada: sistema de cálculo sano, sin bugs de cálculo encontrados
 El dueño ejecutó `auditarSistema()` (ver entrada de abajo, 2026-08-27) contra la hoja real: 112
@@ -61,7 +61,7 @@ Durante la revisión salieron dos categorías de aviso, ambas descartadas como b
 Conclusión: no hace falta ningún fix de código a raíz de esta auditoría. El sistema de cálculo de
 apuestas está verificado como correcto sobre los datos reales actuales.
 
-Commits: (pendiente)
+Commits: ca3d056
 
 ## 2026-08-27 — Auditoría independiente de todo el cálculo de apuestas (`src/Auditoria.gs`)
 El dueño pidió verificar que las fórmulas de `apuestas`/`apuestas_patas` (resultado_pata,
@@ -88,7 +88,7 @@ del panel (ganancia neta, stake total, ROI%, % de aciertos) para compararlos con
 nueva `auditoria` además de en el Registro de ejecución. No se ha ejecutado todavía (pendiente de
 que el dueño la corra desde el editor y comparta el resultado).
 
-Commits: (pendiente)
+Commits: ca3d056
 
 ## 2026-08-27 (cont.) — Panel v10: logo real en la cabecera (sustituye el monograma CSS "PG")
 El dueño mandó el logo circular real de Premier Galgos (JPEG). Redimensionado a 128×128
@@ -183,7 +183,7 @@ Commits: (pendiente)
   Verificado: tras el cambio, las 8 patas pendientes encuentran su
   `dog_id` (antes 1 no lo encontraba) - ninguna se resolvió más porque
   ninguno de esos galgos ha vuelto a correr todavía, esperado.
-- Commits: (pendiente)
+- Commits: ca3d056
 
 ## 2026-08-27 (cont.) — Panel v9: rediseño completo con Claude Design, identidad de marca de la landing, gráfico SVG propio (sin Google Charts)
 El dueño pidió delegar el rediseño visual a Claude Design (herramienta aparte, sin acceso a
