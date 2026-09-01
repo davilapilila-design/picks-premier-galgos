@@ -229,7 +229,7 @@ function calcularUnidadesNetas_(retornoReal, stake) {
 /**
  * Ejecutar A MANO desde el editor (Ejecutar > testReglasAuditoria) antes
  * de fiarte del resultado de auditarSistema() sobre datos reales - mismo
- * espíritu que test_calcularMetricas_/test_calcularHistoricoPicks_ en
+ * espíritu que test_calcularMetricas/test_calcularHistoricoPicks en
  * Dashboard.gs, pero SIN guion bajo al final: Apps Script oculta del
  * desplegable de "Ejecutar" cualquier función cuyo nombre termine en "_"
  * (las trata como privadas), así que una función pensada para ejecutarse a

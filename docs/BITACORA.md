@@ -3,6 +3,32 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-01 — Panel v11: rediseño + filtro de fechas, hora de carrera, picks con value, fix jornadas=picks
+Rediseño completo de `src/Panel.html` (entregable de un handoff de diseño, HTML/CSS/JS plano
+autocontenido, sin frameworks - encaja tal cual en `HtmlService`) más los cambios de servidor en
+`src/Dashboard.gs` que ese nuevo cliente necesitaba:
+- **Filtro de rango de fechas** en la tabla de picks, combinable con Ganados/Perdidos - implementado
+  en el CLIENTE sobre el histórico ya cargado (`historicoPicks[].fechaISO`), sin volver a acotar la
+  consulta del servidor por fecha (la v4 ya se revirtió una vez por eso, "no me cuadran los números").
+- **"Mensaje original"** ahora muestra la hora exacta de envío del pick (`fechaHoraLabel`) y la hora
+  de cada carrera del pick (`historicoPicks[].patas`, una entrada por pata - cubre dobles/triples),
+  con el tiempo transcurrido entre ambas calculado en el cliente. `getMetricasPanel()` no leía
+  `apuestas_patas` hasta ahora; se añadió `obtenerPatasPorMensaje_()` (lectura en bloque, igual
+  patrón que `Auditoria.gs`) y se cruza por `message_id`.
+- **Nueva tarjeta "PICKS CON VALUE"**: % de picks resueltos cuya cuota de cierre (`cuota_final`)
+  acabó por debajo de la publicada (`cuota`) - señal de que el mercado se movió a favor del pick.
+  Función pura `calcularPctCuotaBajada_()` con su test, mismo patrón que `calcularMetricas_`.
+- **Bug real corregido**: `calcularMetricas_` generaba una entrada de `evolucion` por CADA pick
+  resuelto en vez de por día, así que "nº de jornadas" y "nº de picks" del panel coincidían siempre
+  (reportado por el dueño: "130 picks en 130 jornadas"). Ahora se agrupa por día natural
+  (`Europe/Madrid`); test nuevo cubre dos picks el mismo día.
+- Aplicado el cambio obligatorio del handoff de diseño: retirado el `MOCK()` de `Panel.html` que
+  solo se usaba para previsualizar fuera de Apps Script.
+- Desplegado sobre el mismo deployment público de siempre
+  (`AKfycbynXi-jwc8nA4Z3wEx3NNrcVxDwiBKMRQHdrXx_5vdXzrYcItxBlijtD68k4g72ww @21`).
+
+Commits: (pendiente)
+
 ## 2026-08-28 (cont.) — Auditoría: excepciones confirmadas + comprobación de galgo distinto
 Dos ajustes más a `src/Auditoria.gs` a partir de la sesión de auditoría de esta misma tarde:
 - **Excepciones confirmadas para `fecha_pick_inconsistente`**: los 15 `message_id` restantes de la
