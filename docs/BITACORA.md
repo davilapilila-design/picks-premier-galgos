@@ -27,7 +27,7 @@ autocontenido, sin frameworks - encaja tal cual en `HtmlService`) más los cambi
 - Desplegado sobre el mismo deployment público de siempre
   (`AKfycbynXi-jwc8nA4Z3wEx3NNrcVxDwiBKMRQHdrXx_5vdXzrYcItxBlijtD68k4g72ww @21`).
 
-Commits: (pendiente)
+Commits: 467ebfe
 
 ## 2026-08-28 (cont.) — Auditoría: excepciones confirmadas + comprobación de galgo distinto
 Dos ajustes más a `src/Auditoria.gs` a partir de la sesión de auditoría de esta misma tarde:
