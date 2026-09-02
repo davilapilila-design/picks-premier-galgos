@@ -26,7 +26,7 @@ nada del 2º ("12:21 Harlow · Rallying Wood"), y no aparecía ni en `apuestas` 
   ni tocar la hoja a mano.
 - Desplegado sobre el mismo deployment público de siempre (`...5vdXzrYcItxBlijtD68k4g72ww @22`).
 
-Commits: (pendiente)
+Commits: e6327fd
 
 ## 2026-09-01 — Panel v11: rediseño + filtro de fechas, hora de carrera, picks con value, fix jornadas=picks
 Rediseño completo de `src/Panel.html` (entregable de un handoff de diseño, HTML/CSS/JS plano
