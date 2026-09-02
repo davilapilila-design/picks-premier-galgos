@@ -68,19 +68,28 @@ function manejarReply_(msg, texto) {
 }
 
 function manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward) {
+  // Descarga de foto y llamada a la IA van en el MISMO try/catch (bug real
+  // encontrado 2026-09-02, ver docs/BITACORA.md): antes la descarga de la
+  // foto estaba fuera de este bloque, así que si Telegram fallaba al
+  // resolver el file_id (glitch puntual, límite de tasa...) la excepción
+  // escapaba sin capturar hasta doPost, que no manda ningún mensaje - el
+  // pick se perdía en silencio, con estado=pendiente para siempre y sin
+  // fila en `apuestas`. Ambos fallos ahora acaban en el mismo sitio:
+  // marcado como error y con aviso, para que reintentarMensajesConError()
+  // (más abajo) lo recoja solo.
   let fotoBlob = null;
-  if (fotoFileId) {
-    fotoBlob = downloadTelegramPhoto(fotoFileId);
-  }
-
   let resultado;
   try {
+    if (fotoFileId) {
+      fotoBlob = downloadTelegramPhoto(fotoFileId);
+    }
     resultado = extraerPick(texto, fotoBlob);
   } catch (err) {
-    Logger.log('Fallo llamando a la IA de extracción: ' + err);
+    Logger.log('Fallo procesando el pick (descarga de foto o IA de extracción): ' + err);
     actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_ERROR);
     sendTelegramMessage(msg.chat.id,
-      'No he podido procesar este pick (fallo llamando a la IA). Lo he guardado en crudo, revísalo a mano.',
+      'No he podido procesar este pick ahora mismo (fallo técnico al leerlo). Lo tengo guardado y lo ' +
+      'reintentaré yo solo en un rato - no hace falta que hagas nada.',
       msg.message_id);
     return;
   }
@@ -297,4 +306,50 @@ function configurarTriggerReintentos() {
   });
   ScriptApp.newTrigger('reintentarMensajesConError').timeBased().everyHours(2).create();
   Logger.log('Disparador instalado: reintentarMensajesConError cada 2 horas.');
+}
+
+/**
+ * Reparación puntual (2026-09-02, ver docs/BITACORA.md) de picks que se
+ * quedaron atascados en `pendiente` - no en `error` - por el bug real de
+ * `manejarPickNuevo_` corregido arriba: `reintentarMensajesConError()`
+ * solo recoge mensajes con estado=error, así que estos no se
+ * reintentaban solos. Lista cerrada de `message_id` confirmados a mano
+ * con `buscarPicksAtascados()` (Auditoria.gs) - no un heurístico
+ * automático, para no arriesgarse a tocar una reply atascada de verdad
+ * (que también puede salir en ese chequeo) y que el reintento intente
+ * procesarla como si fuera un pick nuevo.
+ *
+ * Marca cada uno como `error` y lanza reintentarMensajesConError() en la
+ * misma ejecución - un solo "Ejecutar" desde el editor basta.
+ *
+ * Ejecutar A MANO desde el editor de Apps Script, una sola vez.
+ */
+function repararPicksAtascados_2026_09_02() {
+  const MESSAGE_IDS_CONFIRMADOS = ['214'];
+
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    Logger.log('mensajes_crudos está vacía, nada que reparar.');
+    return;
+  }
+  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+  let marcados = 0;
+  for (let i = 0; i < datos.length; i++) {
+    const messageId = String(datos[i][index['message_id']]);
+    if (MESSAGE_IDS_CONFIRMADOS.indexOf(messageId) === -1) continue;
+    if (datos[i][index['estado']] !== ESTADO_PENDIENTE) {
+      Logger.log('message_id=' + messageId + ' ya no está en pendiente (estado=' +
+        datos[i][index['estado']] + '), no lo toco.');
+      continue;
+    }
+    sheet.getRange(i + 2, index['estado'] + 1).setValue(ESTADO_ERROR);
+    marcados++;
+    Logger.log('message_id=' + messageId + ': estado cambiado de pendiente a error.');
+  }
+
+  Logger.log('Marcados ' + marcados + ' mensaje(s) como error. Lanzando reintentarMensajesConError()...');
+  reintentarMensajesConError();
 }

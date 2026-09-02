@@ -771,3 +771,69 @@ function logResumenAuditoria_(r) {
 
   Logger.log('===== FIN DEL RESUMEN =====');
 }
+
+/**
+ * Busca picks "perdidos": mensajes en `mensajes_crudos` cuyo `estado` se
+ * quedó en `pendiente` o `error` y que NUNCA llegaron a tener una fila
+ * correspondiente en `apuestas`. Es el chequeo que faltaba para el bug
+ * real encontrado 2026-09-02 (ver docs/BITACORA.md): si
+ * `downloadTelegramPhoto` (Telegram.gs) falla al descargar la foto de un
+ * pick, la excepción escapa sin capturar en `manejarPickNuevo_`
+ * (Main.gs) - el mensaje se queda guardado en crudo con estado=pendiente
+ * para siempre, sin avisar por Telegram y sin crear fila en `apuestas`.
+ * `auditarSistema()` (más arriba) NO cubre esto: parte de `apuestas`
+ * como base, así que un mensaje que nunca llegó a esa hoja es invisible
+ * para esa auditoría.
+ *
+ * OJO con los falsos positivos: una respuesta (reply) a un mensaje de
+ * confirmación (marcar "ganó"/"perdió" a mano) TAMBIÉN puede quedarse en
+ * pendiente/error si `procesarComandoReply` falla (mismo tipo de bug,
+ * pero en `manejarReply_`) - esas NUNCA tienen fila propia en `apuestas`
+ * aunque funcionen bien, así que también saldrán en esta lista. Se
+ * distinguen a ojo por el contenido: una reply suele ser una palabra o
+ * frase corta ("ganó", "perdió a por poco"...), un pick nuevo perdido
+ * suele ser un texto largo o llevar foto.
+ *
+ * SOLO LECTURA. Ejecutar A MANO desde el editor (Ejecutar >
+ * buscarPicksAtascados), igual que auditarSistema.
+ */
+function buscarPicksAtascados() {
+  const sheetMensajes = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const sheetApuestas = getSheet_(SHEET_APUESTAS);
+  const idxMensajes = getHeaderIndex_(sheetMensajes);
+  const idxApuestas = getHeaderIndex_(sheetApuestas);
+
+  const filasMensajes = leerFilasConDatos_(sheetMensajes, idxMensajes, 'message_id');
+  const filasApuestas = leerFilasConDatos_(sheetApuestas, idxApuestas, 'message_id');
+
+  const messageIdsConApuesta = {};
+  filasApuestas.forEach(function (a) {
+    messageIdsConApuesta[String(a.valores[idxApuestas['message_id']])] = true;
+  });
+
+  const atascados = [];
+  filasMensajes.forEach(function (m) {
+    const estado = m.valores[idxMensajes['estado']];
+    if (estado !== ESTADO_PENDIENTE && estado !== ESTADO_ERROR) return;
+    const messageId = String(m.valores[idxMensajes['message_id']]);
+    if (messageIdsConApuesta[messageId]) return;
+    atascados.push({
+      messageId: messageId,
+      fechaRecibido: m.valores[idxMensajes['fecha_recibido']],
+      estado: estado,
+      contenido: String(m.valores[idxMensajes['contenido']] || '').replace(/\s+/g, ' ').slice(0, 90),
+      tieneFoto: !!m.valores[idxMensajes['foto_file_id']],
+    });
+  });
+
+  Logger.log('===== PICKS POSIBLEMENTE ATASCADOS =====');
+  Logger.log('Mensajes revisados en mensajes_crudos: ' + filasMensajes.length);
+  Logger.log('Atascados (estado pendiente/error, sin fila en apuestas): ' + atascados.length);
+  atascados
+    .sort(function (a, b) { return a.fechaRecibido - b.fechaRecibido; })
+    .forEach(function (a) {
+      Logger.log('message_id=' + a.messageId + ' fecha=' + a.fechaRecibido + ' estado=' + a.estado +
+        ' foto=' + a.tieneFoto + ' contenido="' + a.contenido + '"');
+    });
+  Logger.log('===== FIN =====');
+}

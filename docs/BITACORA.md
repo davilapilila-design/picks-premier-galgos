@@ -3,6 +3,31 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-02 — Bug real: pick perdido en silencio si fallaba la descarga de la foto
+El dueño reenvió 3 picks casi seguidos (13:41-13:42); el bot confirmó el 1º y el 3º pero no dijo
+nada del 2º ("12:21 Harlow · Rallying Wood"), y no aparecía ni en `apuestas` ni en el panel.
+- **Causa**: en `manejarPickNuevo_` (`src/Main.gs`), `downloadTelegramPhoto(fotoFileId)` se llamaba
+  FUERA del `try/catch` que solo envolvía la llamada a la IA. Si esa descarga fallaba (glitch
+  puntual de la API de Telegram, probablemente por mandar 3 `getFile` casi a la vez), la excepción
+  escapaba sin capturar hasta `doPost`, que solo hace `Logger.log` y no manda nada por Telegram - el
+  mensaje se quedaba en `mensajes_crudos` con `estado=pendiente` para siempre, sin fila en `apuestas`.
+- **Chequeo nuevo, solo lectura**: `buscarPicksAtascados()` (`src/Auditoria.gs`) - mensajes con
+  `estado` en `pendiente`/`error` sin fila correspondiente en `apuestas` (la auditoría existente
+  parte de `apuestas`, así que no veía estos). Ejecutado sobre 139 mensajes: **1 solo caso histórico**
+  (el propio `message_id=214` de hoy) - no es un problema recurrente, era la primera vez.
+- **Arreglo**: la descarga de la foto entra ahora en el mismo `try/catch` que la IA - cualquiera de
+  los dos fallos marca `estado=error` y manda un aviso por Telegram explicando que se reintentará
+  solo (antes el mensaje de error de la IA sonaba a "revísalo a mano"; ahora deja claro que
+  `reintentarMensajesConError()`, ya programada cada 2h, se encarga sin que el tipster tenga que
+  hacer nada).
+- **Reparación del caso ya atascado**: `repararPicksAtascados_2026_09_02()` (`src/Main.gs`) - lista
+  cerrada con el único `message_id` confirmado, lo pasa de `pendiente` a `error` y lanza
+  `reintentarMensajesConError()` en la misma ejecución, sin que el dueño tuviera que reenviar nada
+  ni tocar la hoja a mano.
+- Desplegado sobre el mismo deployment público de siempre (`...5vdXzrYcItxBlijtD68k4g72ww @22`).
+
+Commits: (pendiente)
+
 ## 2026-09-01 — Panel v11: rediseño + filtro de fechas, hora de carrera, picks con value, fix jornadas=picks
 Rediseño completo de `src/Panel.html` (entregable de un handoff de diseño, HTML/CSS/JS plano
 autocontenido, sin frameworks - encaja tal cual en `HtmlService`) más los cambios de servidor en
