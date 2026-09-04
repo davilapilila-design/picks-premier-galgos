@@ -427,8 +427,8 @@
     var out=[],k=null;
     ev.forEach(function(p){
       var kk=granKey(p.fechaLabel);
-      if(kk!==k){ out.push({fechaLabel:granLabel(p.fechaLabel),acumuladoEur:p.acumuladoEur}); k=kk; }
-      else out[out.length-1].acumuladoEur=p.acumuladoEur;
+      if(kk!==k){ out.push({fechaLabel:granLabel(p.fechaLabel),acumuladoEur:p.acumuladoEur,acumuladoUnidades:p.acumuladoUnidades}); k=kk; }
+      else { out[out.length-1].acumuladoEur=p.acumuladoEur; out[out.length-1].acumuladoUnidades=p.acumuladoUnidades; }
     });
     return out;
   }
@@ -460,7 +460,7 @@
     var iw=w-pl-pr, ih=h-pt-pb, n=ev.length;
     var X=function(i){ return n===1?pl+iw/2:pl+i*iw/(n-1); };
     var Y=function(v){ return pt+(mx-v)/(mx-mn)*ih; };
-    st.pts=ev.map(function(p,i){ return {x:X(i), y:Y(Number(p.acumuladoEur)||0), v:Number(p.acumuladoEur)||0, d:p.fechaLabel}; });
+    st.pts=ev.map(function(p,i){ return {x:X(i), y:Y(Number(p.acumuladoEur)||0), v:Number(p.acumuladoEur)||0, u:Number(p.acumuladoUnidades)||0, d:p.fechaLabel}; });
 
     var line="", area="";
     st.pts.forEach(function(p,i){ line += (i?" L ":"M ")+p.x.toFixed(1)+" "+p.y.toFixed(1); });
@@ -502,7 +502,7 @@
       if(c){ c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("opacity","1"); }
       if(cur){ cur.setAttribute("x1",p.x); cur.setAttribute("x2",p.x); cur.setAttribute("opacity","1"); }
       tip.style.left=p.x+"px"; tip.style.top=p.y+"px"; tip.style.opacity="1";
-      $("tipDate").textContent=p.d; $("tipVal").textContent=signedEur(p.v);
+      $("tipDate").textContent=p.d; $("tipVal").textContent=signedEur(p.v)+" · "+sgn(p.u)+nf(Math.abs(p.u),2)+" UD";
     }
     function out(){
       tip.style.opacity="0";

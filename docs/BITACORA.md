@@ -3,6 +3,16 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-04 — Panel v12: el tooltip del gráfico también muestra unidades
+Pedido del dueño: al pinchar/pasar el ratón sobre la curva de beneficio, el tooltip solo mostraba
+el € acumulado. `getMetricasPanel()` (`Dashboard.gs`) no mandaba las unidades crudas de cada punto
+de `evolucion`, solo el equivalente en euros - se añadió `acumuladoUnidades` a esa respuesta.
+En el cliente (`Panel.html`), se propaga por la agrupación semana/mes de `serie()` (antes solo
+llevaba `acumuladoEur`) y se añade a `st.pts` para pintarlo en el tooltip junto al importe en euros.
+Desplegado sobre el mismo deployment público de siempre (`...5vdXzrYcItxBlijtD68k4g72ww @23`).
+
+Commits: (pendiente)
+
 ## 2026-09-02 — Bug real: pick perdido en silencio si fallaba la descarga de la foto
 El dueño reenvió 3 picks casi seguidos (13:41-13:42); el bot confirmó el 1º y el 3º pero no dijo
 nada del 2º ("12:21 Harlow · Rallying Wood"), y no aparecía ni en `apuestas` ni en el panel.

@@ -386,6 +386,7 @@ function getMetricasPanel() {
       return {
         fechaLabel: Utilities.formatDate(p.fecha, 'Europe/Madrid', 'dd/MM/yyyy'),
         acumuladoEur: Math.round(p.acumuladoUnidades * TASA_EUR_POR_UNIDAD * 100) / 100,
+        acumuladoUnidades: Math.round(p.acumuladoUnidades * 100) / 100,
       };
     }),
     historicoPicks: historicoPicks,
