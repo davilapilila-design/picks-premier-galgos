@@ -11,7 +11,7 @@ En el cliente (`Panel.html`), se propaga por la agrupación semana/mes de `serie
 llevaba `acumuladoEur`) y se añade a `st.pts` para pintarlo en el tooltip junto al importe en euros.
 Desplegado sobre el mismo deployment público de siempre (`...5vdXzrYcItxBlijtD68k4g72ww @23`).
 
-Commits: (pendiente)
+Commits: 7156070
 
 ## 2026-09-02 — Bug real: pick perdido en silencio si fallaba la descarga de la foto
 El dueño reenvió 3 picks casi seguidos (13:41-13:42); el bot confirmó el 1º y el 3º pero no dijo
