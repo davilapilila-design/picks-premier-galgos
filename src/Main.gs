@@ -104,6 +104,21 @@ function manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward) 
 
   const fechaPick = fechaForward || fechaRecibido;
 
+  if (resultado.esExotica) {
+    appendApuestaExotica(msg.message_id, fechaPick, resultado.tipoApuesta, resultado.hipodromo,
+      resultado.horaCarrera, resultado.combinaciones, resultado.stakeTotal,
+      resultado.stakePorCombinacion, texto);
+    actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
+
+    const textoConfirmacionExotica = construirTextoConfirmacionExotica_(resultado);
+    const confirmMessageIdExotica = sendTelegramMessage(msg.chat.id, textoConfirmacionExotica, msg.message_id);
+    if (confirmMessageIdExotica) {
+      const filaExotica = findApuestaExoticaByMessageIdRecienCreada_(msg.message_id);
+      if (filaExotica) setApuestaExoticaConfirmMessageId(filaExotica.row, confirmMessageIdExotica);
+    }
+    return;
+  }
+
   appendApuestaConPatas(msg.message_id, fechaPick, resultado.tipoApuesta, resultado.cuota, resultado.stake, resultado.patas);
   actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
 
@@ -145,6 +160,31 @@ function construirTextoConfirmacion_(resultado) {
   }).join(' + ');
   return 'Apuesta registrada (' + resultado.tipoApuesta + '): ' + resumenPatas +
     ' @' + resultado.cuota + ' (stake ' + resultado.stake + 'u)';
+}
+
+/**
+ * Mensaje de confirmación al registrar una gemela/trío - sin cuota (no se
+ * sabe hasta que se resuelve), a diferencia de construirTextoConfirmacion_.
+ */
+function construirTextoConfirmacionExotica_(resultado) {
+  const combos = resultado.combinaciones.map(function (c) { return 'T' + c.join('-T'); }).join(' y ');
+  return 'Apuesta registrada (' + resultado.tipoApuesta + '): ' + resultado.horaCarrera + ' ' +
+    resultado.hipodromo + ' - ' + combos + ' (stake ' + resultado.stakePorCombinacion +
+    'u cada una, ' + resultado.stakeTotal + 'u total)';
+}
+
+function test_construirTextoConfirmacionExotica() {
+  const texto = construirTextoConfirmacionExotica_({
+    tipoApuesta: 'gemela',
+    horaCarrera: '22:31',
+    hipodromo: 'Star Pelaw',
+    combinaciones: [['3', '4'], ['4', '3']],
+    stakePorCombinacion: 2,
+    stakeTotal: 4,
+  });
+  assertIguales_(texto, 'Apuesta registrada (gemela): 22:31 Star Pelaw - T3-T4 y T4-T3 (stake 2u cada una, 4u total)',
+    'texto exacto del caso real Star Pelaw');
+  Logger.log('test_construirTextoConfirmacionExotica: OK, todas las comprobaciones pasaron.');
 }
 
 /**
