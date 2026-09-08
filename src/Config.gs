@@ -96,6 +96,32 @@ const TIPOS_APUESTA_SOPORTADOS = ['simple', 'doble', 'triple'];
 // CLAUDE.md y docs/superpowers/specs/2026-08-26-panel-metricas-design.md.
 const TASA_EUR_POR_UNIDAD = 250;
 
+const SHEET_APUESTAS_EXOTICAS = 'apuestas_exoticas';
+const SHEET_RESULTADOS_GEMELA_TRIO = 'resultados_gemela_trio';
+
+// gemela = acertar 1º y 2º de UNA carrera; trio = 1º, 2º y 3º. Se paga al
+// dividendo oficial que publica la pista tras la carrera, no a una cuota
+// pactada de antemano - por eso no hay columna `cuota` aquí como en
+// `apuestas`. Ver docs/superpowers/specs/2026-09-08-gemela-trio-design.md.
+const TIPOS_APUESTA_EXOTICA = ['gemela', 'trio'];
+
+const COLUMNAS_APUESTAS_EXOTICAS = [
+  'message_id', 'fecha_pick', 'tipo_apuesta', 'hipodromo', 'hora_carrera',
+  'combinaciones', 'stake_total', 'stake_por_combinacion', 'resultado_final',
+  'combinacion_acertada', 'dividendo', 'retorno_real', 'unidades_netas',
+  'oculto', 'mensaje', 'confirm_message_id', 'creado_en',
+];
+
+// Solo la escribe el job de la VM de Proyecto Galgos (mismo patrón que
+// resultados_galgos). tipo: 'forecast' (gemela) | 'tricast' (trio).
+// pos1/pos2/pos3: trampas que de verdad quedaron en esas posiciones
+// (pos3 vacío si tipo=forecast). dividendo: a stake de 1 unidad, mismo
+// criterio que `cuota` en el resto del proyecto.
+const COLUMNAS_RESULTADOS_GEMELA_TRIO = [
+  'canodromo', 'fecha', 'hora', 'tipo', 'pos1', 'pos2', 'pos3', 'dividendo',
+  'race_id', 'actualizado_en',
+];
+
 function getScriptProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
   if (!value) {
