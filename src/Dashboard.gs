@@ -334,7 +334,9 @@ function obtenerFilasExoticasNormalizadas_() {
   return datos.map(function (fila) {
     const tipoApuesta = fila[index['tipo_apuesta']];
     const nombre = tipoApuesta === 'trio' ? 'Trío' : 'Gemela';
-    const combinaciones = String(fila[index['combinaciones']]).split(';').join(' y ');
+    const combinaciones = String(fila[index['combinaciones']]).split(';').map(function (c) {
+      return 'T' + c.split('-').join('-T');
+    }).join(' y ');
     return {
       messageId: String(fila[index['message_id']] || ''),
       oculto: fila[index['oculto']] === true,
@@ -345,7 +347,7 @@ function obtenerFilasExoticasNormalizadas_() {
       cuotaFinal: '',
       fechaPick: fila[index['fecha_pick']],
       canodromo: fila[index['hipodromo']],
-      galgo: nombre + ' T' + combinaciones.split('-').join('-T'),
+      galgo: nombre + ' ' + combinaciones,
       mensaje: fila[index['mensaje']],
     };
   });
