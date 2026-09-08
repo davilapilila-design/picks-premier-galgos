@@ -15,8 +15,11 @@ function setupSheet() {
   crearApuestasPatas_(ss);
   crearApuestas_(ss);
   crearResultadosGalgos_(ss);
+  crearApuestasExoticas_(ss);
+  crearResultadosGemelaTrio_(ss);
   borrarHojaPorDefecto_(ss);
-  Logger.log('Listo: mensajes_crudos, apuestas_patas, apuestas y resultados_galgos creadas.');
+  Logger.log('Listo: mensajes_crudos, apuestas_patas, apuestas, resultados_galgos, ' +
+    'apuestas_exoticas y resultados_gemela_trio creadas.');
 }
 
 function crearMensajesCrudos_(ss) {
@@ -30,6 +33,20 @@ function crearResultadosGalgos_(ss) {
   const sheet = ss.getSheetByName(SHEET_RESULTADOS_GALGOS) || ss.insertSheet(SHEET_RESULTADOS_GALGOS);
   sheet.clear();
   sheet.getRange(1, 1, 1, COLUMNAS_RESULTADOS_GALGOS.length).setValues([COLUMNAS_RESULTADOS_GALGOS]);
+  sheet.setFrozenRows(1);
+}
+
+function crearApuestasExoticas_(ss) {
+  const sheet = ss.getSheetByName(SHEET_APUESTAS_EXOTICAS) || ss.insertSheet(SHEET_APUESTAS_EXOTICAS);
+  sheet.clear();
+  sheet.getRange(1, 1, 1, COLUMNAS_APUESTAS_EXOTICAS.length).setValues([COLUMNAS_APUESTAS_EXOTICAS]);
+  sheet.setFrozenRows(1);
+}
+
+function crearResultadosGemelaTrio_(ss) {
+  const sheet = ss.getSheetByName(SHEET_RESULTADOS_GEMELA_TRIO) || ss.insertSheet(SHEET_RESULTADOS_GEMELA_TRIO);
+  sheet.clear();
+  sheet.getRange(1, 1, 1, COLUMNAS_RESULTADOS_GEMELA_TRIO.length).setValues([COLUMNAS_RESULTADOS_GEMELA_TRIO]);
   sheet.setFrozenRows(1);
 }
 
@@ -227,7 +244,10 @@ function columnToLetter_(columna) {
  * borrar si es la única que queda).
  */
 function borrarHojaPorDefecto_(ss) {
-  const nombresReales = [SHEET_MENSAJES_CRUDOS, SHEET_APUESTAS, SHEET_APUESTAS_PATAS, SHEET_RESULTADOS_GALGOS];
+  const nombresReales = [
+    SHEET_MENSAJES_CRUDOS, SHEET_APUESTAS, SHEET_APUESTAS_PATAS, SHEET_RESULTADOS_GALGOS,
+    SHEET_APUESTAS_EXOTICAS, SHEET_RESULTADOS_GEMELA_TRIO,
+  ];
   ss.getSheets().forEach(function (sheet) {
     if (nombresReales.indexOf(sheet.getName()) === -1 && ss.getSheets().length > 1) {
       ss.deleteSheet(sheet);
