@@ -3,6 +3,38 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
+Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y
+3º), con o sin "reversible". A diferencia de simple/doble/triple, es UNA
+carrera con varias selecciones y orden, pagada al dividendo oficial que
+publica la pista tras la carrera (no a una cuota fija) - ver
+`docs/superpowers/specs/2026-09-08-gemela-trio-design.md`.
+- Hojas nuevas: `apuestas_exoticas` (la escribe el bot) y
+  `resultados_gemela_trio` (la alimenta un job de la VM de Proyecto
+  Galgos, tarea pendiente en ese otro repo - ver la spec).
+- IA (`AI.gs`): reconoce "GEMELA"/"TRÍO" (desglosado o "reversible"),
+  extrae combinaciones de orden en vez de cuota fija.
+- Resolución por script (`resolverApuestasExoticas`, `Main.gs`, disparador
+  cada 2h) en vez de fórmula de hoja - compara las combinaciones jugadas
+  contra el resultado real y calcula retorno con el dividendo oficial.
+- Dos avisos por Telegram (registro y resolución, ambos como respuesta al
+  mensaje original) - a diferencia del resto de apuestas, que se resuelven
+  en silencio.
+- Cuentan en el panel público (unidades, ROI, aciertos, evolución,
+  historial) - única excepción: la tarjeta "PICKS CON VALUE", que no
+  aplica (no hay cuota previa que comparar).
+- Reparado el caso histórico real (Star Pelaw, 5-sept-2026): acertó la
+  combinación 4-3, dividendo 7.42, retorno 14.84u (+10.84u).
+- Dos bugs reales de auto-conversión de tipos de Google Sheets
+  encontrados y arreglados al probar contra producción (valores tipo
+  "22:31" o "4-3" que Sheets detecta como hora/fecha si no se fuerza
+  formato de texto antes de escribir), más un bug cosmético en la
+  etiqueta de combinaciones del panel.
+- Desplegado sobre el mismo deployment público de siempre
+  (`...5vdXzrYcItxBlijtD68k4g72ww @24`).
+
+Commits: (pendiente)
+
 ## 2026-09-04 — Panel v12: el tooltip del gráfico también muestra unidades
 Pedido del dueño: al pinchar/pasar el ratón sobre la curva de beneficio, el tooltip solo mostraba
 el € acumulado. `getMetricasPanel()` (`Dashboard.gs`) no mandaba las unidades crudas de cada punto
