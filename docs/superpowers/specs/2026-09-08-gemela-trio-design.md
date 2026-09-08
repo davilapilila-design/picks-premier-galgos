@@ -203,10 +203,27 @@ recuperación automática — no hace falta que el dueño reenvíe nada.
 - Cambios en Proyecto Galgos más allá de capturar y publicar
   `forecasts`/`tricasts` — no se toca su dashboard, sus modelos, ni nada
   del pipeline de predicción.
-- **Panel público** (`Dashboard.gs`/`Panel.html`): `getMetricasPanel()`
-  sigue leyendo solo `apuestas` — las gemelas/tríos NO suman a las
-  tarjetas ni a la tabla del panel en esta versión. Se guardan y se
-  resuelven bien, pero de momento solo se ven en la hoja `apuestas_exoticas`
-  y en Telegram. Sumarlas al panel es una ampliación aparte, con su propia
-  decisión de diseño (¿una fila más en la tabla? ¿tarjetas separadas?) que
-  no se ha hablado todavía.
+
+## Integración en el panel público (`Dashboard.gs`/`Panel.html`)
+Corrección sobre la primera versión de este documento (el dueño confirmó
+2026-09-08: **sí tienen que contar**, no quedarse aparte). `getMetricasPanel()`
+combina `apuestas` + `apuestas_exoticas` (mismo filtro de siempre: no
+oculta, `resultado_final` en `gano`/`perdio`) para:
+- **Unidades netas, stake total, ROI%, % de aciertos**: suman las filas
+  resueltas de ambas hojas juntas, no dos cálculos separados.
+- **Evolución acumulada** (curva del gráfico): se fusionan y se ordenan
+  por fecha las filas de ambas hojas antes de acumular — sigue agrupando
+  por día natural (bug ya corregido en `calcularMetricas_`), un día con un
+  pick normal y una gemela sigue siendo 1 sola entrada de jornada.
+- **Tabla de historial** (`historicoPicks`): las filas de gemela/trío
+  entran igual que las demás. `cuota` se rellena con el `dividendo` de la
+  combinación acertada (o el de la carrera si perdió, si se puede saber
+  cuál era relevante — si no, vacío); `galgo` se rellena con un texto
+  legible tipo `"Gemela T4-T3"`/`"Trío T1-T2-T3"`; `canodromo` y
+  `mensaje` igual que las demás.
+
+**Excepción explícita**: la tarjeta **"PICKS CON VALUE"** (`pctCuotaBajada`)
+NO incluye gemela/trío — ese cálculo compara la cuota publicada contra el
+cierre, y aquí no existe una cuota previa con la que comparar (se paga al
+dividendo final, no a un precio pactado). Se calcula igual que hoy, solo
+sobre `apuestas`.
