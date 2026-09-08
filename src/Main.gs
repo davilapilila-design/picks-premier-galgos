@@ -512,7 +512,11 @@ function resolverApuestasExoticas() {
       const filaSheet = i + 2;
 
       sheet.getRange(filaSheet, index['resultado_final'] + 1).setValue(resolucion.resultado);
-      sheet.getRange(filaSheet, index['combinacion_acertada'] + 1).setValue(resolucion.combinacionAcertada || '');
+      // setNumberFormat('@') ANTES de setValue: "4-3" sin esto Sheets lo
+      // detecta como fecha y lo convierte solo (bug real 2026-09-08, visto
+      // en producción con el caso Star Pelaw - combinacion_acertada acabó
+      // guardada como "2026-03-03..." en vez de como texto "4-3").
+      sheet.getRange(filaSheet, index['combinacion_acertada'] + 1).setNumberFormat('@').setValue(resolucion.combinacionAcertada || '');
       sheet.getRange(filaSheet, index['dividendo'] + 1).setValue(resolucion.dividendo || '');
       sheet.getRange(filaSheet, index['retorno_real'] + 1).setValue(retornoReal);
       sheet.getRange(filaSheet, index['unidades_netas'] + 1).setValue(unidadesNetas);
@@ -587,4 +591,39 @@ function repararPicksAtascados_2026_09_02() {
 
   Logger.log('Marcados ' + marcados + ' mensaje(s) como error. Lanzando reintentarMensajesConError()...');
   reintentarMensajesConError();
+}
+
+/**
+ * Reparación puntual (2026-09-08): el pick real de gemela reversible de
+ * Star Pelaw (5-sept-2026) quedó en mensajes_crudos con
+ * estado=revision_manual porque el soporte de gemela/trío no existía
+ * todavía. Ahora que existe, lo reprocesa por el camino nuevo - mismo
+ * patrón que repararPicksAtascados_2026_09_02 pero llamando directamente
+ * a manejarPickNuevo_ con los datos ya guardados en mensajes_crudos, en
+ * vez de re-descargar nada de Telegram.
+ *
+ * Ejecutar A MANO desde el editor, una sola vez.
+ */
+function repararStarPelaw20260905() {
+  const messageId = '245';
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+  for (let i = 0; i < datos.length; i++) {
+    if (String(datos[i][index['message_id']]) !== messageId) continue;
+
+    const fila = datos[i];
+    const texto = fila[index['contenido']];
+    const fotoFileId = fila[index['foto_file_id']] || null;
+    const fechaRecibido = fila[index['fecha_recibido']];
+    const fechaForward = fila[index['fecha_forward']] || null;
+
+    const msgFalso = { message_id: messageId, chat: { id: TELEGRAM_CHAT_ID } };
+    manejarPickNuevo_(msgFalso, texto, fotoFileId, fechaRecibido, fechaForward);
+    Logger.log('repararStarPelaw20260905: reprocesado message_id=' + messageId);
+    return;
+  }
+  Logger.log('repararStarPelaw20260905: no se encontró message_id=' + messageId + ' en mensajes_crudos.');
 }

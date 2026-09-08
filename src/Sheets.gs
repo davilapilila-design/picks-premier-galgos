@@ -118,19 +118,27 @@ function mensajeCrudoYaExiste(messageId) {
 function appendApuestaExotica(messageId, fechaPick, tipoApuesta, hipodromo, horaCarrera,
     combinaciones, stakeTotal, stakePorCombinacion, mensaje) {
   const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
-  return appendRowByHeader_(sheet, {
+  const combinacionesTexto = combinaciones.map(function (c) { return c.join('-'); }).join(';');
+  const fila = appendRowByHeader_(sheet, {
     message_id: messageId,
     fecha_pick: fechaPick,
     tipo_apuesta: tipoApuesta,
     hipodromo: hipodromo,
     hora_carrera: horaCarrera,
-    combinaciones: combinaciones.map(function (c) { return c.join('-'); }).join(';'),
+    combinaciones: combinacionesTexto,
     stake_total: stakeTotal,
     stake_por_combinacion: stakePorCombinacion,
     resultado_final: 'pendiente',
     oculto: false,
     mensaje: mensaje,
   });
+  // Sheets detecta "22:31" y "3-4" como hora/fecha y los convierte solos
+  // (bug real 2026-09-08, visto en producción con el caso Star Pelaw) -
+  // forzar formato de texto y re-escribir arregla el valor ya guardado.
+  const index = getHeaderIndex_(sheet);
+  sheet.getRange(fila, index['hora_carrera'] + 1).setNumberFormat('@').setValue(horaCarrera);
+  sheet.getRange(fila, index['combinaciones'] + 1).setNumberFormat('@').setValue(combinacionesTexto);
+  return fila;
 }
 
 function setApuestaExoticaConfirmMessageId(fila, confirmMessageId) {
