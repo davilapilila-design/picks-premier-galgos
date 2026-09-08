@@ -21,36 +21,64 @@ const EXTRACTION_SYSTEM_PROMPT = [
   'venir con erratas (p. ej. "Ciota" en vez de "Cuota", o ";" en vez de ":"',
   'en la hora) - interprétalas igualmente si el significado es claro.',
   '',
-  'Un pick puede ser una apuesta SIMPLE (1 carrera), o una combinada de',
+  'Un pick puede ser una apuesta SIMPLE (1 carrera), una combinada de',
   'varias carreras con una sola cuota conjunta ("Apuesta Doble" = 2',
-  'carreras, "Apuesta Tríple" = 3 carreras). Cada carrera de la combinada',
-  'es una "pata": mismo formato que una apuesta simple (hipódromo, hora,',
-  'trampa, selección), una tras otra en el texto.',
+  'carreras, "Apuesta Tríple" = 3 carreras), o una GEMELA/TRÍO: acertar el',
+  'ORDEN de llegada de 2 (gemela) o 3 (trío) galgos de UNA SOLA carrera.',
+  'Una gemela/trío NO lleva cuota - se paga al dividendo oficial que',
+  'publica la pista después de la carrera, así que "cuota" va a null en',
+  'ese caso.',
+  '',
+  'Formato de gemela/trío en el texto: números de trampa separados por',
+  'guion, indicando el orden ("3-4" = 3 primero, 4 segundo). Si aparece',
+  'más de una combinación de orden (ej. "3-4 Y 4-3"), son varias jugadas',
+  'a la vez con el mismo stake repartido - inclúyelas todas en',
+  '"combinaciones". Si el texto dice "REVERSIBLE" sin desglosar (ej.',
+  '"GEMELA REVERSIBLE 3-4"), tú mismo genera las combinaciones: para',
+  'gemela reversible son las 2 permutaciones (3-4 y 4-3); para trío',
+  'reversible, si no se desglosa, pon "tipo_apuesta":"otro" (no lo',
+  'adivines con 6 combinaciones, es un caso raro que no se ha visto en la',
+  'práctica).',
+  '',
+  'Cada carrera de una combinada (simple/doble/triple) es una "pata":',
+  'mismo formato que una apuesta simple (hipódromo, hora, trampa,',
+  'selección), una tras otra en el texto.',
   '',
   'Devuelve SOLO un JSON con esta forma exacta, sin texto adicional:',
   '{',
-  '  "tipo_apuesta": "simple" | "doble" | "triple" | "otro",',
+  '  "tipo_apuesta": "simple" | "doble" | "triple" | "gemela" | "trio" | "otro",',
   '  "patas": [',
   '    { "hipodromo": string o null, "hora_carrera": string "HH:MM" o null,',
   '      "trampa": string (solo el número) o null,',
   '      "seleccion": string (nombre del galgo) o null }',
   '  ],',
+  '  "hipodromo_exotica": string o null,',
+  '  "hora_carrera_exotica": string "HH:MM" o null,',
+  '  "combinaciones": [["3","4"],["4","3"]] o null,',
   '  "cuota": number o null,',
   '  "stake": number o null',
   '}',
   '',
   'Reglas:',
   '- "tipo_apuesta": "simple" si es 1 sola carrera, "doble" si son 2,',
-  '  "triple" si son 3. Si es cualquier otra cosa (Trixie, Yankee, apuesta',
-  '  "a puesto"/colocado, 4+ carreras, o no estás seguro del tipo), pon',
-  '  "otro" - en ese caso rellena "patas" con lo que puedas identificar de',
-  '  todas formas (ayuda a la revisión manual), no lo dejes vacío si hay',
-  '  datos reconocibles.',
-  '- "patas" tiene tantos elementos como carreras: 1 para "simple", 2 para',
-  '  "doble", 3 para "triple".',
+  '  "triple" si son 3, "gemela"/"trio" si es una apuesta de orden de UNA',
+  '  carrera. Si es cualquier otra cosa (Trixie, Yankee, apuesta',
+  '  "a puesto"/colocado, 4+ carreras, trío reversible sin desglosar, o no',
+  '  estás seguro del tipo), pon "otro" - en ese caso rellena "patas" o',
+  '  "combinaciones" con lo que puedas identificar de todas formas (ayuda',
+  '  a la revisión manual), no lo dejes vacío si hay datos reconocibles.',
+  '- Si "tipo_apuesta" es "simple"/"doble"/"triple": rellena "patas" (1, 2',
+  '  o 3 elementos), deja "hipodromo_exotica"/"hora_carrera_exotica"/',
+  '  "combinaciones" a null.',
+  '- Si "tipo_apuesta" es "gemela"/"trio": rellena "hipodromo_exotica",',
+  '  "hora_carrera_exotica" y "combinaciones" (cada combinación con 2',
+  '  elementos para gemela, 3 para trío), deja "patas" como array vacío y',
+  '  "cuota" a null.',
   '- "cuota" y "stake" son SIEMPRE los de la apuesta conjunta entera (la',
   '  única cuota y el único stake que aparecen en el mensaje), nunca por',
-  '  carrera - no hay una cuota distinta por pata.',
+  '  carrera - no hay una cuota distinta por pata. Para gemela/trío,',
+  '  "stake" es el TOTAL sumando todas las combinaciones (ej. "stake 2',
+  '  cada una, 4 total" -> stake=4).',
   '- La palabra "Galgo" antes del número de trampa es opcional, ignórala.',
   '- El hipódromo y la hora de cada carrera pueden aparecer en cualquier',
   '  orden en su línea.',
@@ -127,6 +155,87 @@ function callGeminiExtraction_(texto, fotoBlob) {
  */
 const NUM_PATAS_POR_TIPO = { simple: 1, doble: 2, triple: 3 };
 
+const NUM_TRAMPAS_POR_TIPO_EXOTICA = { gemela: 2, trio: 3 };
+
+/**
+ * Valida el JSON ya extraído por Gemini para gemela/trío (misma idea que
+ * las comprobaciones de extraerPick, pero para el esquema de
+ * combinaciones en vez de patas). No llama a la IA - función pura,
+ * testeable con un objeto ya construido a mano.
+ */
+function validarExtraccionExotica_(extraido) {
+  const numEsperado = NUM_TRAMPAS_POR_TIPO_EXOTICA[extraido.tipo_apuesta];
+  const combinaciones = extraido.combinaciones || [];
+
+  if (combinaciones.length === 0) {
+    return { ok: false, motivo: 'faltan_campos', camposFaltantes: ['combinaciones'] };
+  }
+  const todasLongitudCorrecta = combinaciones.every(function (c) { return c.length === numEsperado; });
+  if (!todasLongitudCorrecta) {
+    return { ok: false, motivo: 'num_patas_incorrecto' };
+  }
+
+  const camposFaltantes = [];
+  if (!extraido.hipodromo_exotica) camposFaltantes.push('hipodromo_exotica');
+  if (!extraido.hora_carrera_exotica) camposFaltantes.push('hora_carrera_exotica');
+  if (extraido.stake === null || extraido.stake === undefined || extraido.stake === '') {
+    camposFaltantes.push('stake');
+  }
+  if (camposFaltantes.length > 0) {
+    return { ok: false, motivo: 'faltan_campos', camposFaltantes: camposFaltantes };
+  }
+
+  return {
+    ok: true,
+    esExotica: true,
+    tipoApuesta: extraido.tipo_apuesta,
+    hipodromo: extraido.hipodromo_exotica,
+    horaCarrera: extraido.hora_carrera_exotica,
+    combinaciones: combinaciones.map(function (c) { return c.map(String); }),
+    stakeTotal: Number(extraido.stake),
+    stakePorCombinacion: redondear2_(Number(extraido.stake) / combinaciones.length),
+  };
+}
+
+function test_validarExtraccionExotica() {
+  // Caso real: "GEMELA 3-4 Y 4-3 - STAKE 2 CADA UNA (STAKE 4 TOTAL)" en Star Pelaw 22:31.
+  const real = validarExtraccionExotica_({
+    tipo_apuesta: 'gemela',
+    hipodromo_exotica: 'Star Pelaw',
+    hora_carrera_exotica: '22:31',
+    combinaciones: [['3', '4'], ['4', '3']],
+    cuota: null,
+    stake: 4,
+  });
+  assertIguales_(real.ok, true, 'gemela con todos los campos -> ok');
+  assertIguales_(real.tipoApuesta, 'gemela', 'tipoApuesta pasa tal cual');
+  assertIguales_(real.combinaciones.length, 2, 'las 2 combinaciones (3-4 y 4-3)');
+  assertIguales_(real.stakeTotal, 4, 'stakeTotal = 4');
+  assertIguales_(real.stakePorCombinacion, 2, 'stakePorCombinacion = 4/2 = 2');
+
+  const trioMalFormado = validarExtraccionExotica_({
+    tipo_apuesta: 'trio',
+    hipodromo_exotica: 'Harlow',
+    hora_carrera_exotica: '19:00',
+    combinaciones: [['1', '2']], // solo 2 trampas, un trio necesita 3
+    stake: 6,
+  });
+  assertIguales_(trioMalFormado.ok, false, 'trio con combinacion de 2 trampas -> mal formado');
+  assertIguales_(trioMalFormado.motivo, 'num_patas_incorrecto', 'motivo correcto');
+
+  const sinStake = validarExtraccionExotica_({
+    tipo_apuesta: 'gemela',
+    hipodromo_exotica: 'Harlow',
+    hora_carrera_exotica: '19:00',
+    combinaciones: [['1', '2']],
+    stake: null,
+  });
+  assertIguales_(sinStake.ok, false, 'sin stake -> faltan_campos');
+  assertIguales_(sinStake.camposFaltantes.indexOf('stake') !== -1, true, 'stake en la lista de faltantes');
+
+  Logger.log('test_validarExtraccionExotica: OK, todas las comprobaciones pasaron.');
+}
+
 /**
  * Punto de entrada usado por Main.gs. Devuelve:
  *   { ok: true, tipoApuesta, cuota, stake, patas: [{hipodromo, horaCarrera, trampa, seleccion}, ...] }
@@ -136,6 +245,10 @@ const NUM_PATAS_POR_TIPO = { simple: 1, doble: 2, triple: 3 };
  */
 function extraerPick(texto, fotoBlob) {
   const extraido = callGeminiExtraction_(texto, fotoBlob);
+
+  if (TIPOS_APUESTA_EXOTICA.indexOf(extraido.tipo_apuesta) !== -1) {
+    return validarExtraccionExotica_(extraido);
+  }
 
   if (TIPOS_APUESTA_SOPORTADOS.indexOf(extraido.tipo_apuesta) === -1) {
     return { ok: false, motivo: 'tipo_no_soportado', tipoApuesta: extraido.tipo_apuesta };
