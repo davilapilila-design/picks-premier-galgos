@@ -33,7 +33,7 @@ publica la pista tras la carrera (no a una cuota fija) - ver
 - Desplegado sobre el mismo deployment público de siempre
   (`...5vdXzrYcItxBlijtD68k4g72ww @24`).
 
-Commits: (pendiente)
+Commits: f147576, 2b62930, 0114633, cda5695, 1f3ec87, 7d2e4ff, 7461b08, 4bbc5b5, d0fd795, 4d2766b
 
 ## 2026-09-04 — Panel v12: el tooltip del gráfico también muestra unidades
 Pedido del dueño: al pinchar/pasar el ratón sobre la curva de beneficio, el tooltip solo mostraba
