@@ -111,6 +111,47 @@ function mensajeCrudoYaExiste(messageId) {
 }
 
 /**
+ * Guarda 1 fila en `apuestas_exoticas` (gemela/trío). A diferencia de
+ * appendApuestaConPatas, no hay tabla de patas aparte - es 1 sola
+ * carrera con varias combinaciones, cabe entera en una fila.
+ */
+function appendApuestaExotica(messageId, fechaPick, tipoApuesta, hipodromo, horaCarrera,
+    combinaciones, stakeTotal, stakePorCombinacion, mensaje) {
+  const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+  return appendRowByHeader_(sheet, {
+    message_id: messageId,
+    fecha_pick: fechaPick,
+    tipo_apuesta: tipoApuesta,
+    hipodromo: hipodromo,
+    hora_carrera: horaCarrera,
+    combinaciones: combinaciones.map(function (c) { return c.join('-'); }).join(';'),
+    stake_total: stakeTotal,
+    stake_por_combinacion: stakePorCombinacion,
+    resultado_final: 'pendiente',
+    oculto: false,
+    mensaje: mensaje,
+  });
+}
+
+function setApuestaExoticaConfirmMessageId(fila, confirmMessageId) {
+  const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+  const index = getHeaderIndex_(sheet);
+  sheet.getRange(fila, index['confirm_message_id'] + 1).setValue(confirmMessageId);
+}
+
+function findApuestaExoticaByMessageIdRecienCreada_(messageId) {
+  const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const ids = sheet.getRange(2, index['message_id'] + 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(messageId)) return { row: i + 2 };
+  }
+  return null;
+}
+
+/**
  * Escribe la apuesta (1 fila en `apuestas`, la combinada entera) y sus
  * carreras (1 fila por pata en `apuestas_patas`) - rediseño 2026-08-26,
  * ver docs/BITACORA.md. `patas` es un array de
