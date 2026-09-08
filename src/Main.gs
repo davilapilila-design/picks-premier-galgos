@@ -188,6 +188,97 @@ function test_construirTextoConfirmacionExotica() {
 }
 
 /**
+ * combinaciones: array de arrays de string de trampa, ej. [['3','4'],['4','3']].
+ * resultadoCarrera: {pos1, pos2, pos3, dividendo} o null si `resultados_gemela_trio`
+ * todavía no tiene fila para esa carrera+tipo.
+ * Devuelve {resultado:'pendiente'} o {resultado:'gano'|'perdio', resultadoReal, combinacionAcertada?, dividendo?}.
+ */
+function calcularResolucionExotica_(combinaciones, resultadoCarrera) {
+  if (!resultadoCarrera) return { resultado: 'pendiente' };
+
+  const posiciones = [resultadoCarrera.pos1, resultadoCarrera.pos2, resultadoCarrera.pos3]
+    .filter(function (p) { return p !== '' && p !== null && p !== undefined; })
+    .map(String);
+  const resultadoReal = posiciones.join('-');
+
+  const acertada = combinaciones.filter(function (combo) {
+    return combo.length === posiciones.length &&
+      combo.every(function (trampa, i) { return String(trampa) === posiciones[i]; });
+  })[0];
+
+  if (acertada) {
+    return {
+      resultado: 'gano',
+      resultadoReal: resultadoReal,
+      combinacionAcertada: acertada.join('-'),
+      dividendo: Number(resultadoCarrera.dividendo),
+    };
+  }
+  return { resultado: 'perdio', resultadoReal: resultadoReal };
+}
+
+function test_calcularResolucionExotica() {
+  // Caso real: acierta la combinacion "4-3".
+  const acierto = calcularResolucionExotica_(
+    [['3', '4'], ['4', '3']],
+    { pos1: '4', pos2: '3', pos3: '', dividendo: '7.42' }
+  );
+  assertIguales_(acierto.resultado, 'gano', 'gemela reversible: 4-3 coincide con una combinacion jugada');
+  assertIguales_(acierto.combinacionAcertada, '4-3', 'combinacionAcertada es la que realmente coincidio');
+  assertIguales_(acierto.dividendo, 7.42, 'dividendo viene de resultadoCarrera');
+  assertIguales_(acierto.resultadoReal, '4-3', 'resultadoReal refleja lo que paso de verdad');
+
+  const fallo = calcularResolucionExotica_(
+    [['3', '4']],
+    { pos1: '5', pos2: '2', pos3: '', dividendo: '10.00' }
+  );
+  assertIguales_(fallo.resultado, 'perdio', 'ninguna combinacion jugada coincide -> perdio');
+  assertIguales_(fallo.resultadoReal, '5-2', 'resultadoReal informa que gano el 5-2');
+
+  const pendiente = calcularResolucionExotica_([['1', '2', '3']], null);
+  assertIguales_(pendiente.resultado, 'pendiente', 'sin fila de resultado todavia -> pendiente');
+
+  Logger.log('test_calcularResolucionExotica: OK, todas las comprobaciones pasaron.');
+}
+
+/**
+ * Mensaje de resolución (✅/❌) de una gemela/trío. `pick` = fila de
+ * apuestas_exoticas ya leída {tipoApuesta, horaCarrera, hipodromo,
+ * stakeTotal, stakePorCombinacion}; `resolucion` = lo que devuelve
+ * calcularResolucionExotica_ (resultado 'gano' o 'perdio', nunca
+ * 'pendiente' - no se llama a esta función si sigue pendiente).
+ */
+function construirTextoResolucionExotica_(pick, resolucion) {
+  const nombre = pick.tipoApuesta === 'trio' ? 'Trío' : 'Gemela';
+  const etiqueta = function (combo) { return 'T' + combo.split('-').join('-T'); };
+
+  if (resolucion.resultado === 'gano') {
+    const retorno = redondear2_(pick.stakePorCombinacion * resolucion.dividendo);
+    const neto = redondear2_(retorno - pick.stakeTotal);
+    return '✅ ' + nombre + ' acertada — ' + pick.horaCarrera + ' ' + pick.hipodromo + ': ganó ' +
+      etiqueta(resolucion.combinacionAcertada) + ', dividendo ' + resolucion.dividendo +
+      ', retorno ' + retorno + 'u (' + (neto >= 0 ? '+' : '') + neto + 'u)';
+  }
+  return '❌ ' + nombre + ' perdida — ' + pick.horaCarrera + ' ' + pick.hipodromo +
+    ' (ganó ' + etiqueta(resolucion.resultadoReal) + ')';
+}
+
+function test_construirTextoResolucionExotica() {
+  const pick = { tipoApuesta: 'gemela', horaCarrera: '22:31', hipodromo: 'Star Pelaw', stakeTotal: 4, stakePorCombinacion: 2 };
+
+  const textoGano = construirTextoResolucionExotica_(pick, {
+    resultado: 'gano', resultadoReal: '4-3', combinacionAcertada: '4-3', dividendo: 7.42,
+  });
+  assertIguales_(textoGano, '✅ Gemela acertada — 22:31 Star Pelaw: ganó T4-T3, dividendo 7.42, retorno 14.84u (+10.84u)',
+    'texto exacto de acierto del caso real Star Pelaw');
+
+  const textoPerdio = construirTextoResolucionExotica_(pick, { resultado: 'perdio', resultadoReal: '1-3' });
+  assertIguales_(textoPerdio, '❌ Gemela perdida — 22:31 Star Pelaw (ganó T1-T3)', 'texto exacto de fallo');
+
+  Logger.log('test_construirTextoResolucionExotica: OK, todas las comprobaciones pasaron.');
+}
+
+/**
  * Si el mensaje es un reenvío desde el canal del tipster, la fecha que
  * importa para cruzar con resultados_galgos es la de publicación original,
  * no la de reenvío al grupo (ver docs/BITACORA.md, backfill del histórico).
@@ -346,6 +437,110 @@ function configurarTriggerReintentos() {
   });
   ScriptApp.newTrigger('reintentarMensajesConError').timeBased().everyHours(2).create();
   Logger.log('Disparador instalado: reintentarMensajesConError cada 2 horas.');
+}
+
+/**
+ * Job periódico (mismo patrón que reintentarMensajesConError): resuelve
+ * las apuestas_exoticas pendientes contra resultados_gemela_trio y avisa
+ * por Telegram. Ejecutar a mano desde el editor, o instalar un trigger
+ * (ver configurarTriggerReintentos - se añade su propio trigger en el
+ * Step 8 de esta tarea).
+ */
+function resolverApuestasExoticas() {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(120000);
+  } catch (err) {
+    Logger.log('resolverApuestasExoticas: no se pudo adquirir el lock - ' + err);
+    return;
+  }
+
+  try {
+    const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+    const index = getHeaderIndex_(sheet);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log('resolverApuestasExoticas: apuestas_exoticas vacia, nada que hacer.');
+      return;
+    }
+
+    const sheetResultados = getSheet_(SHEET_RESULTADOS_GEMELA_TRIO);
+    const indexResultados = getHeaderIndex_(sheetResultados);
+    const lastRowResultados = sheetResultados.getLastRow();
+    const filasResultados = lastRowResultados < 2 ? [] :
+      sheetResultados.getRange(2, 1, lastRowResultados - 1, sheetResultados.getLastColumn()).getValues();
+
+    // Índice canodromo|fecha|hora|tipo -> {pos1,pos2,pos3,dividendo}, mismo
+    // criterio de normalización que ya usa Auditoria.gs para cruzar carreras.
+    const resultadosPorCarrera = {};
+    filasResultados.forEach(function (r) {
+      const key = normalizarTexto_(r[indexResultados['canodromo']]) + '|' +
+        normalizarFechaISO_(r[indexResultados['fecha']]) + '|' +
+        normalizarHoraSegundos_(r[indexResultados['hora']]) + '|' +
+        r[indexResultados['tipo']];
+      resultadosPorCarrera[key] = {
+        pos1: r[indexResultados['pos1']], pos2: r[indexResultados['pos2']], pos3: r[indexResultados['pos3']],
+        dividendo: r[indexResultados['dividendo']],
+      };
+    });
+
+    const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+    let resueltos = 0;
+
+    for (let i = 0; i < datos.length; i++) {
+      const fila = datos[i];
+      if (fila[index['resultado_final']] !== 'pendiente') continue;
+
+      const messageId = fila[index['message_id']];
+      const tipoApuesta = fila[index['tipo_apuesta']];
+      const hipodromo = fila[index['hipodromo']];
+      const horaCarrera = fila[index['hora_carrera']];
+      const fechaPick = fila[index['fecha_pick']];
+      const combinaciones = String(fila[index['combinaciones']]).split(';').map(function (c) { return c.split('-'); });
+      const stakeTotal = fila[index['stake_total']];
+      const stakePorCombinacion = fila[index['stake_por_combinacion']];
+
+      const tipoResultado = tipoApuesta === 'trio' ? 'tricast' : 'forecast';
+      const key = normalizarTexto_(hipodromo) + '|' + normalizarFechaISO_(fechaPick) + '|' +
+        normalizarHoraSegundos_(horaCarrera) + '|' + tipoResultado;
+      const resolucion = calcularResolucionExotica_(combinaciones, resultadosPorCarrera[key] || null);
+
+      if (resolucion.resultado === 'pendiente') continue;
+
+      const retornoReal = resolucion.resultado === 'gano' ? redondear2_(stakePorCombinacion * resolucion.dividendo) : 0;
+      const unidadesNetas = redondear2_(retornoReal - stakeTotal);
+      const filaSheet = i + 2;
+
+      sheet.getRange(filaSheet, index['resultado_final'] + 1).setValue(resolucion.resultado);
+      sheet.getRange(filaSheet, index['combinacion_acertada'] + 1).setValue(resolucion.combinacionAcertada || '');
+      sheet.getRange(filaSheet, index['dividendo'] + 1).setValue(resolucion.dividendo || '');
+      sheet.getRange(filaSheet, index['retorno_real'] + 1).setValue(retornoReal);
+      sheet.getRange(filaSheet, index['unidades_netas'] + 1).setValue(unidadesNetas);
+
+      const pick = { tipoApuesta: tipoApuesta, horaCarrera: horaCarrera, hipodromo: hipodromo,
+        stakeTotal: stakeTotal, stakePorCombinacion: stakePorCombinacion };
+      sendTelegramMessage(TELEGRAM_CHAT_ID, construirTextoResolucionExotica_(pick, resolucion), messageId);
+      resueltos++;
+    }
+
+    Logger.log('resolverApuestasExoticas: ' + resueltos + ' resuelta(s).');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Ejecutar UNA VEZ a mano desde el editor para instalar el disparador
+ * periódico - mismo patrón que configurarTriggerReintentos.
+ */
+function configurarTriggerResolverExoticas() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'resolverApuestasExoticas') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger('resolverApuestasExoticas').timeBased().everyHours(2).create();
+  Logger.log('Disparador instalado: resolverApuestasExoticas cada 2 horas.');
 }
 
 /**
