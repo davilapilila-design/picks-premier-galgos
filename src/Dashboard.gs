@@ -317,6 +317,41 @@ function obtenerPatasPorMensaje_() {
 }
 
 /**
+ * Lee apuestas_exoticas y la normaliza a la MISMA forma que ya usan
+ * calcularMetricas_/calcularHistoricoPicks_ para las filas de `apuestas`
+ * - así esas dos funciones no necesitan tocarse, solo reciben un array
+ * más largo. `cuota`/`cuotaFinal` se dejan vacíos (no aplica a gemela/
+ * trío, no hay cuota previa que comparar - por eso calcularPctCuotaBajada_
+ * sigue llamándose SOLO con las filas de `apuestas`, nunca con estas).
+ */
+function obtenerFilasExoticasNormalizadas_() {
+  const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  return datos.map(function (fila) {
+    const tipoApuesta = fila[index['tipo_apuesta']];
+    const nombre = tipoApuesta === 'trio' ? 'Trío' : 'Gemela';
+    const combinaciones = String(fila[index['combinaciones']]).split(';').join(' y ');
+    return {
+      messageId: String(fila[index['message_id']] || ''),
+      oculto: fila[index['oculto']] === true,
+      resultadoFinal: fila[index['resultado_final']],
+      unidadesNetas: fila[index['unidades_netas']],
+      stake: fila[index['stake_total']],
+      cuota: fila[index['resultado_final']] === 'gano' ? fila[index['dividendo']] : '',
+      cuotaFinal: '',
+      fechaPick: fila[index['fecha_pick']],
+      canodromo: fila[index['hipodromo']],
+      galgo: nombre + ' T' + combinaciones.split('-').join('-T'),
+      mensaje: fila[index['mensaje']],
+    };
+  });
+}
+
+/**
  * Llamada desde el cliente (Panel.html) vía google.script.run. Lee
  * `apuestas` completa una sola vez y la reparte en dos vistas, ambas de
  * TODO el histórico (sin ventana de fecha ni límite de filas - revertido
@@ -355,9 +390,11 @@ function getMetricasPanel() {
     };
   });
 
+  const filasCombinadas = filas.concat(obtenerFilasExoticasNormalizadas_());
+
   const patasPorMensaje = obtenerPatasPorMensaje_();
 
-  const historicoPicks = calcularHistoricoPicks_(filas).map(function (p) {
+  const historicoPicks = calcularHistoricoPicks_(filasCombinadas).map(function (p) {
     return {
       fechaLabel: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'dd/MM/yyyy'),
       fechaISO: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'yyyy-MM-dd'),
@@ -371,7 +408,7 @@ function getMetricasPanel() {
     };
   });
 
-  const metricas = calcularMetricas_(filas);
+  const metricas = calcularMetricas_(filasCombinadas);
   if (!metricas.hayDatos) return { hayDatos: false, historicoPicks: historicoPicks };
 
   return {
