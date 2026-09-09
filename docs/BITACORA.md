@@ -3,6 +3,54 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-09 — `resolverApuestasExoticas` adaptada a la captura automática real de Proyecto Galgos (dividendo locale, trío sin mercado)
+El dueño avisó que Proyecto Galgos (VM Hetzner) acaba de desplegar la captura
+automática de `resultados_gemela_trio` (job propio por `gspread`, cada 20 min) -
+la pestaña ya no se rellena a mano. Dio por escrito tres detalles reales del
+dato que iban a romper `resolverApuestasExoticas()`/`calcularResolucionExotica_`
+(`src/Main.gs`, añadidas ayer en `7d2e4ff`) si no se contemplaban:
+
+- **`dividendo` en dos formas**: número real de Sheets en las filas nuevas de
+  la VM, pero texto con coma decimal es_ES ("7,42") en la fila sembrada a mano
+  el 8/09 (Star Pelaw) - `Number()` de JS da `NaN` con la segunda forma.
+  Arreglado con `parsearNumeroLocale_(v)` nueva (devuelve `v` tal cual si ya es
+  `number`, si no `Number(String(v).replace(',', '.'))`), usada en el único
+  punto donde se lee `dividendo`.
+- **`actualizado_en` en dos formatos** (ISO UTC en la VM, local en la fila
+  sembrada a mano) - confirmado que el código no la usa para nada (ni como
+  clave ni para ordenar), así que no hacía falta ningún cambio; documentado
+  explícitamente en el propio código para que quede claro que no es un punto
+  ciego.
+- **El trío no existe en carreras de menos de 6 galgos** (verificado por el
+  dueño contra datos reales de Kinsley 06/09: exactamente las 3 carreras de 6
+  galgos de 12 tenían fila `tricast`) - antes, una apuesta de trío en una
+  carrera así se quedaba en `pendiente` para siempre, indistinguible de "la VM
+  aún no lo ha publicado". `calcularResolucionExotica_` acepta ahora un
+  tercer parámetro `carreraYaProcesada` (true si existe la fila `forecast` de
+  esa misma carrera, señal de que la VM ya la resolvió del todo aunque no
+  haya `tricast`) y devuelve un resultado nuevo `'no_disponible'` en ese caso,
+  distinto de `'pendiente'`.
+- **Tratamiento financiero de `'no_disponible'`, decisión del dueño**: se
+  reembolsa el stake (`retorno_real = stake_total`, `unidades_netas = 0`) -
+  la apuesta no cuenta como ganada ni perdida. Queda excluida del panel
+  público sin tocar `Dashboard.gs`: `calcularMetricas_` ya solo filtra
+  `resultado_final` en `gano`/`perdio`. Aviso de Telegram propio (⚠️,
+  distinto de ✅/❌) explicando que la carrera no tuvo ese mercado.
+- **Cadencia del disparador**: `configurarTriggerResolverExoticas` pasa de
+  cada 2h a cada 30 min - con la VM publicando cada 20 min, 2h de por medio
+  añadía hasta 1h40 de retraso innecesario al aviso de Telegram.
+- Tests ampliados (`test_calcularResolucionExotica`/
+  `test_construirTextoResolucionExotica`, `src/Main.gs`): dividendo como
+  número real y como texto con coma, y el caso de trío sin mercado.
+  Verificados aparte en Node (funciones puras, sin API de Sheets) antes de
+  subir - todos "OK".
+- Sin cambios en el esquema ni en el orden de columnas de `apuestas_exoticas`
+  ni de `resultados_gemela_trio` (avisado expresamente por el dueño: la VM
+  lee/escribe esas pestañas por posición de columna, cualquier cambio ahí
+  rompe el push en silencio).
+
+Commits: (pendiente)
+
 ## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
 Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y
 3º), con o sin "reversible". A diferencia de simple/doble/triple, es UNA
