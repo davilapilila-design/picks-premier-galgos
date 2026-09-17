@@ -81,7 +81,8 @@
   .chart-x{display:flex;justify-content:space-between;padding:8px 4px 0;font-family:var(--mono);font-size:10px;color:var(--dim2);letter-spacing:.2px}
   .tip{position:absolute;pointer-events:none;transform:translate(-50%,-118%);background:rgba(9,13,18,.94);border:1px solid rgba(57,255,20,.3);border-radius:10px;padding:8px 11px;white-space:nowrap;opacity:0;transition:opacity .12s ease;box-shadow:0 14px 34px -12px rgba(0,0,0,.9);z-index:3}
   .tip u{display:block;text-decoration:none;font-family:var(--mono);font-size:10px;color:var(--dim2);letter-spacing:.4px}
-  .tip b{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:14.5px;color:#fff}
+  .tip b{display:block;font-family:'Inter Tight',sans-serif;font-weight:800;font-size:16px;color:var(--acc)}
+  .tip i{display:block;font-style:normal;font-family:var(--mono);font-size:11px;color:var(--dim2);margin-top:1px}
 
   /* ---------- metric strip ---------- */
   .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
@@ -339,7 +340,7 @@
         </div>
         <div class="chart-box" id="chartBox">
           <svg id="chartSvg" preserveAspectRatio="none"></svg>
-          <div class="tip" id="chartTip"><u id="tipDate"></u><b id="tipVal"></b></div>
+          <div class="tip" id="chartTip"><u id="tipDate"></u><b id="tipVal"></b><i id="tipSub"></i></div>
         </div>
         <div class="chart-x"><span id="xFirst"></span><span id="xLast"></span></div>
       </div>
@@ -501,8 +502,13 @@
       var p=st.pts[best], c=document.getElementById("pgHover"), cur=document.getElementById("pgCursor");
       if(c){ c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("opacity","1"); }
       if(cur){ cur.setAttribute("x1",p.x); cur.setAttribute("x2",p.x); cur.setAttribute("opacity","1"); }
-      tip.style.left=p.x+"px"; tip.style.top=p.y+"px"; tip.style.opacity="1";
-      $("tipDate").textContent=p.d; $("tipVal").textContent=signedEur(p.v)+" · "+sgn(p.u)+nf(Math.abs(p.u),2)+" UD";
+      $("tipDate").textContent=p.d;
+      $("tipVal").textContent=sgn(p.u)+nf(Math.abs(p.u),2)+" UD";
+      $("tipVal").style.color = p.u>=0 ? "var(--acc)" : "var(--neg)";
+      $("tipSub").textContent=signedEur(p.v);
+      tip.style.top=p.y+"px"; tip.style.opacity="1";
+      var half=(tip.offsetWidth||140)/2, margin=6, boxW=box.clientWidth;
+      tip.style.left=Math.max(half+margin, Math.min(p.x, boxW-half-margin))+"px";
     }
     function out(){
       tip.style.opacity="0";
