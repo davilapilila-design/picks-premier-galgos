@@ -101,6 +101,14 @@
   .seg button[aria-pressed="true"]{background:rgba(57,255,20,.14);color:var(--acc);box-shadow:inset 0 0 0 1px rgba(57,255,20,.3)}
   .seg button i{font-style:normal;opacity:.55;font-size:11px;margin-left:4px}
   .count{font-family:var(--mono);font-size:11px;color:var(--dim2);letter-spacing:.3px;padding-left:2px}
+  .sum-toggle{display:inline-flex;align-items:center;gap:6px;margin:2px 0 0;padding:0;font-family:'Inter Tight',sans-serif;font-weight:600;font-size:12px;color:var(--acc-soft);min-height:30px}
+  .sum-toggle svg{transition:transform .2s ease}
+  .sum-toggle[aria-expanded="true"] svg{transform:rotate(180deg)}
+  .sum-box{display:none;gap:10px;margin:8px 0 4px}
+  .sum-box[data-open="true"]{display:flex;animation:pgIn .2s ease both}
+  .sum-item{flex:1;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+  .sum-item u{display:block;text-decoration:none;font-size:9.5px;letter-spacing:1.2px;font-weight:700;color:var(--dim2);font-family:'Inter Tight',sans-serif;margin-bottom:5px}
+  .sum-item b{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:18px}
   .date-range{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
   .date-range input[type=date]{font:600 12.5px 'Inter Tight',sans-serif;color:#fff;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-height:34px;color-scheme:dark;width:118px}
   .date-range span{color:var(--dim2);font-size:12px}
@@ -376,6 +384,14 @@
           </button>
         </div>
         <div class="count" id="rowCount"></div>
+        <button type="button" class="sum-toggle" id="sumToggle" aria-expanded="false">
+          Ver resumen de estos picks
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="sum-box" id="sumBox" data-open="false">
+          <div class="sum-item"><u>UNIDADES GANADAS</u><b id="sumUnits"></b></div>
+          <div class="sum-item"><u>ROI</u><b id="sumRoi"></b></div>
+        </div>
       </div>
 
       <div class="rows" id="rows"></div>
@@ -578,11 +594,26 @@
       '<div class="card" style="padding:26px;text-align:center;color:var(--dim)">Sin picks en este filtro.</div>';
     $("rowCount").textContent = "Mostrando "+slice.length+" de "+list.length+" picks";
     $("more").classList.toggle("hidden", slice.length>=list.length);
+
+    var units=0, stakeTotal=0;
+    list.forEach(function(p){ units+=Number(p.unidades)||0; stakeTotal+=Number(p.stake)||0; });
+    var roi = stakeTotal===0 ? 0 : (units/stakeTotal)*100;
+    $("sumUnits").textContent = sgn(units)+nf(Math.abs(units),2)+" UD";
+    $("sumUnits").style.color = units>=0 ? "var(--acc)" : "var(--neg)";
+    $("sumRoi").textContent = pct(roi);
+    $("sumRoi").style.color = roi>=0 ? "var(--acc)" : "var(--neg)";
   }
 
   document.addEventListener("click",function(e){
     var t=e.target.closest?e.target.closest(".row-toggle"):null;
     if(t){ var row=t.closest(".row"); row.setAttribute("data-open", row.getAttribute("data-open")==="true"?"false":"true"); }
+    var st2=e.target.closest?e.target.closest("#sumToggle"):null;
+    if(st2){
+      var open=st2.getAttribute("aria-expanded")==="true";
+      st2.setAttribute("aria-expanded", open?"false":"true");
+      $("sumBox").setAttribute("data-open", open?"false":"true");
+      st2.childNodes[0].textContent = open ? "Ver resumen de estos picks " : "Ocultar resumen ";
+    }
   });
 
   /* ---------- pintar ---------- */
