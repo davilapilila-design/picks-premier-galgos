@@ -1,5 +1,6 @@
 {
   "scriptId": "1EIdBCf7tceSW81pIvHA1Gi8I-aY77_2BBYvetiwReWOPuEc5f8PwvgSm",
   "rootDir": "./src",
-  "projectId": "picks-premier-galgos"
+  "projectId": "picks-premier-galgos",
+  "fileExtension": "gs"
 }

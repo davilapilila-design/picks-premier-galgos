@@ -188,13 +188,35 @@ function test_construirTextoConfirmacionExotica() {
 }
 
 /**
+ * `dividendo` en resultados_gemela_trio llega en dos formas según el
+ * origen (ver docs/BITACORA.md 2026-09-09): número real de Sheets (filas
+ * que escribe el job automático de la VM desde el 09/09) o texto con coma
+ * decimal es_ES (filas sembradas a mano antes de esa fecha, ej. "7,42"
+ * para Star Pelaw 05/09/2026) - `Number()` de JS no entiende la coma y
+ * devuelve `NaN` con la segunda forma.
+ */
+function parsearNumeroLocale_(v) {
+  if (typeof v === 'number') return v;
+  return Number(String(v).trim().replace(',', '.'));
+}
+
+/**
  * combinaciones: array de arrays de string de trampa, ej. [['3','4'],['4','3']].
  * resultadoCarrera: {pos1, pos2, pos3, dividendo} o null si `resultados_gemela_trio`
  * todavía no tiene fila para esa carrera+tipo.
- * Devuelve {resultado:'pendiente'} o {resultado:'gano'|'perdio', resultadoReal, combinacionAcertada?, dividendo?}.
+ * carreraYaProcesada: true si la carrera YA tiene fila `forecast` en
+ * `resultados_gemela_trio` (el job de la VM la ha resuelto del todo),
+ * aunque `resultadoCarrera` (la fila del tipo que se está resolviendo,
+ * normalmente `tricast`) siga sin existir - eso significa que ese mercado
+ * NUNCA se va a publicar (el trío solo existe con 6 galgos en la carrera,
+ * confirmado 2026-09-09, ver docs/BITACORA.md), no que falte por llegar.
+ * Se ignora cuando `resultadoCarrera` sí existe.
+ *
+ * Devuelve {resultado:'pendiente'|'no_disponible'} o
+ * {resultado:'gano'|'perdio', resultadoReal, combinacionAcertada?, dividendo?}.
  */
-function calcularResolucionExotica_(combinaciones, resultadoCarrera) {
-  if (!resultadoCarrera) return { resultado: 'pendiente' };
+function calcularResolucionExotica_(combinaciones, resultadoCarrera, carreraYaProcesada) {
+  if (!resultadoCarrera) return { resultado: carreraYaProcesada ? 'no_disponible' : 'pendiente' };
 
   const posiciones = [resultadoCarrera.pos1, resultadoCarrera.pos2, resultadoCarrera.pos3]
     .filter(function (p) { return p !== '' && p !== null && p !== undefined; })
@@ -211,42 +233,58 @@ function calcularResolucionExotica_(combinaciones, resultadoCarrera) {
       resultado: 'gano',
       resultadoReal: resultadoReal,
       combinacionAcertada: acertada.join('-'),
-      dividendo: Number(resultadoCarrera.dividendo),
+      dividendo: parsearNumeroLocale_(resultadoCarrera.dividendo),
     };
   }
   return { resultado: 'perdio', resultadoReal: resultadoReal };
 }
 
 function test_calcularResolucionExotica() {
-  // Caso real: acierta la combinacion "4-3".
+  // Caso real: acierta la combinacion "4-3". dividendo como NUMERO real de
+  // Sheets (forma en que lo escribe el job automatico de la VM).
   const acierto = calcularResolucionExotica_(
     [['3', '4'], ['4', '3']],
-    { pos1: '4', pos2: '3', pos3: '', dividendo: '7.42' }
+    { pos1: '4', pos2: '3', pos3: '', dividendo: 7.42 }
   );
   assertIguales_(acierto.resultado, 'gano', 'gemela reversible: 4-3 coincide con una combinacion jugada');
   assertIguales_(acierto.combinacionAcertada, '4-3', 'combinacionAcertada es la que realmente coincidio');
   assertIguales_(acierto.dividendo, 7.42, 'dividendo viene de resultadoCarrera');
   assertIguales_(acierto.resultadoReal, '4-3', 'resultadoReal refleja lo que paso de verdad');
 
+  // Mismo caso real pero con dividendo como TEXTO con coma decimal (forma
+  // de la fila sembrada a mano de Star Pelaw, 05/09/2026) - Number() a
+  // pelo daria NaN, parsearNumeroLocale_ lo tiene que resolver igual.
+  const aciertoTexto = calcularResolucionExotica_(
+    [['3', '4'], ['4', '3']],
+    { pos1: '4', pos2: '3', pos3: '', dividendo: '7,42' }
+  );
+  assertIguales_(aciertoTexto.dividendo, 7.42, 'dividendo con coma decimal (texto) se parsea igual que el numero real');
+
   const fallo = calcularResolucionExotica_(
     [['3', '4']],
-    { pos1: '5', pos2: '2', pos3: '', dividendo: '10.00' }
+    { pos1: '5', pos2: '2', pos3: '', dividendo: '10,00' }
   );
   assertIguales_(fallo.resultado, 'perdio', 'ninguna combinacion jugada coincide -> perdio');
   assertIguales_(fallo.resultadoReal, '5-2', 'resultadoReal informa que gano el 5-2');
 
-  const pendiente = calcularResolucionExotica_([['1', '2', '3']], null);
-  assertIguales_(pendiente.resultado, 'pendiente', 'sin fila de resultado todavia -> pendiente');
+  const pendiente = calcularResolucionExotica_([['1', '2', '3']], null, false);
+  assertIguales_(pendiente.resultado, 'pendiente', 'sin fila de resultado y carrera aun sin procesar -> pendiente');
+
+  // Trio sin fila tricast, pero la carrera SI tiene fila forecast (ya
+  // procesada del todo) -> el trio no existia (caso real Kinsley 06/09,
+  // carreras de <6 galgos sin mercado de trio), no un simple retraso.
+  const noDisponible = calcularResolucionExotica_([['1', '2', '3']], null, true);
+  assertIguales_(noDisponible.resultado, 'no_disponible', 'sin fila tricast pero carrera ya resuelta (forecast existe) -> no_disponible');
 
   Logger.log('test_calcularResolucionExotica: OK, todas las comprobaciones pasaron.');
 }
 
 /**
- * Mensaje de resolución (✅/❌) de una gemela/trío. `pick` = fila de
+ * Mensaje de resolución (✅/❌/⚠️) de una gemela/trío. `pick` = fila de
  * apuestas_exoticas ya leída {tipoApuesta, horaCarrera, hipodromo,
  * stakeTotal, stakePorCombinacion}; `resolucion` = lo que devuelve
- * calcularResolucionExotica_ (resultado 'gano' o 'perdio', nunca
- * 'pendiente' - no se llama a esta función si sigue pendiente).
+ * calcularResolucionExotica_ (resultado 'gano'/'perdio'/'no_disponible',
+ * nunca 'pendiente' - no se llama a esta función si sigue pendiente).
  */
 function construirTextoResolucionExotica_(pick, resolucion) {
   const nombre = pick.tipoApuesta === 'trio' ? 'Trío' : 'Gemela';
@@ -258,6 +296,11 @@ function construirTextoResolucionExotica_(pick, resolucion) {
     return '✅ ' + nombre + ' acertada — ' + pick.horaCarrera + ' ' + pick.hipodromo + ': ganó ' +
       etiqueta(resolucion.combinacionAcertada) + ', dividendo ' + resolucion.dividendo +
       ', retorno ' + retorno + 'u (' + (neto >= 0 ? '+' : '') + neto + 'u)';
+  }
+  if (resolucion.resultado === 'no_disponible') {
+    return '⚠️ ' + nombre + ' no disponible — ' + pick.horaCarrera + ' ' + pick.hipodromo +
+      ': la carrera no tuvo mercado de ' + nombre.toLowerCase() +
+      ' (probablemente no corrieron los galgos necesarios). Stake devuelto (' + pick.stakeTotal + 'u), no cuenta como ganada ni perdida.';
   }
   return '❌ ' + nombre + ' perdida — ' + pick.horaCarrera + ' ' + pick.hipodromo +
     ' (ganó ' + etiqueta(resolucion.resultadoReal) + ')';
@@ -274,6 +317,12 @@ function test_construirTextoResolucionExotica() {
 
   const textoPerdio = construirTextoResolucionExotica_(pick, { resultado: 'perdio', resultadoReal: '1-3' });
   assertIguales_(textoPerdio, '❌ Gemela perdida — 22:31 Star Pelaw (ganó T1-T3)', 'texto exacto de fallo');
+
+  const pickTrio = { tipoApuesta: 'trio', horaCarrera: '20:26', hipodromo: 'Kinsley', stakeTotal: 3, stakePorCombinacion: 3 };
+  const textoNoDisponible = construirTextoResolucionExotica_(pickTrio, { resultado: 'no_disponible' });
+  assertIguales_(textoNoDisponible,
+    '⚠️ Trío no disponible — 20:26 Kinsley: la carrera no tuvo mercado de trío (probablemente no corrieron los galgos necesarios). Stake devuelto (3u), no cuenta como ganada ni perdida.',
+    'texto exacto de trio sin mercado (carrera con menos de 6 galgos)');
 
   Logger.log('test_construirTextoResolucionExotica: OK, todas las comprobaciones pasaron.');
 }
@@ -472,6 +521,10 @@ function resolverApuestasExoticas() {
 
     // Índice canodromo|fecha|hora|tipo -> {pos1,pos2,pos3,dividendo}, mismo
     // criterio de normalización que ya usa Auditoria.gs para cruzar carreras.
+    // `actualizado_en` NO se lee para nada aquí (ni como clave ni para
+    // ordenar) - en las filas sembradas a mano antes del job automático va
+    // en formato local, no ISO, no es fiable para nada (ver docs/BITACORA.md
+    // 2026-09-09).
     const resultadosPorCarrera = {};
     filasResultados.forEach(function (r) {
       const key = normalizarTexto_(r[indexResultados['canodromo']]) + '|' +
@@ -501,14 +554,32 @@ function resolverApuestasExoticas() {
       const stakePorCombinacion = fila[index['stake_por_combinacion']];
 
       const tipoResultado = tipoApuesta === 'trio' ? 'tricast' : 'forecast';
-      const key = normalizarTexto_(hipodromo) + '|' + normalizarFechaISO_(fechaPick) + '|' +
-        normalizarHoraSegundos_(horaCarrera) + '|' + tipoResultado;
-      const resolucion = calcularResolucionExotica_(combinaciones, resultadosPorCarrera[key] || null);
+      const claveBase = normalizarTexto_(hipodromo) + '|' + normalizarFechaISO_(fechaPick) + '|' +
+        normalizarHoraSegundos_(horaCarrera);
+      // La fila `forecast` de la MISMA carrera existe siempre que la VM ya
+      // la ha procesado del todo (se calcula con solo 2 corredores, casi
+      // cualquier carrera la tiene) - si el trío sigue sin fila `tricast`
+      // pese a eso, es que esa carrera no tuvo mercado de trío (<6 galgos,
+      // confirmado 2026-09-09), no que falte por llegar. Ver
+      // calcularResolucionExotica_ para el uso de esta señal.
+      const carreraYaProcesada = !!resultadosPorCarrera[claveBase + '|forecast'];
+      const resolucion = calcularResolucionExotica_(
+        combinaciones, resultadosPorCarrera[claveBase + '|' + tipoResultado] || null, carreraYaProcesada);
 
       if (resolucion.resultado === 'pendiente') continue;
 
-      const retornoReal = resolucion.resultado === 'gano' ? redondear2_(stakePorCombinacion * resolucion.dividendo) : 0;
-      const unidadesNetas = redondear2_(retornoReal - stakeTotal);
+      let retornoReal, unidadesNetas;
+      if (resolucion.resultado === 'no_disponible') {
+        // Opción (b) confirmada por el dueño 2026-09-09: se reembolsa el
+        // stake, la apuesta no cuenta como ganada ni perdida (excluida del
+        // panel público igual que 'pendiente'/'revision_manual' - ver
+        // calcularMetricas_ en Dashboard.gs, solo filtra gano/perdio).
+        retornoReal = stakeTotal;
+        unidadesNetas = 0;
+      } else {
+        retornoReal = resolucion.resultado === 'gano' ? redondear2_(stakePorCombinacion * resolucion.dividendo) : 0;
+        unidadesNetas = redondear2_(retornoReal - stakeTotal);
+      }
       const filaSheet = i + 2;
 
       sheet.getRange(filaSheet, index['resultado_final'] + 1).setValue(resolucion.resultado);
@@ -535,7 +606,11 @@ function resolverApuestasExoticas() {
 
 /**
  * Ejecutar UNA VEZ a mano desde el editor para instalar el disparador
- * periódico - mismo patrón que configurarTriggerReintentos.
+ * periódico - mismo patrón que configurarTriggerReintentos. Cada 30 min
+ * (no cada 2h como al principio): desde 2026-09-09 el job de la VM de
+ * Proyecto Galgos publica `resultados_gemela_trio` solo cada 20 min, así
+ * que 2h de por medio añadía hasta 1h40 de retraso innecesario al aviso de
+ * Telegram - ver docs/BITACORA.md.
  */
 function configurarTriggerResolverExoticas() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -543,8 +618,8 @@ function configurarTriggerResolverExoticas() {
       ScriptApp.deleteTrigger(t);
     }
   });
-  ScriptApp.newTrigger('resolverApuestasExoticas').timeBased().everyHours(2).create();
-  Logger.log('Disparador instalado: resolverApuestasExoticas cada 2 horas.');
+  ScriptApp.newTrigger('resolverApuestasExoticas').timeBased().everyMinutes(30).create();
+  Logger.log('Disparador instalado: resolverApuestasExoticas cada 30 minutos.');
 }
 
 /**

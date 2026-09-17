@@ -3,6 +3,31 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
+Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos
+reales de producción tras el lanzamiento del 8 sept. Desplegados en su
+momento vía `clasp push` directo al proyecto de Apps Script; esta entrada
+sincroniza ese código con el repo (quedó unos días sin commitear).
+- `parsearNumeroLocale_`: `dividendo` en `resultados_gemela_trio` llega como
+  número real (filas del job automático de la VM, desde el 09/09) o como
+  texto con coma decimal es_ES (filas sembradas a mano antes de esa fecha,
+  ej. "7,42" de Star Pelaw 05/09/2026) - `Number()` de JS no entiende la
+  coma y daba `NaN` con la segunda forma.
+- Nuevo resultado `no_disponible`: si la carrera ya tiene fila `forecast`
+  en `resultados_gemela_trio` (la VM la resolvió del todo) pero sigue sin
+  fila `tricast`, es que esa carrera nunca tuvo mercado de trío (necesita
+  6 galgos corriendo - caso real Kinsley 06/09), no que falte por llegar.
+  Se distingue de `pendiente` real. Se reembolsa el stake (no cuenta como
+  ganada ni perdida, excluida del panel igual que `pendiente`/
+  `revision_manual`) y se avisa por Telegram con ⚠️.
+- `configurarTriggerResolverExoticas`: disparador de `resolverApuestasExoticas`
+  pasa de cada 2h a **cada 30 min** - el job de la VM publica
+  `resultados_gemela_trio` cada 20 min desde el 09/09, así que 2h añadía
+  hasta 1h40 de retraso innecesario al aviso de Telegram.
+- De paso: `.clasp.json` con `fileExtension: "gs"` para que `clasp pull`
+  escriba directo en `.gs` (antes creaba duplicados `.js`).
+- Commits: (este commit)
+
 ## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
 Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y
 3º), con o sin "reversible". A diferencia de simple/doble/triple, es UNA
