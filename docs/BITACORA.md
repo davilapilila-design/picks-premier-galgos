@@ -3,6 +3,37 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 2) — Sesión nueva: comprobación de accesos y foto de pendientes; bloqueado por falta de acceso a la VM
+Sesión retomada sin contexto. Accesos comprobados:
+- OK: GitHub (fetch + `push --dry-run`), clasp (`list-deployments` muestra
+  AKfycbynXi…@28; `run-function checkConfig` sin error), lectura completa de la
+  hoja (xlsx por el conector de Drive, parseado sin muestreo), Playwright
+  (instalado con pip; Chromium en `/opt/pw-browsers`), npm/pypi/github.
+- FALTA: **SSH a la VM** (el entorno cloud no tiene cliente ssh, ni Tailscale,
+  ni claves; la red solo deja salir HTTPS por el proxy) y **script.google.com**
+  (403 del proxy: la URL pública del panel no se puede abrir; se revisa con
+  `scripts/revisar_panel_local.py`).
+
+Estado de la hoja hoy (xlsx completo): las **mismas 17 apuestas / 19 patas**
+pendientes que lista `scripts/diagnostico_pendientes_vm.py` (lista sin cambios).
+**El msg 315 NO se ha resuelto solo**: sigue sin ninguna fila de Star Pelaw del
+22/09 en `resultados_galgos` (arreglar el canódromo no bastó: el dato no llega
+de la VM). Último día con filas en `resultados_galgos`: 23/09. Gemela 319
+sigue `pendiente` y `resultados_gemela_trio` solo tiene la fila del 08/09.
+Msgs 32 y 74 siguen en `revision_manual`.
+
+Rama: `claude/lucid-pascal-148x58` puesta al día (fast-forward) con
+`claude/audit-test-sheets-row-40-7e67wh` (PR #1, sin fusionar; `main` no tenía
+nada que ella no tuviera). Tests por `clasp run-function` contra el HEAD del
+Apps Script, todos sin error: `test_normalizarCanodromo`,
+`test_calcularResolucionExotica`, `test_construirTextoResolucionExotica`,
+`testReglasAuditoria`. Sin `clasp push` ni despliegue en esta sesión.
+
+Siguiente paso: ejecutar el diagnóstico en la VM (lo hace el dueño o una
+sesión con acceso) y seguir con las causas de la entrada del 25/09.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont.) — Autorevisión del panel con Playwright; recuperado el logo real (regresión desde la v11)
 El dueño pidió que el panel se revise solo, con Playwright, tras cada cambio.
 `script.google.com` está bloqueado por el proxy de los entornos cloud (403,
