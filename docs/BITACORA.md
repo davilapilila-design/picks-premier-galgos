@@ -18,8 +18,13 @@ msg 301: el texto del tipster dice "Joys Of Dannielle"; el boleto (foto, vista
 con `fotoDeMensajeBase64`) dice "Joys Of Danielle", que es el nombre real. El
 prompt no decía qué fuente manda para el galgo y Gemini copió el texto. Cambio
 en `src/AI.gs`: para "seleccion", si el boleto trae el nombre, se copia de la
-imagen (al revés que el canódromo, donde manda el texto). **Sin `clasp push`**
-hasta que lo apruebe el dueño.
+imagen (al revés que el canódromo, donde manda el texto). **Desplegado con
+permiso del dueño**: antes, `clasp pull` a una carpeta aparte y `diff` contra
+la rama (única diferencia: este cambio; la rama tenía todo lo de `main` y de la
+PR #1). `clasp push`, tests sin error (`test_normalizarCanodromo`,
+`test_calcularResolucionExotica`, `test_construirTextoResolucionExotica`,
+`testReglasAuditoria`, `checkConfig`), versión 29 y `update-deployment` del
+despliegue fijo AKfycbynXi…@29. Panel público: HTTP 200.
 
 Pendiente: escribir en la hoja el nombre corregido de la 301 y las filas de
 esas 4 carreras en `resultados_galgos` (bloqueado por el clasificador de
