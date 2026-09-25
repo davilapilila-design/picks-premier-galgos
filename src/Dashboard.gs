@@ -371,27 +371,8 @@ function obtenerFilasExoticasNormalizadas_() {
  * excepción documentada en CLAUDE.md.
  */
 function getMetricasPanel() {
-  const sheet = getSheet_(SHEET_APUESTAS);
-  const index = getHeaderIndex_(sheet);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { hayDatos: false, historicoPicks: [] };
-
-  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  const filas = datos.map(function (fila) {
-    return {
-      messageId: String(fila[index['message_id']] || ''),
-      oculto: fila[index['oculto']] === true,
-      resultadoFinal: fila[index['resultado_final']],
-      unidadesNetas: fila[index['unidades_netas']],
-      stake: fila[index['stake']],
-      cuota: fila[index['cuota']],
-      cuotaFinal: fila[index['cuota_final']],
-      fechaPick: fila[index['fecha_pick']],
-      canodromo: fila[index['canodromo']],
-      galgo: fila[index['galgo']],
-      mensaje: fila[index['mensaje']],
-    };
-  });
+  const filas = obtenerFilasApuestas_();
+  if (filas.length === 0) return { hayDatos: false, historicoPicks: [] };
 
   const filasCombinadas = filas.concat(obtenerFilasExoticasNormalizadas_());
 
@@ -432,6 +413,36 @@ function getMetricasPanel() {
     }),
     historicoPicks: historicoPicks,
   };
+}
+
+/**
+ * Lee `apuestas` completa y la deja en la forma que usan calcularMetricas_/
+ * calcularHistoricoPicks_. Compartida por el panel (getMetricasPanel) y las
+ * estadísticas de Telegram (Estadisticas.gs), para que los dos cuenten
+ * exactamente lo mismo.
+ */
+function obtenerFilasApuestas_() {
+  const sheet = getSheet_(SHEET_APUESTAS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  return datos.map(function (fila) {
+    return {
+      messageId: String(fila[index['message_id']] || ''),
+      oculto: fila[index['oculto']] === true,
+      resultadoFinal: fila[index['resultado_final']],
+      unidadesNetas: fila[index['unidades_netas']],
+      stake: fila[index['stake']],
+      cuota: fila[index['cuota']],
+      cuotaFinal: fila[index['cuota_final']],
+      fechaPick: fila[index['fecha_pick']],
+      canodromo: fila[index['canodromo']],
+      galgo: fila[index['galgo']],
+      mensaje: fila[index['mensaje']],
+    };
+  });
 }
 
 /**

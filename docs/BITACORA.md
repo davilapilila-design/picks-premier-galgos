@@ -3,6 +3,36 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 14) — Resumen semanal de los lunes y comando `/stats N` (en la rama; sin desplegar)
+Pedido del dueño. Decisiones (preguntadas): se envía al grupo del bot
+(`TELEGRAM_CHAT_ID`); comando `/stats N` (sin número = 7 días; 1-365), para
+cualquiera del grupo; incluye exóticas, como el panel. Formato: DOS mensajes,
+el de estadísticas (apuestas resueltas con ganadas/perdidas, unidades, ROI,
+acierto) y, solo si hay alguna del periodo sin resultado, otro con
+"Pendientes de resultado: N".
+- `src/Estadisticas.gs` (nuevo): periodo por `fecha_pick` en hora de Madrid
+  (claves `yyyy-MM-dd`, a prueba de cambio de hora); semana anterior = lunes a
+  domingo; mismos filtros que el panel (sin ocultas, solo gano/perdio; ROI =
+  unidades / stake); todo en unidades. `enviarResumenSemanal`,
+  `previsualizarResumenSemanal([dias])` (devuelve el texto SIN enviar),
+  `configurarTriggerResumenSemanal` (idempotente; Apps Script solo deja fijar
+  la hora: se ejecuta entre las 7:00 y las 8:00) y `test_estadisticas`.
+- `src/Main.gs` (`doPost`): si el mensaje no es un reply y es `/stats…`, se
+  contesta y NO pasa a la IA; queda `procesado` en `mensajes_crudos`
+  (`buscarPicksAtascados` solo mira `pendiente`/`error`).
+- `src/Dashboard.gs`: la lectura de `apuestas` pasa a `obtenerFilasApuestas_()`,
+  compartida por el panel y las estadísticas (sin cambio de comportamiento).
+Verificado: `clasp push` solo al HEAD (producción sigue en @29), 9 tests sin
+error (`test_estadisticas` + los de siempre). Vista previa con datos reales:
+semana 14-20/09 → 13 (6 g, 7 p), +43,00 UD, ROI +82,7 %, acierto 46,2 %;
+`/stats 7` (19-25/09) → 16 (7 g, 9 p), +31,20 UD, ROI +42,7 %, 43,8 %.
+Recalculado aparte en Python sobre la hoja: idéntico, y el histórico (195
+picks, +246,03 UD, ROI +28,3 %) coincide con `getMetricasPanel`.
+Falta (con permiso): versión 30 + redeploy, probar `/stats 7` en el grupo e
+instalar el trigger.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 13) — La extracción de datos de Proyecto Galgos (VPN, rotación, scraper) queda FUERA de las sesiones de picks
 Decisión del dueño: no se cambia nada de cómo Proyecto Galgos extrae los datos
 (VPN, `rotate_vpn_daily.sh`, `src/utils/vpn.py`, scraper); lo atacará él en

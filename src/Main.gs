@@ -43,7 +43,12 @@ function doPost(e) {
 
     appendMensajeCrudo(msg.message_id, fechaRecibido, texto, fotoFileId, ESTADO_PENDIENTE, fechaForward);
 
-    if (msg.reply_to_message) {
+    // `/stats N` (Estadisticas.gs): se contesta aquí y NO se trata como pick
+    // (si no, iría a la IA y acabaría en revision_manual).
+    const comandoStats = msg.reply_to_message ? null : parsearComandoStats_(texto);
+    if (comandoStats) {
+      manejarComandoStats_(msg, comandoStats);
+    } else if (msg.reply_to_message) {
       manejarReply_(msg, texto);
     } else {
       manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward);
