@@ -6,8 +6,17 @@ Entradas más recientes arriba.
 ## 2026-09-25 (cont. 3) — Diagnóstico ejecutado en la VM: la causa común es el 403 de Racing Post
 Sesión con acceso a la VM (root, local). Accesos: OK datos de Proyecto Galgos,
 logs, hoja con gspread (solo lectura) y salida a internet (incluido
-script.google.com). FALTA: push a GitHub (sin credenciales en la VM), Node/clasp
-(sin instalar, sin `~/.clasprc.json`) y Playwright.
+script.google.com). Configurados en esta sesión (sin tocar servicios):
+- GitHub: token fine-grained del dueño (solo este repo, Contents RW, sin
+  caducidad) en `/root/.git-credentials` (`credential.helper store`).
+- Node 20 con nvm en `/root/.nvm` (cargado desde `/root/.bashrc`) + clasp 3.4.1
+  global. **`clasp run-function` exige loguearse con el cliente OAuth de
+  escritorio `clasp-cli` del proyecto GCP `picks-premier-galgos`** (con el
+  cliente por defecto de clasp da "Unable to run script function"):
+  `clasp login --no-localhost --use-project-scopes --include-clasp-scopes
+  --creds /root/.config/picks-premier-galgos/clasp_oauth_client.json`.
+  Verificado: `list-deployments` (AKfycbynXi…@28) y `run-function checkConfig`.
+- Playwright: sin instalar todavía.
 
 Hoja hoy: **13 apuestas / 14 patas** pendientes + gemela 319. Las del 24/09
 (329, 331, 332, 333) se resolvieron solas (`auto`); quitadas de
