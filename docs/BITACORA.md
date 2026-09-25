@@ -3,6 +3,28 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 4) — VPN a Japón y recuperados los resultados de las dos carreras del 22/09 (msgs 315, 316, gemela 319)
+Con permiso del dueño, cambios en producción de Proyecto Galgos:
+- **VPN**: la IP de NordVPN Grecia (186.247.178.185) recibía 403 de Racing Post
+  en toda la web (Varnish/Fastly, "Error 54113"); hoy no se había guardado
+  ningún resultado. Cambiada a mano a **Japón #1275** (`nordvpn connect
+  Japan`, anotado en `logs/automation/vpn_rotation.log`): 200 al momento, también
+  para fechas pasadas. Tailscale no se cortó. La rotación de la 01:00 UTC la
+  volverá a cambiar (Japón no está en su lista).
+- **Solo las dos reuniones que pidió el dueño** (no el backfill completo: dice
+  que para el predictor no aporta): `scrape_results_for_track("2026-09-22",
+  "Star Pelaw" / "Central Park")` con el lock global de scraping cogido, y
+  `sync_and_rebuild()` (+63 filas en `results_enriched`). Resultado: 315
+  Glenbowen Mabel 1º; 316 King Cobain 1º; dividendos de Star Pelaw 22/09
+  capturados (18:11 UTC forecast 1-5 = 19,30, que es la gemela 319).
+- La hoja la escriben los jobs de siempre en su pasada normal, sin tocarla a mano.
+
+Pendiente (sin decidir): que el 403 dispare cambio de VPN en `src/utils/vpn.py`
+(hoy solo 429/580/903) y que `change_vpn()` no vaya siempre a Irlanda; resto de
+patas pendientes (el dueño no quiere backfill de los otros días); 32/74; 120.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 3) — Diagnóstico ejecutado en la VM: la causa común es el 403 de Racing Post
 Sesión con acceso a la VM (root, local). Accesos: OK datos de Proyecto Galgos,
 logs, hoja con gspread (solo lectura) y salida a internet (incluido
