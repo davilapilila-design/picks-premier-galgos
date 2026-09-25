@@ -14,7 +14,9 @@ Script (lo último que se subió con `clasp push`).
 
 Uso (desde la raíz del repo):
     python3 scripts/revisar_panel_local.py [directorio_capturas]
-Requiere: pip install playwright (Chromium ya está en /opt/pw-browsers).
+Requiere: pip install playwright, y Chromium: en los entornos cloud de Claude
+Code ya está en /opt/pw-browsers; en otra máquina, `python3 -m playwright
+install chromium`. Y `clasp` autenticado con la cuenta dueña del Apps Script.
 """
 import json
 import pathlib
@@ -46,7 +48,9 @@ def pagina_con_datos(datos, destino):
 def revisar(pagina, capturas):
     fallos = []
     with sync_playwright() as p:
-        navegador = p.chromium.launch(executable_path=CHROMIUM)
+        # Fuera de los entornos cloud de Claude Code no existe esa ruta: se usa
+        # el Chromium propio de Playwright (`python3 -m playwright install chromium`).
+        navegador = p.chromium.launch(executable_path=CHROMIUM if pathlib.Path(CHROMIUM).exists() else None)
         for nombre, viewport in [("movil", {"width": 390, "height": 844}),
                                  ("escritorio", {"width": 1366, "height": 900})]:
             pg = navegador.new_page(viewport=viewport, locale="es-ES")
