@@ -3,6 +3,30 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 7) — Harlow 16/09 y 18/09: resultados vistos; nombre del galgo del boleto manda sobre el texto
+Resultados consultados en Racing Post (solo lectura, peticiones directas sin
+`vpn.py`): 292 Gagas Merry T6 3ª; 302 Caislean Champ T4 1º; 301 y 303 fuera
+del podio → posición real sacada del histórico de cada galgo
+(`dog/blocks.sd?...&blocks=details`): 301 Joys Of Danielle T2 **5ª** (race
+2224156), 303 Da Danna T3 **5ª** (race 2224159). La card de carreras pasadas
+no se puede pedir (580). **Incidente**: esa petición de card pasó por
+`request_json`, que ante el 580 cambió la VPN sola a Irlanda (403); devuelta a
+Japón al momento (anotado en `vpn_rotation.log`). Desde entonces, solo
+peticiones directas con curl_cffi.
+
+msg 301: el texto del tipster dice "Joys Of Dannielle"; el boleto (foto, vista
+con `fotoDeMensajeBase64`) dice "Joys Of Danielle", que es el nombre real. El
+prompt no decía qué fuente manda para el galgo y Gemini copió el texto. Cambio
+en `src/AI.gs`: para "seleccion", si el boleto trae el nombre, se copia de la
+imagen (al revés que el canódromo, donde manda el texto). **Sin `clasp push`**
+hasta que lo apruebe el dueño.
+
+Pendiente: escribir en la hoja el nombre corregido de la 301 y las filas de
+esas 4 carreras en `resultados_galgos` (bloqueado por el clasificador de
+permisos de la sesión; necesita autorización del dueño).
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 6) — Yarmouth 09/09 y 16/09: resultados recuperados, 267/268 perdio y 293 gano
 A petición del dueño, resultados de las carreras de Yarmouth de sus picks.
 `scrape_results_for_track` de Yarmouth 09/09 y 16/09 (la API de Racing Post

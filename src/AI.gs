@@ -85,6 +85,11 @@ const EXTRACTION_SYSTEM_PROMPT = [
   '- Copia el nombre del hipódromo COMPLETO, tal y como aparece en el texto',
   '  del mensaje ("Star Pelaw", nunca solo "Pelaw"; "Central Park", no',
   '  "Central"). Si el texto y la imagen no coinciden, manda el texto.',
+  '- El nombre del galgo ("seleccion") es al revés: si hay imagen del boleto',
+  '  y en ella se lee el nombre del galgo, cópialo EXACTO de la imagen (es el',
+  '  nombre oficial de la casa de apuestas; el texto del tipster puede traer',
+  '  erratas, ej. texto "Joys Of Dannielle", boleto "Joys Of Danielle" ->',
+  '  "Joys Of Danielle"). Si no hay imagen o no se lee, usa el del texto.',
   '- Si un campo no aparece o no estás seguro, ponlo a null. No inventes',
   '  valores.',
 ].join('\n');
