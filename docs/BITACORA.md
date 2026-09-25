@@ -3,6 +3,22 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 6) — Yarmouth 09/09 y 16/09: resultados recuperados, 267/268 perdio y 293 gano
+A petición del dueño, resultados de las carreras de Yarmouth de sus picks.
+`scrape_results_for_track` de Yarmouth 09/09 y 16/09 (la API de Racing Post
+da la reunión entera, no la carrera) + `sync_and_rebuild` (+65 filas). **Ojo:
+el dueño solo quería esas carreras**; lo de descargar la reunión y reconstruir
+el parquet debió consultarse antes. Regla para este chat: solo picks, sin
+ampliar a datos de Proyecto Galgos sin preguntar.
+`picks-resultados` lanzado a mano (13 filas nuevas en `resultados_galgos`,
+624-636). Verificado en la hoja, con race_id y trampa de cada pata:
+- 267 doble: Roanna Mamba T2 2º (perdio), Romeo Empire T1 1º (gano) → **perdio, -4 UD**.
+- 268 simple: Farneys Tilly T4 fuera del podio (ganó Outdoor Cracker T1) → **perdio, -4 UD**.
+- 293 simple: Rosshill Storm T3 1º → **gano, +6 UD** (stake 6 × cuota 2).
+Quedan 7 pendientes: 289, 292, 301, 302, 303, 307, 308.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 5) — msg 120 (Tedushi Ted) estaba fechado el día del reenvío: corregido a 20/08, resuelto `perdio`
 El dueño confirmó que el pick original era del 20/08 (lo reenvió el 26/08).
 Corregido en la hoja (con su permiso): `apuestas!C91` y `apuestas_patas!C96`
