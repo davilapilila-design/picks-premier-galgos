@@ -3,6 +3,27 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 5) — msg 120 (Tedushi Ted) estaba fechado el día del reenvío: corregido a 20/08, resuelto `perdio`
+El dueño confirmó que el pick original era del 20/08 (lo reenvió el 26/08).
+Corregido en la hoja (con su permiso): `apuestas!C91` y `apuestas_patas!C96`
+(`fecha_pick` 26/08/2026 6:11:27 → 20/08/2026) y `mensajes_crudos!F93`
+(`fecha_forward` vacío → 20/08/2026). `picks-resultados` lanzado a mano:
+Hove 20/08 21:59 (race_id 2218931), Tedushi Ted T5 **2º** → **perdio, -4 UD**
+(verificado releyendo la hoja; cuota_final 2,875).
+
+Por qué pasó (bitácora del 26/08): 119 (Newcastle) y 120 (Hove) fallaron en
+Gemini por un 429 sin reintento; se restauraron **a mano** usando
+`fecha_recibido` como fecha, porque `mensajes_crudos` aún no guardaba la fecha
+del reenvío. Después el dueño los reenvió (123, 124): 123 lo procesó `doPost`
+con la fecha del reenvío (20/08, bien) y se borró el 119 manual como duplicado;
+124 volvió a fallar y se dio por bueno el 120 manual, con la fecha mal. Esa
+misma tarde se añadió `fecha_forward` y se corrigieron 11 reenvíos (127-148),
+pero el 120 no entró en esa lista. El flujo automático actual
+(`extraerFechaForward_`, con `forward_origin`) ya no tiene este problema; el
+riesgo solo existe en cargas manuales.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 4) — VPN a Japón y recuperados los resultados de las dos carreras del 22/09 (msgs 315, 316, gemela 319)
 Con permiso del dueño, cambios en producción de Proyecto Galgos:
 - **VPN**: la IP de NordVPN Grecia (186.247.178.185) recibía 403 de Racing Post

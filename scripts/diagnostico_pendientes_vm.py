@@ -35,7 +35,6 @@ HISTORICO_SIN_FECHA = [
 
 # (message_id, canodromo, fecha, hora UK del tipster, galgo)
 PATAS_PENDIENTES = [
-    ("120", "Hove", "2026-08-26", "21:59", "Tedushi Ted"),
     ("267", "Yarmouth", "2026-09-09", "20:22", "Roanna Mamba"),
     ("267", "Yarmouth", "2026-09-09", "22:23", "Romeo Empire"),
     ("268", "Yarmouth", "2026-09-09", "21:47", "Farneys Tilly"),
