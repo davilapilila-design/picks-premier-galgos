@@ -3,6 +3,32 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 12) — Playwright en la VM y revisión del panel (local y URL pública): todo bien
+Con permiso del dueño ("que no perjudique al resto"):
+- Playwright en un venv aislado `/root/.venvs/playwright` + Chromium headless en
+  `/root/.cache/ms-playwright` (662 MB). Faltaban librerías del sistema
+  (libnspr4, libnss3, libgbm1…): 41 paquetes **nuevos**, 0 actualizados, 0
+  quitados (simulado antes con `apt-get -s`), con `NEEDRESTART_MODE=l` para no
+  reiniciar servicios. Servicios en marcha antes/después iguales (solo aparece
+  `packagekit`, que arranca apt y se para solo); Caddy, dashboard, Tailscale y
+  NordVPN activos; `dpkg --audit` limpio.
+- **Ojo**: el mirror de apt de la VM (`mirror.hetzner.com`) solo acepta IPs de
+  Hetzner; con la VPN puesta, apt se queda colgado sin descargar nada. Se
+  instaló desde `ports.ubuntu.com` solo para esa orden (sources e índices
+  temporales vía `-o Dir::Etc::sourcelist=… -o Dir::State::Lists=…`), sin
+  tocar la configuración de apt.
+- Uso: `/root/.venvs/playwright/bin/python scripts/revisar_panel_local.py <dir>`
+  (con nvm cargado para `npx clasp`).
+- Revisión local: 193 picks, sin errores JS, logo y botón de resumen OK en
+  móvil y escritorio. Revisión de la **URL pública** (despliegue @29) con
+  Playwright: sin errores JS, +58.507,50 € / +234,03 UD / ROI +27,2 % / 193
+  picks; desplegando "Ver más picks" (9 clics) aparecen todos los picks
+  resueltos hoy (32, 74, 120, 289, Harlow, Towcester, Yarmouth…) con su
+  resultado. Revisado también el msg 203 (Turnthemagicon en Nottingham 31/08):
+  correcto, el galgo corrió allí (T6, 2º).
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 11) — Picks 32 y 74 registrados (fecha única por las cards; el dueño lo confirmó en Racing Post)
 El dueño comprobó a mano en Racing Post las 4 patas y pidió registrarlas.
 - `clasp run-function appendApuestaConPatas` (el mismo código que usa el bot):
