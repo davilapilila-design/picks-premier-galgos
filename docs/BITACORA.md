@@ -3,6 +3,51 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 — Diagnóstico de apuestas pendientes; canódromo mal extraído por la IA (msg 315) corregido y blindado
+El dueño pidió revisar por qué seguían sin resolverse las apuestas en
+`pendiente`. Hoja descargada entera en xlsx (vía Drive, todas las pestañas sin
+muestreo) y analizada fila a fila: **17 apuestas en `pendiente` + 1 gemela**.
+En todas salvo una pata, la carrera no tiene ni una fila en `resultados_galgos`:
+no es un fallo de cruce de este repo, el dato no llega. El job de la VM
+(`scripts/vm_job_resultados_galgos.py`) sigue funcionando (escribe filas hasta
+el 24/09), pero busca cada carrera por canódromo+fecha+hora al minuto EXACTOS
+contra el parquet; si algo no cuadra, la carrera se queda sin resolver para
+siempre, sin aviso. Causas encontradas (se atacan una a una, ver entradas
+siguientes): canódromo mal escrito (msg 315), Yarmouth sin ningún resultado
+nunca (4 patas), carreras de canódromos cubiertos sin datos (Harlow 18/09
+reunión entera, Towcester 20/09, etc.), `resultados_gemela_trio` sin ninguna
+fila nueva desde el 09/09 (el job de gemela/trío de la VM no escribe), y 2
+picks del 19/08 en `revision_manual` (msgs 32 y 74, patas sin trampa).
+`buscarPicksAtascados()` no ve nada de esto: solo detecta mensajes sin fila
+en `apuestas`.
+
+**Causa 1, resuelta - msg 315**: el tipster escribió "20:04 Star Pelaw" pero
+Gemini devolvió `hipodromo: "Pelaw"`, y así la VM nunca encuentra la carrera.
+- Corregido en la hoja con `repararHipodromoPelaw20260925()` (Main.gs,
+  idempotente: solo toca la celda si sigue siendo exactamente "Pelaw").
+- Para que no se repita (`src/AI.gs`): regla nueva en el prompt (copiar el
+  nombre COMPLETO del texto; si texto e imagen no coinciden, manda el texto)
+  y `normalizarCanodromo_` sobre lo que devuelve la IA, contra los
+  canódromos que ya han cruzado alguna vez con la VM (los de
+  `resultados_galgos`): coincidencia exacta sin mayúsculas, o el nombre
+  extraído como palabra(s) completa(s) dentro de UN SOLO canódromo conocido.
+  Ambiguo o desconocido → se deja tal cual (no se adivina, regla de
+  `CLAUDE.md`). Test `test_normalizarCanodromo`.
+
+**Hallazgo de proceso**: `clasp run` **ya funciona** en este proyecto (antes
+"NOT_FOUND"; lo arregló la vinculación al proyecto de GCP estándar,
+`5422ba8`) - desde ahora se pueden ejecutar funciones y tests de Apps Script
+desde la sesión, sin pasar por el editor. Así se ejecutaron la reparación y
+los tests (`test_normalizarCanodromo`, `test_calcularResolucionExotica`,
+`test_construirTextoResolucionExotica`, `testReglasAuditoria`, todos OK).
+Ojo: un primer `clasp push` desde esta rama dejó unos minutos el HEAD del
+Apps Script sin los cambios del panel de `main` (`06ae896`, `c0b23f8`) - el
+panel público no se vio afectado (se sirve desde el deployment fijo @26).
+Arreglado integrando `main` antes de volver a subir y redesplegar. Antes de
+cada `clasp push`, comprobar que la rama tiene todo lo de `main`.
+
+Commits: (pendiente)
+
 ## 2026-09-09 — `resolverApuestasExoticas` adaptada a la captura automática real de Proyecto Galgos (dividendo locale, trío sin mercado)
 El dueño avisó que Proyecto Galgos (VM Hetzner) acaba de desplegar la captura
 automática de `resultados_gemela_trio` (job propio por `gspread`, cada 20 min) -
