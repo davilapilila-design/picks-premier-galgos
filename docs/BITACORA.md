@@ -3,6 +3,21 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 13) — La extracción de datos de Proyecto Galgos (VPN, rotación, scraper) queda FUERA de las sesiones de picks
+Decisión del dueño: no se cambia nada de cómo Proyecto Galgos extrae los datos
+(VPN, `rotate_vpn_daily.sh`, `src/utils/vpn.py`, scraper); lo atacará él en
+otra sesión. Descartada, sin aplicar, la propuesta de comprobar Racing Post
+tras cada rotación. Corrección de concepto: Racing Post veta **la IP** desde
+la que se conecta (NordVPN cambia de IP dentro de un mismo país), no el país;
+donde esta bitácora dice "país vetado", léase "IP vetada".
+Estado que queda hoy: VPN en Japón (cambio manual de esta sesión); la rotación
+de la 01:00 UTC la cambiará como siempre. Si vuelven a quedar picks pendientes
+por falta de resultados, en una sesión de picks: pedir SOLO esas carreras a
+Racing Post con peticiones directas (sin `vpn.py`) y escribir SOLO esas filas en
+`resultados_galgos` (ver cont. 8-10).
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 12) — Playwright en la VM y revisión del panel (local y URL pública): todo bien
 Con permiso del dueño ("que no perjudique al resto"):
 - Playwright en un venv aislado `/root/.venvs/playwright` + Chromium headless en
