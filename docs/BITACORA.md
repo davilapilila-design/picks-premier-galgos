@@ -3,6 +3,43 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 3) — Diagnóstico ejecutado en la VM: la causa común es el 403 de Racing Post
+Sesión con acceso a la VM (root, local). Accesos: OK datos de Proyecto Galgos,
+logs, hoja con gspread (solo lectura) y salida a internet (incluido
+script.google.com). FALTA: push a GitHub (sin credenciales en la VM), Node/clasp
+(sin instalar, sin `~/.clasprc.json`) y Playwright.
+
+Hoja hoy: **13 apuestas / 14 patas** pendientes + gemela 319. Las del 24/09
+(329, 331, 332, 333) se resolvieron solas (`auto`); quitadas de
+`scripts/diagnostico_pendientes_vm.py`.
+
+Resultado del diagnóstico (solo lectura):
+- **32 → fecha única 01/08/2026** (T6 Turnthemagicon CP 20:10 UTC, 1º; T5
+  Vhagar Monmore 20:54 UTC, 1º). **74 → fecha única 15/08/2026** (T4 Vhagar
+  Monmore 19:14 UTC, 3º; T4 Slingshot Poppy 20:54 UTC, 1º). Sin registrar aún.
+- Ninguna pata es "hora distinta" ni "abandonada". 12 patas: el galgo está en
+  las cards con la trampa del tipster pero la carrera no tiene resultado en
+  `results_enriched`; 3 (Harlow 18/09 mañana): sin cards; 1 (msg 120).
+- **Causa común**: `job_poll_results` de Proyecto Galgos recibe **HTTP 403** de
+  Racing Post (`_fetch_results_tracks`). Pasadas fallidas por día: 16/09, 18/09
+  y 22/09 las 41 (día entero sin resultados); 09/09 21, 15/09 24, 20/09 30 (a
+  partir de media tarde: solo se guardó la primera mitad de cada reunión, p. ej.
+  Yarmouth 09/09 4 de 12 carreras). Hoy 25/09 también falla desde las 10:30. El
+  job solo mira el día en curso, así que lo perdido no se recupera solo.
+  Existe `main.py scrape-results-range --fecha-desde --fecha-hasta` en Proyecto
+  Galgos, que también captura dividendos.
+- **Gemela/trío**: `picks-gemela-trio` (código en
+  `/opt/galgos/repo/scripts/picks/vm_job_gemela_trio.py`, commiteado en
+  Proyecto_Galgos 1006c70) funciona y sale con 0; no escribía porque desde el
+  09/09 solo ha habido una exótica nueva (319) y no hay dividendo capturado de
+  Star Pelaw 22/09 (mismo 403). Log: `/var/log/picks-gemela-trio.log`.
+- **msg 120** (Hove 26/08 21:59 T5 Tedushi Ted): Hove 26/08 solo tiene reunión
+  de tarde en las cards; Tedushi Ted T5 corrió en Hove el 20/08 a 20:59 UTC
+  (= 21:59 UK). Posible reenvío cargado con la fecha de llegada, pero
+  `fecha_forward` está vacío: NO se corrige sin confirmación del dueño.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 2) — Sesión nueva: comprobación de accesos y foto de pendientes; bloqueado por falta de acceso a la VM
 Sesión retomada sin contexto. Accesos comprobados:
 - OK: GitHub (fetch + `push --dry-run`), clasp (`list-deployments` muestra
