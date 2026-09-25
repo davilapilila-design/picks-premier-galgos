@@ -3,7 +3,7 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
-## 2026-09-25 (cont. 14) — Resumen semanal de los lunes y comando `/stats N` (en la rama; sin desplegar)
+## 2026-09-25 (cont. 14) — Resumen semanal de los lunes y comando `/stats N` (desplegado, v30)
 Pedido del dueño. Decisiones (preguntadas): se envía al grupo del bot
 (`TELEGRAM_CHAT_ID`); comando `/stats N` (sin número = 7 días; 1-365), para
 cualquiera del grupo; incluye exóticas, como el panel. Formato: DOS mensajes,
@@ -28,8 +28,15 @@ semana 14-20/09 → 13 (6 g, 7 p), +43,00 UD, ROI +82,7 %, acierto 46,2 %;
 `/stats 7` (19-25/09) → 16 (7 g, 9 p), +31,20 UD, ROI +42,7 %, 43,8 %.
 Recalculado aparte en Python sobre la hoja: idéntico, y el histórico (195
 picks, +246,03 UD, ROI +28,3 %) coincide con `getMetricasPanel`.
-Falta (con permiso): versión 30 + redeploy, probar `/stats 7` en el grupo e
-instalar el trigger.
+**Desplegado** (con permiso del dueño): versión 30, `update-deployment` del
+despliegue fijo AKfycbynXi…@30 (antes, HEAD comprobado = rama `e3f2480`). Panel
+público revisado con Playwright: sin errores, 195 picks, +246,03 UD. Prueba real:
+el dueño mandó `/stats 7` en el grupo (msg 342): respondió bien, quedó
+`procesado` y no creó apuesta (tardó 1-2 min, probablemente esperando el lock
+de `doPost`). `configurarTriggerResumenSemanal` ejecutado: primer resumen el
+lunes 28/09 entre las 7:00 y las 8:00. **Ojo**: los triggers de tiempo ejecutan
+el código del HEAD, no el de la versión desplegada; no dejar código a medias
+en el HEAD.
 
 Commits: (este commit)
 
