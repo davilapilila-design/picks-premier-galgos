@@ -46,6 +46,29 @@ panel público no se vio afectado (se sirve desde el deployment fijo @26).
 Arreglado integrando `main` antes de volver a subir y redesplegar. Antes de
 cada `clasp push`, comprobar que la rama tiene todo lo de `main`.
 
+**Causa 6, a medias - msgs 32 y 74** (dobles del histórico, en
+`revision_manual` desde el 20/08 porque al texto le faltan trampas). La carga
+del histórico se hizo con regex sobre el texto y nunca miró las fotos; ahora,
+con `fotoDeMensajeBase64(messageId)` (Telegram.gs, nueva, pensada para
+`clasp run-function fotoDeMensajeBase64 --params '["32"]'`), se han visto los
+boletos de Sky Bet, que SÍ traen la trampa de cada galgo:
+- 32: T6 Turnthemagicon (Central Park) + **T5 Vhagar** (Monmore 21:54 en el
+  texto). 74: **T4 Vhagar** (Monmore 20:14) + **T4 Slingshot Poppy**
+  (Monmore 21:54). En 74, "1.44"/"1.57" del texto eran la cuota de cada pata
+  (1,44 × 1,57 = 2,26, la cuota conjunta), no trampas.
+- Las horas del boleto van exactamente 1h por detrás del texto en las 4 patas
+  (misma carrera en otra zona horaria, no una contradicción); se mantiene la
+  hora del texto, que es la convención con la que resuelve todo el sistema.
+- **Falta la fecha real** (no se guardó `fecha_forward` en esa carga; el
+  boleto no la muestra). Los vecinos solo acotan (32: 31/07-02/08; 74:
+  15-16/08) - no se elige una por proximidad (regla de `CLAUDE.md`). Ojo:
+  `resultados_galgos` tiene "Monmore 22/08 20:54 T5 Vhagar", que coincide con
+  el boleto del 32 pero NO es esa carrera (fecha fuera del rango de los
+  vecinos; los galgos repiten trampa y franja horaria semana a semana - mismo
+  riesgo que el falso "perdió" de Moaning May del 26/08). Pendiente de que el
+  dueño mire la fecha de publicación de esos dos mensajes en el canal del
+  tipster; con ella se registran directamente.
+
 Commits: (pendiente)
 
 ## 2026-09-09 — `resolverApuestasExoticas` adaptada a la captura automática real de Proyecto Galgos (dividendo locale, trío sin mercado)
