@@ -3,6 +3,29 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 11) — Picks 32 y 74 registrados (fecha única por las cards; el dueño lo confirmó en Racing Post)
+El dueño comprobó a mano en Racing Post las 4 patas y pidió registrarlas.
+- `clasp run-function appendApuestaConPatas` (el mismo código que usa el bot):
+  32 → `apuestas` fila 191 (doble, cuota 2.30, stake 4; T6 Turnthemagicon
+  Central Park 21:10 + T5 Vhagar Monmore 21:54); 74 → fila 192 (doble, 2.26,
+  stake 6; T4 Vhagar Monmore 20:14 + T4 Slingshot Poppy Monmore 21:54).
+  Patas en `apuestas_patas` 204-207. `mensajes_crudos` filas 31 y 73:
+  `revision_manual` → `procesado`, `fecha_forward` 01/08/2026 y 15/08/2026.
+- **Trampa encontrada**: pasar la fecha como "2026-08-01" por clasp la guarda
+  como fecha pero con formato `yyyy-mm-dd`, y `vm_job_resultados_galgos.py`
+  lee el texto mostrado con `%d/%m/%Y`: **se salta la pata sin avisar**
+  ("206 totales, 202 cubiertas, 0 pendientes"). Arreglado poniendo formato
+  `dd/mm/yyyy` a esas celdas (C191:C192 y C204:C207). Ojo si se vuelve a cargar
+  algo a mano por clasp.
+- Job relanzado: 13 filas en `resultados_galgos` (662-674). Verificado en la
+  hoja, galgo + trampa + race_id de cada pata coinciden con el boleto:
+  **32 gano, +5,2 UD** (Turnthemagicon 1º, Vhagar 1º); **74 perdio, -6 UD**
+  (Vhagar 3º, Slingshot Poppy 1º).
+Estado final: 0 apuestas `pendiente`, 0 exóticas `pendiente`, 0 mensajes en
+`revision_manual`.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 10) — Central Park 15/09: 289 perdio. Cero apuestas pendientes
 Igual que Harlow: podio de la carrera 2223828 pedido a Racing Post (petición
 directa) y filas 658-661 en `resultados_galgos` solo de esa carrera. Swift
