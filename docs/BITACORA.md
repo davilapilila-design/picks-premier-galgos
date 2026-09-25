@@ -65,11 +65,52 @@ boletos de Sky Bet, que SÍ traen la trampa de cada galgo:
   `resultados_galgos` tiene "Monmore 22/08 20:54 T5 Vhagar", que coincide con
   el boleto del 32 pero NO es esa carrera (fecha fuera del rango de los
   vecinos; los galgos repiten trampa y franja horaria semana a semana - mismo
-  riesgo que el falso "perdió" de Moaning May del 26/08). Pendiente de que el
-  dueño mire la fecha de publicación de esos dos mensajes en el canal del
-  tipster; con ella se registran directamente.
+  riesgo que el falso "perdió" de Moaning May del 26/08).
+- Por qué se perdió la fecha: `scripts/backfill_picks.py:110` sí calculaba
+  la fecha real del reenvío, pero para los `revision_manual` solo escribía la
+  fila de `mensajes_crudos`, que entonces no tenía columna para ella. Desde
+  el 26/08 (`fecha_forward`) ya no pasa con picks nuevos.
+- Cómo fecharlos sin adivinar (idea del dueño): en las cards de la VM
+  (`galgos_master.parquet`), el día del rango en que TODAS las patas cuadran
+  con canódromo + galgo + trampa del boleto. Lo hace
+  `scripts/diagnostico_pendientes_vm.py` (abajo).
 
-Commits: (pendiente)
+**Lo que falta (necesita la VM de Proyecto Galgos)**. Esta sesión (entorno
+cloud) no llega a la VM: su política de red bloquea Tailscale y cualquier
+host fuera de la lista. Queda preparado `scripts/diagnostico_pendientes_vm.py`
+(SOLO LECTURA, probado con datos sintéticos), para ejecutar en la VM:
+1. Fecha los picks 32 y 74 por las cards (solo si la fecha es única).
+2. Para cada una de las 19 patas pendientes (lista en el propio script),
+   busca el galgo en las cards de su día POR NOMBRE y cruza por `race_id`
+   con `results_enriched.parquet`: sin cards de esa reunión / galgo no está
+   / carrera sin resultado / resultado con hora distinta a la del tipster /
+   estado (abandonada).
+Hallado leyendo el código de Proyecto Galgos (repo `Proyecto_Galgos`, commit
+`73040a8`): `automation/job_poll_results.py` solo scrapea resultados del día
+EN CURSO - una reunión que no se recogió ese día (VM caída, bloqueo de
+memoria, rate-limit) no se vuelve a buscar nunca; las carreras cambian de
+hora (tienen su propio `reconcile_master_horas`) y nuestro
+`vm_job_resultados_galgos.py` exige la hora al minuto; y Racing Post marca
+las carreras abandonadas (`status A`), que nunca tendrán resultado. Yarmouth
+NO está excluido del scraper (aparece con ese nombre en sus datos).
+Siguientes pasos según lo que salga del diagnóstico:
+- Picks 32/74: registrarlos con la fecha única y las trampas del boleto
+  (`apuestas` + `apuestas_patas`, mismo esquema que `appendApuestaConPatas`;
+  `mensajes_crudos.estado` → `procesado`).
+- Reuniones sin datos: backfill de esas fechas en Proyecto Galgos.
+- Hora distinta: que `vm_job_resultados_galgos.py` localice la carrera por
+  canódromo+fecha+NOMBRE del galgo en las cards (como ya hace
+  `vm_job_dog_forms.py`) en vez de por hora exacta, o con tolerancia.
+- Abandonadas: anular la apuesta (no dejarla `pendiente` para siempre).
+- Causa 5 (gemela msg 319, Star Pelaw 22/09 19:11): el job de gemela/trío de
+  la VM no escribe en `resultados_gemela_trio` desde el 09/09; su código no
+  está commiteado en `Proyecto_Galgos` (último push 08/09) - revisar servicio,
+  timer y `journalctl` en la VM.
+
+Commits: e4c2033 (fix canódromo + reparación 315), 1424852
+(`fotoDeMensajeBase64`), 6ce08dc (`diagnostico_pendientes_vm.py`); merge de
+`main` en cf34b93. Desplegado en Apps Script como v27. Todo en la rama
+`claude/audit-test-sheets-row-40-7e67wh` (sin mergear a `main` todavía).
 
 ## 2026-09-09 — `resolverApuestasExoticas` adaptada a la captura automática real de Proyecto Galgos (dividendo locale, trío sin mercado)
 El dueño avisó que Proyecto Galgos (VM Hetzner) acaba de desplegar la captura
