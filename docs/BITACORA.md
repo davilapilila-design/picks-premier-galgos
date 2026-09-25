@@ -3,6 +3,34 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont.) — Autorevisión del panel con Playwright; recuperado el logo real (regresión desde la v11)
+El dueño pidió que el panel se revise solo, con Playwright, tras cada cambio.
+`script.google.com` está bloqueado por el proxy de los entornos cloud (403,
+también desde Chromium), así que no se puede abrir la URL pública. Solución:
+`scripts/revisar_panel_local.py` saca los datos REALES con `clasp run-function
+getMetricasPanel --json` (la API de Apps Script sí es accesible), abre el
+`src/Panel.html` del repo en Chromium local con `google.script.run` sustituido
+por esos datos, y comprueba en móvil y escritorio: errores de JavaScript, que
+cargue el logo y que el botón de resumen abra el resumen. Deja capturas.
+Salida con código 1 si algo falla. Uso: `python3 scripts/revisar_panel_local.py
+[dir_capturas]` (requiere `pip install playwright`; Chromium ya está en
+`/opt/pw-browsers`). Primera versión del script daba un falso "botón no
+encontrado" (volvía a buscar el texto después de pulsarlo, cuando ya había
+cambiado a "Ocultar resumen") - corregido antes de dar nada por bueno.
+
+**Regresión encontrada al revisarlo**: el logo real (embebido en base64 en la
+v10, `c1a886e`, a petición del dueño) desapareció en la v11 (`467ebfe`, 01/09):
+el diseño de la v11 partía de un `Panel.html` anterior al logo y volvió al
+monograma "PG". Nadie lo pidió (no consta en esta bitácora). Restaurada la
+etiqueta `<img>` exacta de la v10. Verificado con el script: logo 128×128
+cargado, sin errores. Datos del panel coherentes: 173 picks, +229,63 UD =
++57.407,50 € (× 250), ROI +29,7 %.
+No verificable aquí: el formato de los campos de fecha (sale "mm/dd/yyyy"
+porque este Chromium de servidor no tiene datos regionales en español; en un
+dispositivo en español lo pinta el sistema como dd/mm/aaaa).
+
+Commits: (este commit)
+
 ## 2026-09-25 — Diagnóstico de apuestas pendientes; canódromo mal extraído por la IA (msg 315) corregido y blindado
 El dueño pidió revisar por qué seguían sin resolverse las apuestas en
 `pendiente`. Hoja descargada entera en xlsx (vía Drive, todas las pestañas sin
