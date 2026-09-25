@@ -3,6 +3,19 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 10) — Central Park 15/09: 289 perdio. Cero apuestas pendientes
+Igual que Harlow: podio de la carrera 2223828 pedido a Racing Post (petición
+directa) y filas 658-661 en `resultados_galgos` solo de esa carrera. Swift
+United no estaba en el podio; su ficha en Racing Post dio 580, pero su
+histórico ya estaba en la VM (`/opt/galgos/data/master/galgos_json_sidecar.parquet`,
+el mismo que usa `vm_job_dog_forms.py`): T4, **5º**, SP 6/4 → **289 perdio,
+-4 UD**. Verificado releyendo la hoja: **0 apuestas y 0 exóticas en
+`pendiente`** (quedan 32 y 74 en `revision_manual`, sin registrar).
+Truco para la próxima vez: para la posición de un galgo fuera del podio, mirar
+primero ese sidecar antes de pedir la ficha a Racing Post.
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 9) — Harlow 16/09 y 18/09 resueltos; nombre de la 301 corregido
 Igual que Towcester (cont. 8), a petición del dueño: `apuestas!Y175` y
 `apuestas_patas!G186` "Joys Of Dannielle" → "Joys Of Danielle" (nombre del

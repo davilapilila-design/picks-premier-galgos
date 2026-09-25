@@ -35,7 +35,6 @@ HISTORICO_SIN_FECHA = [
 
 # (message_id, canodromo, fecha, hora UK del tipster, galgo)
 PATAS_PENDIENTES = [
-    ("289", "Central Park", "2026-09-15", "20:56", "Swift United"),
 ]
 
 
