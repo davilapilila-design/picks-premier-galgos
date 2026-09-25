@@ -49,7 +49,11 @@ dato que iban a romper `resolverApuestasExoticas()`/`calcularResolucionExotica_`
   lee/escribe esas pestañas por posición de columna, cualquier cambio ahí
   rompe el push en silencio).
 
-Commits: (pendiente)
+- De paso (commit de sincronización `2c0e964`, otra sesión): `.clasp.json` con
+  `fileExtension: "gs"` para que `clasp pull` escriba directo en `.gs` (antes
+  creaba duplicados `.js`).
+
+Commits: c114a78 (el mismo código se sincronizó también a `main` en `2c0e964`)
 
 ## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
 Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y
