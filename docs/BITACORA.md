@@ -3,6 +3,22 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 8) — Towcester 20/09: 307 y 308 perdio (filas escritas solo de esas dos carreras)
+A petición del dueño ("como en Harlow"), sin tocar datos de Proyecto Galgos:
+resultados pedidos a Racing Post con peticiones directas (sin `vpn.py`) y
+escritas en `resultados_galgos` SOLO las filas de las dos carreras (637-642),
+con el formato de `vm_job_resultados_galgos.py` (podio, `fract` → decimal,
+url, race_id, dog_id), comprobando antes que no existían.
+- 307 doble: pata 1 Magical Jason 1º (ya estaba; race 2223915 es Towcester
+  20/09 15:51 UTC, bien aunque el número parezca de otro día), pata 2 Romeo
+  Tomcat T5 **3º** → **perdio, -5 UD**.
+- 308 simple: Droopys Erlybird T1 **2º** → **perdio, -5 UD**.
+Verificado releyendo la hoja (cuotas guardadas como número: 5,5 / 1,4 / 1,9091).
+Pendientes: 289 (Central Park 15/09) y Harlow 292/301/302/303 (escritura
+bloqueada por el clasificador de permisos; ver cont. 7).
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 7) — Harlow 16/09 y 18/09: resultados vistos; nombre del galgo del boleto manda sobre el texto
 Resultados consultados en Racing Post (solo lectura, peticiones directas sin
 `vpn.py`): 292 Gagas Merry T6 3ª; 302 Caislean Champ T4 1º; 301 y 303 fuera
