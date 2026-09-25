@@ -44,6 +44,20 @@ function downloadTelegramPhoto(fileId) {
   return fileResp.getBlob();
 }
 
+/**
+ * Para revisar a mano la foto (boleto) de un pick desde fuera del editor:
+ * `clasp run-function fotoDeMensajeBase64 --params '["32"]'`. Devuelve la
+ * imagen en base64, o null si el mensaje no tiene foto.
+ */
+function fotoDeMensajeBase64(messageId) {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const fila = datos.filter(function (f) { return String(f[index['message_id']]) === String(messageId); })[0];
+  if (!fila || !fila[index['foto_file_id']]) return null;
+  return Utilities.base64Encode(downloadTelegramPhoto(fila[index['foto_file_id']]).getBytes());
+}
+
 function mejorFotoFileId(photoArray) {
   if (!photoArray || photoArray.length === 0) return null;
   // Telegram devuelve las resoluciones de menor a mayor.

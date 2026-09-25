@@ -82,6 +82,9 @@ const EXTRACTION_SYSTEM_PROMPT = [
   '- La palabra "Galgo" antes del número de trampa es opcional, ignórala.',
   '- El hipódromo y la hora de cada carrera pueden aparecer en cualquier',
   '  orden en su línea.',
+  '- Copia el nombre del hipódromo COMPLETO, tal y como aparece en el texto',
+  '  del mensaje ("Star Pelaw", nunca solo "Pelaw"; "Central Park", no',
+  '  "Central"). Si el texto y la imagen no coinciden, manda el texto.',
   '- Si un campo no aparece o no estás seguro, ponlo a null. No inventes',
   '  valores.',
 ].join('\n');
@@ -237,6 +240,61 @@ function test_validarExtraccionExotica() {
 }
 
 /**
+ * Canódromos que ya han cruzado alguna vez con éxito contra el parquet de
+ * Proyecto Galgos: el job de la VM compara el nombre EXACTO (sin
+ * mayúsculas), así que cualquier nombre de `resultados_galgos` es uno que
+ * se sabe que funciona.
+ */
+function obtenerCanodromosConocidos_() {
+  const sheet = getSheet_(SHEET_RESULTADOS_GALGOS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const valores = sheet.getRange(2, index['canodromo'] + 1, lastRow - 1, 1).getValues();
+  const vistos = {};
+  valores.forEach(function (r) {
+    const nombre = String(r[0] || '').trim();
+    if (nombre) vistos[nombre] = true;
+  });
+  return Object.keys(vistos);
+}
+
+/**
+ * Corrige el canódromo que devuelve la IA contra la lista de conocidos -
+ * bug real 2026-09-22 (msg 315): el tipster escribió "Star Pelaw", Gemini
+ * devolvió "Pelaw", y la VM (match exacto) nunca encontró la carrera, así
+ * que la apuesta se quedó pendiente para siempre sin avisar. Solo corrige
+ * si no hay ambigüedad: coincidencia exacta ignorando mayúsculas, o el
+ * nombre extraído aparece como palabra(s) completa(s) dentro de UN SOLO
+ * canódromo conocido. Si no, lo deja tal cual (canódromo nuevo o
+ * ambiguo - no se adivina).
+ */
+function normalizarCanodromo_(nombre, conocidos) {
+  const limpio = String(nombre === null || nombre === undefined ? '' : nombre).trim();
+  if (!limpio) return nombre;
+  const bajo = limpio.toLowerCase();
+
+  const exacto = conocidos.filter(function (c) { return c.toLowerCase() === bajo; });
+  if (exacto.length > 0) return exacto[0];
+
+  const contienen = conocidos.filter(function (c) {
+    return (' ' + c.toLowerCase() + ' ').indexOf(' ' + bajo + ' ') !== -1;
+  });
+  return contienen.length === 1 ? contienen[0] : limpio;
+}
+
+function test_normalizarCanodromo() {
+  const conocidos = ['Star Pelaw', 'Central Park', 'Shelbourne Park', 'Nottingham', 'Harlow'];
+  assertIguales_(normalizarCanodromo_('Pelaw', conocidos), 'Star Pelaw', 'caso real msg 315: Pelaw -> Star Pelaw');
+  assertIguales_(normalizarCanodromo_('star pelaw ', conocidos), 'Star Pelaw', 'mayusculas/espacios -> nombre canonico');
+  assertIguales_(normalizarCanodromo_('Park', conocidos), 'Park', 'ambiguo (2 canodromos con Park) -> se deja tal cual');
+  assertIguales_(normalizarCanodromo_('ham', conocidos), 'ham', 'trozo de palabra (Nottingham) no cuenta');
+  assertIguales_(normalizarCanodromo_('Yarmouth', conocidos), 'Yarmouth', 'canodromo nuevo -> se deja tal cual');
+  assertIguales_(normalizarCanodromo_(null, conocidos), null, 'null se respeta (lo marca faltan_campos)');
+  Logger.log('test_normalizarCanodromo: OK, todas las comprobaciones pasaron.');
+}
+
+/**
  * Punto de entrada usado por Main.gs. Devuelve:
  *   { ok: true, tipoApuesta, cuota, stake, patas: [{hipodromo, horaCarrera, trampa, seleccion}, ...] }
  *   { ok: false, motivo: 'tipo_no_soportado', tipoApuesta } - Trixie/Yankee/etc., fuera de alcance
@@ -247,7 +305,9 @@ function extraerPick(texto, fotoBlob) {
   const extraido = callGeminiExtraction_(texto, fotoBlob);
 
   if (TIPOS_APUESTA_EXOTICA.indexOf(extraido.tipo_apuesta) !== -1) {
-    return validarExtraccionExotica_(extraido);
+    const exotica = validarExtraccionExotica_(extraido);
+    if (exotica.ok) exotica.hipodromo = normalizarCanodromo_(exotica.hipodromo, obtenerCanodromosConocidos_());
+    return exotica;
   }
 
   if (TIPOS_APUESTA_SOPORTADOS.indexOf(extraido.tipo_apuesta) === -1) {
@@ -278,6 +338,7 @@ function extraerPick(texto, fotoBlob) {
     return { ok: false, motivo: 'faltan_campos', camposFaltantes: camposFaltantes };
   }
 
+  const canodromosConocidos = obtenerCanodromosConocidos_();
   return {
     ok: true,
     tipoApuesta: extraido.tipo_apuesta,
@@ -285,7 +346,7 @@ function extraerPick(texto, fotoBlob) {
     stake: Number(extraido.stake),
     patas: patas.map(function (p) {
       return {
-        hipodromo: p.hipodromo,
+        hipodromo: normalizarCanodromo_(p.hipodromo, canodromosConocidos),
         horaCarrera: p.hora_carrera,
         trampa: String(p.trampa),
         seleccion: p.seleccion,
