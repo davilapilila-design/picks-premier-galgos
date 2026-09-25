@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-09-25 (cont. 9) — Harlow 16/09 y 18/09 resueltos; nombre de la 301 corregido
+Igual que Towcester (cont. 8), a petición del dueño: `apuestas!Y175` y
+`apuestas_patas!G186` "Joys Of Dannielle" → "Joys Of Danielle" (nombre del
+boleto); filas 643-657 en `resultados_galgos` solo de las 4 carreras (podio de
+Racing Post + la 5ª posición de Joys Of Danielle y Da Danna sacada del
+histórico de cada galgo, como `vm_job_dog_forms.py`). Verificado en la hoja:
+- 292 Gagas Merry 3ª → **perdio, -3 UD**.
+- 301 Joys Of Danielle 5ª → **perdio, -3 UD**.
+- 302 Caislean Champ 1º → **gano, +12 UD** (stake 3 × cuota 5).
+- 303 Da Danna 5ª → **perdio, -4 UD**.
+Queda 1 pendiente: 289 (Central Park 15/09).
+
+Commits: (este commit)
+
 ## 2026-09-25 (cont. 8) — Towcester 20/09: 307 y 308 perdio (filas escritas solo de esas dos carreras)
 A petición del dueño ("como en Harlow"), sin tocar datos de Proyecto Galgos:
 resultados pedidos a Racing Post con peticiones directas (sin `vpn.py`) y
