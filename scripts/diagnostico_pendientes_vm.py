@@ -47,8 +47,6 @@ PATAS_PENDIENTES = [
     ("303", "Harlow", "2026-09-18", "14:54", "Da Danna"),
     ("307", "Towcester", "2026-09-20", "18:06", "Romeo Tomcat"),
     ("308", "Towcester", "2026-09-20", "18:24", "Droopys Erlybird"),
-    ("315", "Star Pelaw", "2026-09-22", "20:04", "Glenbowen Mabel"),
-    ("316", "Central Park", "2026-09-22", "21:13", "King Cobain"),
 ]
 
 

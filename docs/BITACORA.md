@@ -17,7 +17,11 @@ Con permiso del dueño, cambios en producción de Proyecto Galgos:
   `sync_and_rebuild()` (+63 filas en `results_enriched`). Resultado: 315
   Glenbowen Mabel 1º; 316 King Cobain 1º; dividendos de Star Pelaw 22/09
   capturados (18:11 UTC forecast 1-5 = 19,30, que es la gemela 319).
-- La hoja la escriben los jobs de siempre en su pasada normal, sin tocarla a mano.
+- La hoja la escriben los jobs de siempre, lanzados a mano a petición del dueño
+  (`systemctl start picks-resultados` / `picks-gemela-trio` y `clasp run-function
+  resolverApuestasExoticas`). Verificado releyendo la hoja: **315 gano** (+7,2 UD),
+  **316 gano** (+12 UD), **319 perdio** (6-1/1-6 vs 1-5, -5 UD). Quedan 11
+  apuestas pendientes: 120, 267, 268, 289, 292, 293, 301, 302, 303, 307, 308.
 
 Pendiente (sin decidir): que el 403 dispare cambio de VPN en `src/utils/vpn.py`
 (hoy solo 429/580/903) y que `change_vpn()` no vaya siempre a Irlanda; resto de
