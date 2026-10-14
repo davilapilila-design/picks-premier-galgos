@@ -31,7 +31,7 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
 |---|---|
 | Bot | Nombre "PREMIER GALGOS" con el logo del canal. Administrador del canal con un único permiso: «Añadir suscriptores». |
 | Bienvenida | Versión B (ver `premier_captacion/mensajes.py`), negritas Unicode idénticas al mensaje manual. Solo a quien no la haya recibido nunca (por `user_id`). |
-| Botones | «🏁 Ya he apostado» y «🆕 Es mi primera vez». Abren el chat de @Dronwhite con el texto ya escrito: «¡Hola! Vengo de PREMIER GALGOS 🐕 Ya he apostado en galgos» / «… Es mi primera vez». |
+| Botones | «🏁 Ya he apostado» y «🆕 Es mi primera vez». Abren el chat de @Dronwhite con el texto ya escrito: «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» / «¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕» (cambiado durante las pruebas: el dueño no quería «Vengo de PREMIER GALGOS»). |
 | Si escriben al bot | Responde cada vez con «Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil…» y los dos botones. Ante una ráfaga de mensajes, una sola respuesta (pausa de 60 s). Atender dudas desde el bot a quien ya escribió al dueño: **más adelante**. |
 | Enlaces de entrada | `+VtCh-VrBHPpiMzg0` (descripción y web, se cuentan juntos) y `+om-eKd0-3OUyOGY0` (landing). Se guarda de cuál viene cada persona; conviene ponerles nombre en Telegram. |
 | Carpeta del día `MM.DD` | Solo entra quien recibió alguna bienvenida (bot o manual). Si vuelve a escribir otro día sin haber recibido el enlace, pasa a la carpeta del día nuevo. Hora de España. Se adoptan las carpetas `MM.DD` que el dueño ya tiene. |

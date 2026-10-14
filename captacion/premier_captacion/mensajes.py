@@ -74,13 +74,13 @@ TEXTO_REDIRECCION = (
 # enlace, así que la única forma de saber qué eligió cada persona es el
 # texto que acaba enviando al dueño (fase 3): por eso cada botón deja una
 # frase distinta y reconocible.
-FRASE_YA_APOSTADO = "Ya he apostado en galgos"
-FRASE_PRIMERA_VEZ = "Es mi primera vez"
-_SALUDO = "¡Hola! Vengo de PREMIER GALGOS 🐕"
+FRASE_YA_APOSTADO = "Ya he apostado en galgos antes"
+FRASE_PRIMERA_VEZ = "Es mi primera vez con los galgos"
+_SALUDO = "¡Hola! Acabo de entrar en el canal."
 
 BOTONES = (
-    ("🏁 Ya he apostado", f"{_SALUDO} {FRASE_YA_APOSTADO}"),
-    ("🆕 Es mi primera vez", f"{_SALUDO} {FRASE_PRIMERA_VEZ}"),
+    ("🏁 Ya he apostado", f"{_SALUDO} {FRASE_YA_APOSTADO} 🐕"),
+    ("🆕 Es mi primera vez", f"{_SALUDO} {FRASE_PRIMERA_VEZ} 🐕"),
 )
 
 

@@ -64,8 +64,16 @@ quien responde y sacar estadísticas.
   propietario configurado (los timers se activan al instalar). Probados en
   un contenedor desechable con systemctl simulado, y el bot instalado
   arrancando con el usuario sin privilegios.
+- Instalado en la VM por el dueño (instancia `prueba`): la bienvenida llega
+  y la solicitud se acepta sola. Primer cambio tras probarlo: el texto que
+  dejan escrito los botones pasa de «¡Hola! Vengo de PREMIER GALGOS 🐕 …» a
+  «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» /
+  «… Es mi primera vez con los galgos 🐕» (al dueño no le gustaba «Vengo
+  de PREMIER GALGOS»). Se mantiene el tipo de mensaje `bot_b_v1` porque aún
+  no hay datos reales que separar.
 - Commits: `3dc009a` (fase 1), `82876bc` (Iniciar en puesta en marcha),
-  `35d0a71` (papeles de la prueba), (este commit)
+  `35d0a71` (papeles de la prueba), `4e7b881`/`4f234e6`/`2616cfa`
+  (instalador y configurador), (este commit)
 
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos

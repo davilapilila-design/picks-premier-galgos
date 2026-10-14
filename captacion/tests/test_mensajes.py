@@ -42,8 +42,8 @@ class TestBotones(unittest.TestCase):
             url = urlparse(fila[0]["url"])
             self.assertEqual((url.scheme, url.netloc, url.path), ("https", "t.me", "/Dronwhite"))
             borradores.append(parse_qs(url.query)["text"][0])
-        self.assertEqual(borradores[0], "¡Hola! Vengo de PREMIER GALGOS 🐕 Ya he apostado en galgos")
-        self.assertEqual(borradores[1], "¡Hola! Vengo de PREMIER GALGOS 🐕 Es mi primera vez")
+        self.assertEqual(borradores[0], "¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕")
+        self.assertEqual(borradores[1], "¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕")
 
     def test_cada_boton_deja_una_frase_distinta(self):
         # La fase 3 distingue la respuesta por estas frases.
