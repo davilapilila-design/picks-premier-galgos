@@ -107,17 +107,28 @@ fi
 chown root:root "$ENV"
 chmod 600 "$ENV"
 valor_de() { sed -n "s/^$1=//p" "$ENV" | tail -n 1; }
+hay_terminal() { [ -t 0 ] || { : < /dev/tty; } 2>/dev/null; }
 
-if [ -z "$(valor_de CAPTACION_BOT_TOKEN)" ]; then
-    echo "   Falta el token del bot: cópialo del chat con @BotFather."
-    CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" token \
-        || fallo "Sin token no se puede arrancar. Cuando lo tengas: bash $DESTINO/configurar.sh $INSTANCIA token  y después repite este instalador."
-else
-    echo "   token ya puesto ✓"
-fi
 if [ -z "$(valor_de CAPTACION_PERFIL)" ]; then
     CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" perfil Dronwhite >/dev/null
     echo "   perfil de los botones: @Dronwhite ✓"
+fi
+if [ -n "$(valor_de CAPTACION_BOT_TOKEN)" ]; then
+    echo "   token ya puesto ✓"
+elif ! hay_terminal; then
+    # P. ej. lo está ejecutando una sesión de Claude: no puede pedir el
+    # token, y tampoco debe verlo. Se para aquí, sin arrancar nada.
+    echo
+    echo "⏸️  Instalado a falta del token del bot (aquí no hay terminal para pedirlo)."
+    echo "   El dueño lo pega desde SU terminal SSH (nunca en un chat):"
+    echo "     bash $DESTINO/configurar.sh $INSTANCIA token"
+    echo "   y después se vuelve a ejecutar:"
+    echo "     bash $DESTINO/instalar.sh $INSTANCIA"
+    exit 3
+else
+    echo "   Falta el token del bot: cópialo del chat con @BotFather."
+    CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" token \
+        || fallo "Sin token no se puede arrancar. Cuando lo tengas: bash $DESTINO/configurar.sh $INSTANCIA token  y después repite este instalador."
 fi
 
 paso "Arrancando el bot y los resúmenes"
