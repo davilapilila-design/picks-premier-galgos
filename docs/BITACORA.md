@@ -48,10 +48,9 @@ quien responde y sacar estadísticas.
   falta dos cuentas porque quien crea un canal no puede pedir unirse a él.
   La secundaria como "dueño" queda para la fase 3 (programa de carpetas),
   para no conectar ese programa a la cuenta principal hasta probarlo.
-- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`. Canal de
-  prueba creado: «Prueba bot captación» (privado, enlace con aprobación).
-  Su enlace de invitación NO se guarda en el repo: el repositorio es
-  público y con el bot activo cualquiera con el enlace entraría.
+- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`. Los
+  enlaces de invitación de prueba NO se guardan en el repo: el repositorio
+  es público y con el bot activo cualquiera con el enlace entraría.
 - Instalación simplificada para el dueño (no técnico): como el repo es
   público, la VM descarga el código de GitHub directamente.
   `captacion/deploy/instalar.sh` (instala/actualiza en un comando, fija el
@@ -64,8 +63,24 @@ quien responde y sacar estadísticas.
   propietario configurado (los timers se activan al instalar). Probados en
   un contenedor desechable con systemctl simulado, y el bot instalado
   arrancando con el usuario sin privilegios.
-- Instalado en la VM por el dueño (instancia `prueba`): la bienvenida llega
-  y la solicitud se acepta sola. Primer cambio tras probarlo: el texto que
+- **Instalado y probado en la VM** (instancia `prueba`, versión `6bbb6e7`).
+  Lo ejecutó una sesión de Claude en la propia VM con autorización expresa
+  del dueño limitada a lo de captación (usuario `captacion`,
+  `/opt|/etc|/var/lib/premier-captacion`, servicios `captacion-*`; nada de
+  Proyecto Galgos ni de picks); el token lo puso el dueño desde su terminal
+  SSH con `configurar.sh prueba token`, sin pasar por ningún chat.
+  Propietario y canal configurados con `configurar.sh` (los ids no se
+  apuntan aquí: repo público).
+- Tropiezo de la puesta en marcha: el primer intento («Prueba bot
+  captación») era un **grupo** con el bot como simple miembro, y no sirve.
+  Tiene que ser un **canal** con el bot **administrador** con «Añadir
+  suscriptores». Canal de prueba definitivo: «Prueba canal captación con
+  bot» (privado, enlace de «Solicitar unirse»). Ojo al pasar a producción.
+- Prueba de punta a punta OK: la cuenta secundaria pide entrar → recibe la
+  bienvenida nueva → el bot acepta solo; el botón abre el chat de
+  @Dronwhite con el texto ya escrito. Primer resumen diario: madrugada del
+  16-10 (hora de España); primer semanal: lunes 19-10 a las 9:00.
+- Primer cambio tras probarlo: el texto que
   dejan escrito los botones pasa de «¡Hola! Vengo de PREMIER GALGOS 🐕 …» a
   «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» /
   «… Es mi primera vez con los galgos 🐕» (al dueño no le gustaba «Vengo

@@ -53,12 +53,15 @@ El **token** que da BotFather no se copia a ningún sitio: se queda en ese
 chat y solo se usa en el paso 3. Si se escapa, `/revoke` en BotFather.
 
 ### Paso 2. Canal de prueba (con tu cuenta principal) ✅
-Canal **privado** «Prueba bot captación», con un enlace de invitación con
-**«Solicitar aprobación de administrador»** activado (si se le pone de
-nombre `prueba-1`, el bot lo usará para saber por qué enlace entra cada
-uno). El bot todavía no se añade (paso 5).
+Canal **privado** «Prueba canal captación con bot», con un enlace de
+invitación con **«Solicitar aprobación de administrador»** activado (si se
+le pone nombre, p. ej. `prueba-1`, el bot lo usará para saber por qué
+enlace entra cada uno). El bot todavía no se añade (paso 5).
 
-### Paso 3. Instalar el bot en la VM
+⚠️ Tiene que ser un **canal**, no un grupo: el primer intento fue un grupo
+con el bot como simple miembro y no sirve.
+
+### Paso 3. Instalar el bot en la VM ✅
 Entra en la VM por SSH (`ssh root@galgos-vm.tailc02685.ts.net`; si Tailscale
 pide verificar en el navegador, se acepta) y ejecuta:
 ```bash
@@ -71,7 +74,7 @@ El instalador comprueba la VM, descarga el código de GitHub, lo instala en
 terminal. No se ve al pegarlo; es normal. Pulsa Enter. Al final debe decir
 «✅ Bot «prueba» instalado y funcionando».
 
-### Paso 4. Decirle al bot quién eres
+### Paso 4. Decirle al bot quién eres ✅
 Con tu **cuenta principal**, abre `@premiergalgos_pruebas_bot` y pulsa
 **«Iniciar»**. Contesta «🛠️ Bot en puesta en marcha. Tu id de Telegram es:
 …». En la VM, con ese número:
@@ -81,7 +84,7 @@ bash /opt/premier-captacion/configurar.sh prueba propietario TU_ID
 (reinicia el bot solo). Escribe `/start` otra vez: ahora contesta «✅ Bot
 de captación activo».
 
-### Paso 5. Hacer administrador al bot en el canal de prueba
+### Paso 5. Hacer administrador al bot en el canal de prueba ✅
 Con tu cuenta principal: canal de prueba → Administrar canal →
 Administradores → Añadir administrador → busca `premiergalgos_pruebas_bot`
 → deja activado **solo «Añadir suscriptores»** → Guardar. El bot te escribe
