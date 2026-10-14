@@ -6,13 +6,15 @@
 #   bash /opt/premier-captacion/configurar.sh prueba perfil Dronwhite
 #   bash /opt/premier-captacion/configurar.sh prueba propietario 123456789
 #   bash /opt/premier-captacion/configurar.sh prueba canal -1001234567890
+#   bash /opt/premier-captacion/configurar.sh prueba sheet <enlace o id del Google Sheet>
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos el token)
 #
 # Por seguridad el token NUNCA se escribe en la línea de comandos (quedaría
 # en el historial de la terminal): siempre se pega cuando lo pide.
 #
-# Con CAPTACION_NO_REINICIAR=1 solo guarda, sin reiniciar el bot (lo usa
-# instalar.sh).
+# Al cambiar el Sheet no se reinicia el bot: se hace una copia al Sheet en
+# ese momento. Con CAPTACION_NO_REINICIAR=1 solo guarda, sin reiniciar nada
+# (lo usa instalar.sh).
 set -euo pipefail
 
 DIR_CONFIG=/etc/premier-captacion
@@ -20,7 +22,8 @@ DIR_CONFIG=/etc/premier-captacion
 fallo() { echo "❌ $*" >&2; exit 1; }
 
 uso() {
-    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2
+    # Muestra el comentario del principio de este archivo.
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0" >&2
     exit 1
 }
 
@@ -91,6 +94,14 @@ case "$DATO" in
         CLAVE=CAPTACION_CANAL_ID
         PATRON='^-100[0-9]+$'
         ;;
+    sheet)
+        CLAVE=CAPTACION_SHEET_ID
+        # Vale pegar el enlace entero del Sheet: se queda con el id.
+        if [[ "$VALOR" =~ /d/([A-Za-z0-9_-]+) ]]; then
+            VALOR=${BASH_REMATCH[1]}
+        fi
+        PATRON='^[A-Za-z0-9_-]{30,100}$'
+        ;;
     ver)
         echo "Configuración de $INSTANCIA ($ENV):"
         while IFS= read -r linea || [ -n "$linea" ]; do
@@ -118,6 +129,24 @@ fi
 
 poner "$ENV" "$CLAVE" "$VALOR"
 echo "✓ $DATO guardado"
+
+if [ "$DATO" = sheet ]; then
+    [ -z "${CAPTACION_NO_REINICIAR:-}" ] || exit 0
+    if ! systemctl is-enabled --quiet "captacion-sheet@$INSTANCIA.timer" 2>/dev/null; then
+        echo "   (la copia al Sheet aún no está activada: la activa instalar.sh)"
+        exit 0
+    fi
+    echo "   Copiando al Sheet ahora (puede tardar unos segundos)..."
+    if systemctl start "captacion-sheet@$INSTANCIA.service"; then
+        journalctl -u "captacion-sheet@$INSTANCIA" -n 1 --no-pager -o cat || true
+        echo "✓ Sheet actualizado"
+    else
+        echo "❌ No se ha podido copiar al Sheet. Últimas líneas del registro:" >&2
+        journalctl -u "captacion-sheet@$INSTANCIA" -n 15 --no-pager >&2 || true
+        exit 1
+    fi
+    exit 0
+fi
 
 if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-bot@$INSTANCIA" 2>/dev/null; then
     systemctl restart "captacion-bot@$INSTANCIA"

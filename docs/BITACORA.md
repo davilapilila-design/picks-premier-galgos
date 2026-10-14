@@ -3,6 +3,46 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-15 — Captación: fase 2 (copia al Google Sheet)
+El dueño eligió hacer el Sheet antes de pasar el bot a producción, y pidió
+avanzar de noche con lo posible sin él (nada de producción).
+- Hoja de pruebas **«Captación PREMIER GALGOS (pruebas)»** creada en su
+  Drive con el conector de Google Drive, privada y compartida como editor
+  solo con la cuenta de servicio que ya usa la VM para picks (el correo se
+  sacó de los permisos de la hoja de picks; no se apunta aquí). Sin datos
+  todavía: la llena la VM.
+- `captacion/premier_captacion/sheet.py`: copia la base de datos local al
+  Sheet cada 10 min (`captacion-sheet@<instancia>.timer`). Pestañas
+  `Usuarios` (una fila por user_id), `Eventos` (solo añade lo nuevo; si se
+  borran filas, se rellenan), `Resumen diario` (una fila por día con
+  fórmulas COUNTIFS/COUNTUNIQUEIFS sobre Eventos, siguiendo la norma de que
+  los números derivados sean fórmulas trazables) y `Tipos de mensaje`.
+  Datos en modo RAW (un nombre que empiece por "=" no se convierte en
+  fórmula); solo el Resumen va como fórmulas. Fechas como número de serie
+  con formato de fecha, en hora de España.
+- Fórmulas con nombres en inglés y separador ";", como las de
+  `src/Setup.gs` de picks (hoja del mismo dueño, en español): por eso el
+  volcado fija la configuración regional del libro en `es_ES` y la zona
+  horaria en `Europe/Madrid`.
+- Instalación: `instalar.sh` crea un venv propio
+  (`/opt/premier-captacion/venv`, gspread 6.1.4) para no tocar el Python del
+  sistema ni el venv de Proyecto Galgos, y copia (solo lectura del
+  original) la credencial de picks a `/etc/premier-captacion/google.json`
+  (root, 600); systemd se la pasa al servicio con `LoadCredential=`, así el
+  usuario `captacion` no puede leerla fuera del servicio. Si algo de esto
+  falla, el bot se instala igual y solo la copia queda sin activar.
+  `configurar.sh <instancia> sheet <enlace>` acepta el enlace entero y hace
+  la primera copia en el acto.
+- Verificado sin red: 62 tests (incluida una hoja simulada que, como la
+  API, falla al escribir fuera de la cuadrícula), y el volcado ejecutado con
+  el gspread real sobre un cliente HTTP falso para ver las peticiones
+  exactas que haría. Eso destapó un fallo ya corregido: gspread devuelve
+  `[[]]` para una pestaña vacía, y la pestaña inicial no se reutilizaba.
+  Instalador probado en contenedor desechable (venv + gspread + credencial
+  falsa → error claro de credencial). **Falta probarlo contra Google de
+  verdad en la VM.**
+- Commits: (este commit)
+
 ## 2026-10-14 — Captación: plan aprobado y fase 1 (bot de bienvenida)
 Subsistema nuevo e independiente del de picks, en `captacion/` y en la rama
 `captacion-bienvenida` (no toca `src/`). Objetivo: dejar de aceptar a mano

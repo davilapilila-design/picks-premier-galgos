@@ -84,6 +84,12 @@ BOTONES = (
 )
 
 
+# Para la pestaña «Tipos de mensaje» del Sheet: de dónde sale cada tipo y
+# su texto completo. Los manuales se añaden en la fase 4.
+ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot"}
+TEXTOS_TIPO = {TIPO_BIENVENIDA_BOT: TEXTO_BIENVENIDA}
+
+
 def enlace_perfil(usuario, texto):
     """Enlace que abre el chat privado con `usuario` y deja `texto` escrito.
 

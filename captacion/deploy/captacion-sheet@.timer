@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer: copia de captacion al Google Sheet (%i), cada 10 minutos
+
+[Timer]
+OnCalendar=*:0/10
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

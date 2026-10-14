@@ -28,6 +28,13 @@ class TestConfig(unittest.TestCase):
     def test_canal_vacio_es_puesta_en_marcha(self):
         self.assertIsNone(cargar_config(entorno(CAPTACION_CANAL_ID="")).canal_id)
 
+    def test_sheet_opcional(self):
+        self.assertIsNone(cargar_config(entorno()).sheet_id)
+        sheet_id = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd"
+        self.assertEqual(cargar_config(entorno(CAPTACION_SHEET_ID=sheet_id)).sheet_id, sheet_id)
+        with self.assertRaises(ErrorConfig):
+            cargar_config(entorno(CAPTACION_SHEET_ID="https://docs.google.com/x"))
+
     def test_token_incorrecto_no_aparece_en_el_error(self):
         malo = TOKEN[:-25]
         with self.assertRaises(ErrorConfig) as ctx:

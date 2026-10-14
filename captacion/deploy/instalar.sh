@@ -21,7 +21,10 @@
 #   5. Crea /etc/premier-captacion/<instancia>.env (solo root) si no existe,
 #      pide el token si falta (no se ve al pegarlo) y pone el perfil
 #      Dronwhite si está vacío. Los datos que ya haya no se tocan.
-#   6. Arranca (o reinicia) el bot y activa los resúmenes.
+#   6. Copia al Google Sheet (opcional, fase 2): crea un entorno de Python
+#      con gspread en /opt/premier-captacion/venv y copia la credencial de la
+#      cuenta de servicio de picks a /etc/premier-captacion/google.json.
+#   7. Arranca (o reinicia) el bot y activa los resúmenes y la copia al Sheet.
 set -euo pipefail
 
 REPO=davilapilila-design/picks-premier-galgos
@@ -30,6 +33,10 @@ DESTINO=/opt/premier-captacion
 DIR_CONFIG=/etc/premier-captacion
 DIR_UNIDADES=/etc/systemd/system
 PY=/usr/bin/python3
+VERSION_GSPREAD=6.1.4
+# Cuenta de servicio de Google que ya usa el sistema de picks en la VM (solo
+# se lee, para copiarla a $DIR_CONFIG/google.json).
+ORIGEN_GOOGLE=/root/.config/picks-premier-galgos/service_account.json
 
 fallo() { echo "❌ $*" >&2; exit 1; }
 paso() { echo; echo "▶ $*"; }
@@ -139,10 +146,53 @@ else
         || fallo "Sin token no se puede arrancar. Cuando lo tengas: bash $DESTINO/configurar.sh $INSTANCIA token  y después repite este instalador."
 fi
 
+# La copia al Google Sheet (fase 2) es opcional: si algo de esto falla, el
+# bot se instala y funciona igual; solo queda sin activar la copia.
+paso "Google Sheet: entorno de Python y credencial"
+SHEET_OK=1
+if [ ! -x "$DESTINO/venv/bin/python" ]; then
+    if "$PY" -m venv "$DESTINO/venv" >/dev/null 2>&1; then
+        echo "   entorno de Python creado en $DESTINO/venv"
+    else
+        rm -rf "$DESTINO/venv"
+        echo "   ⚠️  No se pudo crear el entorno de Python (suele faltar el paquete python3-venv)."
+        SHEET_OK=0
+    fi
+fi
+if [ "$SHEET_OK" = 1 ]; then
+    if "$DESTINO/venv/bin/python" -m pip install --quiet --disable-pip-version-check "gspread==$VERSION_GSPREAD"; then
+        chmod -R a+rX "$DESTINO/venv"
+        echo "   gspread $VERSION_GSPREAD ✓"
+    else
+        echo "   ⚠️  No se pudo instalar gspread."
+        SHEET_OK=0
+    fi
+fi
+if [ -f "$ORIGEN_GOOGLE" ]; then
+    # Copia solo para root; systemd se la pasa al servicio (LoadCredential).
+    install -m 600 -o root -g root "$ORIGEN_GOOGLE" "$DIR_CONFIG/google.json"
+    echo "   credencial de Google (cuenta de servicio de picks) ✓"
+elif [ -f "$DIR_CONFIG/google.json" ]; then
+    echo "   credencial de Google ya puesta ✓"
+else
+    echo "   ⚠️  No encuentro la credencial de Google ($ORIGEN_GOOGLE)."
+    SHEET_OK=0
+fi
+VERSION_SYSTEMD=$(systemctl --version 2>/dev/null | awk 'NR == 1 {print $2}')
+if ! [ "${VERSION_SYSTEMD:-0}" -ge 247 ] 2>/dev/null; then
+    echo "   ⚠️  systemd ${VERSION_SYSTEMD:-?} no sabe pasar credenciales a un servicio (hace falta la 247 o superior)."
+    SHEET_OK=0
+fi
+
 paso "Arrancando el bot y los resúmenes"
 systemctl enable --quiet "captacion-bot@$INSTANCIA"
 systemctl restart "captacion-bot@$INSTANCIA"
 systemctl enable --quiet --now "captacion-resumen-diario@$INSTANCIA.timer" "captacion-resumen-semanal@$INSTANCIA.timer"
+if [ "$SHEET_OK" = 1 ]; then
+    systemctl enable --quiet --now "captacion-sheet@$INSTANCIA.timer"
+else
+    echo "   ⚠️  La copia al Google Sheet queda sin activar; el bot funciona igual."
+fi
 sleep 4
 if ! systemctl is-active --quiet "captacion-bot@$INSTANCIA"; then
     echo "❌ El bot no ha arrancado. Últimas líneas del registro:" >&2
@@ -151,6 +201,15 @@ if ! systemctl is-active --quiet "captacion-bot@$INSTANCIA"; then
 fi
 journalctl -u "captacion-bot@$INSTANCIA" -n 4 --no-pager -o cat || true
 
+if [ "$SHEET_OK" = 1 ] && [ -n "$(valor_de CAPTACION_SHEET_ID)" ]; then
+    if systemctl start "captacion-sheet@$INSTANCIA.service"; then
+        echo "   copia al Google Sheet hecha ✓"
+    else
+        echo "   ⚠️  La copia al Google Sheet ha fallado (se reintenta cada 10 min). Registro:"
+        journalctl -u "captacion-sheet@$INSTANCIA" -n 5 --no-pager -o cat || true
+    fi
+fi
+
 echo
 echo "✅ Bot «$INSTANCIA» instalado y funcionando (versión $VERSION)."
 bash "$DESTINO/configurar.sh" "$INSTANCIA" ver
@@ -158,4 +217,11 @@ if [ -z "$(valor_de CAPTACION_PROPIETARIO_ID)" ]; then
     echo
     echo "Siguiente: abre el bot con tu cuenta principal y pulsa «Iniciar». Te dirá tu id;"
     echo "después: bash $DESTINO/configurar.sh $INSTANCIA propietario <tu id>"
+fi
+if [ "$SHEET_OK" = 1 ] && [ -z "$(valor_de CAPTACION_SHEET_ID)" ]; then
+    CORREO=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["client_email"])' "$DIR_CONFIG/google.json" 2>/dev/null || echo "?")
+    echo
+    echo "Para activar la copia al Google Sheet: compártelo como editor con"
+    echo "  $CORREO"
+    echo "y después: bash $DESTINO/configurar.sh $INSTANCIA sheet <enlace del Sheet>"
 fi

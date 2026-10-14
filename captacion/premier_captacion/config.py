@@ -42,6 +42,8 @@ class Config:
     # Pausa mínima entre dos respuestas "escríbeme" a la misma persona
     # (si manda varios mensajes seguidos, se contesta una sola vez).
     pausa_redireccion_s: int = 60
+    # Google Sheet al que se copia todo (fase 2). None = sin Sheet.
+    sheet_id: Optional[str] = None
 
     @property
     def tz(self):
@@ -50,6 +52,7 @@ class Config:
 
 _RE_TOKEN = re.compile(r"^\d+:[A-Za-z0-9_-]{30,}$")
 _RE_USUARIO = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
+_RE_SHEET = re.compile(r"^[A-Za-z0-9_-]{30,100}$")
 
 
 def _entero_opcional(entorno, clave):
@@ -88,6 +91,10 @@ def cargar_config(entorno=None) -> Config:
     except Exception:
         raise ErrorConfig(f"CAPTACION_ZONA_HORARIA desconocida: {zona!r}") from None
 
+    sheet_id = entorno.get("CAPTACION_SHEET_ID", "").strip() or None
+    if sheet_id is not None and not _RE_SHEET.match(sheet_id):
+        raise ErrorConfig(f"CAPTACION_SHEET_ID no parece el id de un Google Sheet: {sheet_id!r}")
+
     return Config(
         bot_token=token,
         perfil=perfil,
@@ -95,4 +102,5 @@ def cargar_config(entorno=None) -> Config:
         canal_id=canal_id,
         propietario_id=_entero_opcional(entorno, "CAPTACION_PROPIETARIO_ID"),
         zona_horaria=zona,
+        sheet_id=sheet_id,
     )

@@ -67,9 +67,12 @@ uno explícito aparte.
    la recibió, avisos, resúmenes. La cuenta principal del dueño hace de
    dueño, igual que en producción (canal de prueba suyo, avisos y botones a
    @Dronwhite), y la secundaria hace de cliente: hacen falta dos cuentas
-   porque quien crea un canal no puede pedir unirse a él. ← *en curso*
-2. **Google Sheet**: pestañas `usuarios`, `eventos`, `tipos_mensaje`,
-   `resumen`; volcado automático desde la VM con la cuenta de servicio.
+   porque quien crea un canal no puede pedir unirse a él. ✅ *Instalado y
+   probado en la VM (2026-10-14).*
+2. **Google Sheet**: pestañas `Usuarios`, `Eventos`, `Resumen diario` y
+   `Tipos de mensaje`; volcado automático desde la VM cada 10 min con la
+   cuenta de servicio de picks. ⏳ *Programado y probado sin red
+   (2026-10-15); falta activarlo en la VM. Hoja de pruebas ya creada.*
 3. **Carpetas, probadas en la cuenta secundaria** (que hace de "dueño";
    la cuenta real del dueño hace de "cliente"): `MM.DD`, `free send`,
    filtro del canal principal, rotación de 5 días.

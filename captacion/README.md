@@ -10,14 +10,15 @@ fases: [`PLAN.md`](PLAN.md).
 ## Estructura
 ```
 captacion/
-├── premier_captacion/      código (solo librería estándar de Python 3.9+)
+├── premier_captacion/      código (Python 3.9+)
 │   ├── bot.py              el bot: solicitudes, mensajes, avisos, comandos
 │   ├── mensajes.py         textos de bienvenida y botones
 │   ├── resumen.py          resúmenes diario y semanal
+│   ├── sheet.py            copia al Google Sheet (fase 2; usa gspread)
 │   ├── db.py               base de datos local (SQLite)
 │   ├── config.py           configuración (variables de entorno)
 │   └── telegram_api.py     cliente mínimo de la Bot API
-├── tests/                  pruebas automáticas (sin red)
+├── tests/                  pruebas automáticas (sin red ni Google)
 └── deploy/                 instalador, configurador, servicios systemd y
                             plantilla de configuración
 ```
@@ -134,12 +135,52 @@ bash /opt/premier-captacion/instalar.sh prueba         # actualizar a la última
 systemctl status captacion-bot@prueba                  # ¿está funcionando?
 journalctl -u captacion-bot@prueba --since today       # registro de hoy
 journalctl -u captacion-bot@prueba -f                  # registro en directo (Ctrl+C sale)
-systemctl list-timers 'captacion-*'                    # próximos resúmenes
+systemctl list-timers 'captacion-*'                    # próximos resúmenes y copias
+systemctl start captacion-sheet@prueba                 # copiar al Sheet ahora mismo
+journalctl -u captacion-sheet@prueba -n 20             # registro de las copias al Sheet
 ```
 Si el token se ha escapado: `/revoke` en @BotFather y después
 `bash /opt/premier-captacion/configurar.sh prueba token` con el nuevo.
 
 Sin `root` hay que poner `sudo` delante de cada orden.
+
+---
+
+## Fase 2: copia al Google Sheet
+
+Hoja de pruebas: **«Captación PREMIER GALGOS (pruebas)»**, en el Drive del
+dueño, privada y compartida como editor solo con la cuenta de servicio de la
+VM (la misma que usa el sistema de picks). La instancia real tendrá su
+propia hoja.
+
+Se rellena sola cada 10 minutos desde la VM. **No edites estas cuatro
+pestañas** (se sobrescriben); para notas o gráficos propios, crea otras:
+
+| Pestaña | Qué tiene |
+|---|---|
+| Usuarios | Una fila por persona (por su User ID de Telegram): nombre y @ actuales, primera y última solicitud, enlace de entrada, tipo de bienvenida y cuándo, mensajes al bot, si lo bloqueó |
+| Eventos | Todo lo que pasa, en orden: solicitudes, bienvenidas, aceptaciones, mensajes al bot... Solo se añaden filas nuevas |
+| Resumen diario | Una fila por día, más reciente arriba. Cada número es una fórmula sobre Eventos: al pulsarlo se ve de dónde sale |
+| Tipos de mensaje | Cada texto de bienvenida con su código (el que aparece en Usuarios y Eventos) |
+
+Las fechas son fechas de verdad (en hora de España), así que valen para
+filtros, tablas dinámicas y gráficos. No se guarda el contenido de ninguna
+conversación.
+
+### Activarla en la VM
+1. Actualiza: `bash /opt/premier-captacion/instalar.sh prueba`. Instala
+   gspread en `/opt/premier-captacion/venv`, copia la credencial de la
+   cuenta de servicio de picks a `/etc/premier-captacion/google.json` (solo
+   root) y activa el timer `captacion-sheet@prueba`.
+2. Dile qué hoja usar (vale pegar el enlace entero):
+   ```bash
+   bash /opt/premier-captacion/configurar.sh prueba sheet "https://docs.google.com/spreadsheets/d/…/edit"
+   ```
+   Hace la primera copia en el acto. Debe acabar en «✓ Sheet actualizado».
+3. Abre la hoja: deben salir las cuatro pestañas con los datos de la prueba.
+
+Si falla con un error de permisos, la hoja no está compartida como editor con
+la cuenta de servicio (el instalador dice cuál es).
 
 ---
 
