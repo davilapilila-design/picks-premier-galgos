@@ -39,7 +39,18 @@ quien responde y sacar estadísticas.
   parada limpia con SIGTERM); unidades systemd validadas con
   `systemd-analyze`. Las negritas Unicode de la bienvenida se comprueban
   contra el texto original del dueño.
-- Commits: (este commit)
+- Ajuste tras empezar la puesta en marcha: al abrir el bot por primera vez
+  ("Iniciar") en plena configuración, contesta con el id de quien escribe
+  en vez de con la respuesta para clientes.
+- Papeles en la prueba de la fase 1, cambiados a petición del dueño: su
+  cuenta principal hace de dueño (canal de prueba suyo, avisos y botones a
+  @Dronwhite, igual que en producción) y la secundaria de cliente. Hacen
+  falta dos cuentas porque quien crea un canal no puede pedir unirse a él.
+  La secundaria como "dueño" queda para la fase 3 (programa de carpetas),
+  para no conectar ese programa a la cuenta principal hasta probarlo.
+- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`.
+- Commits: `3dc009a` (fase 1), `82876bc` (Iniciar en puesta en marcha),
+  (este commit)
 
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos

@@ -64,7 +64,10 @@ Cada fase necesita el visto bueno del dueño, y las de producción (5 y 6)
 uno explícito aparte.
 
 1. **Bot en el canal de prueba**: bienvenida, aceptación, memoria de quién
-   la recibió, avisos, resúmenes. ← *en curso*
+   la recibió, avisos, resúmenes. La cuenta principal del dueño hace de
+   dueño, igual que en producción (canal de prueba suyo, avisos y botones a
+   @Dronwhite), y la secundaria hace de cliente: hacen falta dos cuentas
+   porque quien crea un canal no puede pedir unirse a él. ← *en curso*
 2. **Google Sheet**: pestañas `usuarios`, `eventos`, `tipos_mensaje`,
    `resumen`; volcado automático desde la VM con la cuenta de servicio.
 3. **Carpetas, probadas en la cuenta secundaria** (que hace de "dueño";

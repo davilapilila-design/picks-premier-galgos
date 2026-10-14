@@ -27,8 +27,9 @@ class ErrorConfig(Exception):
 @dataclass(frozen=True)
 class Config:
     bot_token: str
-    # @usuario (sin la @) al que llevan los botones "Escríbeme". En
-    # pruebas es la cuenta secundaria; en producción, el perfil del dueño.
+    # @usuario (sin la @) al que llevan los botones de la bienvenida: el
+    # perfil del dueño (también en las pruebas de la fase 1). Solo en las
+    # pruebas de la fase 3 será la cuenta secundaria.
     perfil: str
     db_path: str
     # Canal cuyas solicitudes gestiona el bot. None = puesta en marcha.
