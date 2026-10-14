@@ -3,6 +3,66 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-15 — Captación: fases 3 y 4 programadas (carpetas e histórico)
+Avanzado de noche sin el dueño, como pidió: solo código y pruebas; **nada
+instalado ni conectado a ninguna cuenta**. Para activarlo hacen falta pasos
+suyos (api_id/api_hash, conectar la cuenta secundaria) y su visto bueno.
+- **Lector de la cuenta del dueño** (`captacion/premier_captacion/lector.py`,
+  Telethon 1.45.0): servicio `captacion-lector@<instancia>` que ordena sus
+  carpetas con las reglas acordadas (`carpetas.py`): carpeta del día «MM.DD»
+  para quien recibió bienvenida y le escribe (pasa al día nuevo si vuelve a
+  escribir sin enlace), «free send» cuando el dueño envía un enlace
+  `t.me/+…` que no es del canal principal (se pregunta a Telegram a qué
+  canal lleva, sin unirse, con caché en la base de datos), rotación a las 5
+  carpetas de días más recientes, «free send» con los ~90 más recientes del
+  embudo, nunca se quitan chats puestos a mano, nunca se tocan carpetas
+  compartidas ni las que no son de días/free send, aviso si no hay hueco.
+- **Seguridad**: `guardia.py` es una lista blanca de peticiones a Telegram
+  enganchada en `TelegramClient._call` (por donde pasan todas): en modo
+  lector solo lectura + carpetas + «no en línea»; en modo histórico, solo
+  lectura. Enviar, marcar como leído, unirse, reenviar, borrar, salir,
+  «escribiendo…», reaccionar o aparecer «en línea» quedan bloqueados. Se
+  comprobó contra las clases reales de Telethon que cada nombre de la lista
+  existe y que 11 peticiones peligrosas se bloquean en todos los modos.
+- El lector **empieza siempre en simulación**: avisa por el bot de lo que
+  haría («🧪 Simulación (no he tocado nada): …») sin tocar carpetas, sobre
+  una copia en memoria de las carpetas reales. Solo actúa con
+  `configurar.sh <instancia> lector real`. Recupera al arrancar lo llegado
+  mientras estuvo parado (punto de control por persona: `ultimo_msg_id`).
+- **Histórico** (`historico.py`, fase 4, solo lectura): busca las
+  bienvenidas manuales del dueño (dos versiones, ahora tipos
+  `manual_buenas` y `manual_buenos_dias` con sus textos en «Tipos de
+  mensaje»), marca a esas personas como del embudo (el bot no les repetirá
+  la bienvenida) y reconstruye si contestaron y si recibieron enlace de
+  venta, para comparar manual frente a bot. Repetible sin duplicar.
+- Base de datos: migración 2 (columnas de mensajes, botón, enlace y canal de
+  venta, carpeta; tabla `enlaces`). Las migraciones ahora usan `BEGIN
+  IMMEDIATE` y `abrir()` reintenta si la base está bloqueada (una prueba de
+  6 procesos abriendo a la vez fallaba ~1 de cada 20 veces; ahora 0 de 80).
+- Sheet y resúmenes ampliados: columnas de Usuarios (primer mensaje, botón,
+  enlace y canal de venta, carpeta), columnas nuevas en Resumen diario y
+  líneas «Te escribieron» / «Enlaces de venta» en los resúmenes por
+  Telegram cuando el lector está activo.
+- Despliegue: `instalar.sh` añade Telethon al venv y reinicia el lector si
+  ya estaba activo (no lo activa); `conectar-cuenta.sh` (solo con terminal:
+  lo hace el dueño; para la instancia `real` crea la configuración pero no
+  arranca nada), `leer-historico.sh` y `lector.sh` (para el lector si
+  estaba en marcha: una sesión usada por dos programas a la vez se anula);
+  `configurar.sh` con `api` (api_hash oculto, nunca por argumento) y
+  `lector simulacion|real`. La sesión de la cuenta vive en
+  `/var/lib/premier-captacion/<instancia>-cuenta.session` (umask 077).
+- Para probar con la secundaria como "dueño", la cuenta principal se marca
+  del embudo con `lector.sh prueba embudo-prueba <id>` (solo pruebas).
+- Verificado: 122 tests en Python 3.9, 3.12 (con gspread y Telethon reales)
+  y 3.13; el adaptador de Telethon con sus tipos reales (`DialogFilter`,
+  `TextWithEntities`, invitaciones) y el servicio entero con un cliente
+  falso (simulación sin escrituras; modo real crea «MM.DD» y «free send» y
+  todas las peticiones pasan la lista blanca). Scripts probados en
+  contenedor desechable. Al revisar se quitaron del código de pruebas los
+  ids reales de Telegram y los enlaces de los canales de venta que el dueño
+  pasó como ejemplo (el repo es público).
+- Commits: (este commit)
+
 ## 2026-10-15 — Captación: fase 2 (copia al Google Sheet)
 El dueño eligió hacer el Sheet antes de pasar el bot a producción, y pidió
 avanzar de noche con lo posible sin él (nada de producción).
@@ -41,7 +101,7 @@ avanzar de noche con lo posible sin él (nada de producción).
   Instalador probado en contenedor desechable (venv + gspread + credencial
   falsa → error claro de credencial). **Falta probarlo contra Google de
   verdad en la VM.**
-- Commits: (este commit)
+- Commits: `a8e337c`
 
 ## 2026-10-14 — Captación: plan aprobado y fase 1 (bot de bienvenida)
 Subsistema nuevo e independiente del de picks, en `captacion/` y en la rama

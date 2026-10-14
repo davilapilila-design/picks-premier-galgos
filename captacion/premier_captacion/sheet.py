@@ -56,7 +56,11 @@ CABECERA_USUARIOS = [
     "User ID", "Nombre", "Usuario", "Idioma", "Primera solicitud", "Última solicitud",
     "Solicitudes", "Enlace de entrada", "Tipo de bienvenida", "Bienvenida enviada",
     "Mensajes al bot", "Bloqueó el bot",
+    # Fase 3 (lector de la cuenta del dueño) y fase 4 (histórico):
+    "Te escribió (primera vez)", "Último mensaje", "Botón", "Primer enlace de venta",
+    "Canal de venta", "Último enlace de venta", "Carpeta",
 ]
+BOTONES = {"ya_apostado": "Ya he apostado", "primera_vez": "Primera vez", "otro": "Otro texto"}
 CABECERA_EVENTOS = ["Id", "Fecha y hora", "Día", "User ID", "Nombre", "Evento", "Tipo de mensaje", "Detalle"]
 CABECERA_TIPOS = ["Código", "Descripción", "Origen", "Texto"]
 
@@ -75,6 +79,13 @@ ETIQUETAS_EVENTO = {
     "bloqueo_bot": "Bloqueó el bot",
     "desbloqueo_bot": "Desbloqueó el bot",
     "permisos_bot": "Cambio de permisos del bot",
+    "te_escribe": "Te escribió",
+    "enlace_venta": "Enlace de venta enviado",
+    "enlace_principal": "Enlace del canal principal enviado",
+    "carpeta": "Carpeta",
+    "carpeta_borrada": "Carpeta borrada",
+    "bienvenida_manual": "Bienvenida manual",
+    "bienvenida_prueba": "Marcado del embudo (prueba)",
 }
 
 MOTIVOS = {
@@ -92,6 +103,9 @@ COLUMNAS_RESUMEN = [
     ("Volvieron (ya tenían bienvenida)", "ya_recibida", "filas"),
     ("Aceptadas", "aceptada", "filas"),
     ("Personas que escribieron al bot", "mensaje_al_bot", "personas"),
+    ("Personas que te escribieron", "te_escribe", "personas"),
+    ("Enlaces de venta enviados", "enlace_venta", "filas"),
+    ("Bienvenidas manuales (histórico)", "bienvenida_manual", "filas"),
 ]
 FILAS_CABECERA_RESUMEN = [
     ["Día"] + [cabecera for cabecera, _, _ in COLUMNAS_RESUMEN],
@@ -155,6 +169,21 @@ def texto_detalle(detalle):
                 partes.append("ya estaba dentro")
         elif clave == "puede_invitar":
             partes.append(f"puede aceptar solicitudes: {'sí' if valor else 'no'}")
+        elif clave == "canal":
+            partes.append(f"canal: {valor}")
+        elif clave == "carpeta":
+            accion = detalle.get("accion")
+            partes.append({"entra": "entra en", "sale": "sale de"}.get(accion, "carpeta") + f" {valor}")
+        elif clave == "accion":
+            continue
+        elif clave == "boton":
+            partes.append(f"botón: {BOTONES.get(valor, valor)}")
+        elif clave == "primera_vez":
+            if valor:
+                partes.append("primera vez que escribe")
+        elif clave == "historico":
+            if valor:
+                partes.append("del histórico")
         else:
             partes.append(f"{clave}: {valor}")
     return "; ".join(partes)
@@ -187,6 +216,13 @@ def filas_usuarios(con, tz):
             _o_vacio(u["bienvenida_ts"], tz),
             u["mensajes_bot"],
             "sí" if u["ultimo_bloqueo"] == "bloqueo_bot" else "",
+            _o_vacio(u["primer_mensaje_ts"], tz),
+            _o_vacio(u["ultimo_mensaje_ts"], tz),
+            BOTONES.get(u["boton"], u["boton"] or ""),
+            _o_vacio(u["enlace_venta_ts"], tz),
+            u["canal_venta"] or "",
+            u["enlace_venta"] or "",
+            u["carpeta"] or "",
         ])
     return filas
 
@@ -261,7 +297,8 @@ def sincronizar(con, tz, libro):
     usuarios = filas_usuarios(con, tz)
     p = libro.pestana(TAB_USUARIOS, [CABECERA_USUARIOS])
     p.reemplazar(usuarios, desde_fila=2)
-    p.formatear([("E2:F", FORMATO_FECHA_HORA), ("J2:J", FORMATO_FECHA_HORA)])
+    p.formatear([("E2:F", FORMATO_FECHA_HORA), ("J2:J", FORMATO_FECHA_HORA), ("M2:N", FORMATO_FECHA_HORA),
+                 ("P2:P", FORMATO_FECHA_HORA)])
 
     p = libro.pestana(TAB_EVENTOS, [CABECERA_EVENTOS])
     nuevos = filas_eventos(con, tz, desde_id=max(p.ids(), default=0))
@@ -272,7 +309,7 @@ def sincronizar(con, tz, libro):
     dias = filas_resumen(con, tz)
     p = libro.pestana(TAB_RESUMEN, FILAS_CABECERA_RESUMEN)
     p.reemplazar(dias, desde_fila=3, formulas=True)
-    p.formatear([("A2:H2", FORMATO_FILA_EVENTO), ("A3:A", FORMATO_DIA_SEMANA)])
+    p.formatear([(f"A2:{_letra_columna(len(FILAS_CABECERA_RESUMEN[0]))}2", FORMATO_FILA_EVENTO), ("A3:A", FORMATO_DIA_SEMANA)])
 
     p = libro.pestana(TAB_TIPOS, [CABECERA_TIPOS])
     p.reemplazar(filas_tipos(), desde_fila=2)

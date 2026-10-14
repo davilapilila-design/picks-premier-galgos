@@ -7,10 +7,13 @@
 #   bash /opt/premier-captacion/configurar.sh prueba propietario 123456789
 #   bash /opt/premier-captacion/configurar.sh prueba canal -1001234567890
 #   bash /opt/premier-captacion/configurar.sh prueba sheet <enlace o id del Google Sheet>
-#   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos el token)
+#   bash /opt/premier-captacion/configurar.sh prueba api               (api_id y api_hash de my.telegram.org; los pide)
+#   bash /opt/premier-captacion/configurar.sh prueba lector simulacion (el lector de carpetas solo avisa)
+#   bash /opt/premier-captacion/configurar.sh prueba lector real       (el lector de carpetas actúa)
+#   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
 #
-# Por seguridad el token NUNCA se escribe en la línea de comandos (quedaría
-# en el historial de la terminal): siempre se pega cuando lo pide.
+# Por seguridad el token y el api_hash NUNCA se escriben en la línea de
+# comandos (quedarían en el historial de la terminal): se pegan cuando los pide.
 #
 # Al cambiar el Sheet no se reinicia el bot: se hace una copia al Sheet en
 # ese momento. Con CAPTACION_NO_REINICIAR=1 solo guarda, sin reiniciar nada
@@ -48,15 +51,17 @@ poner() {
     mv "$tmp" "$archivo"
 }
 
-# leer_oculto VARIABLE MENSAJE: lee sin mostrar lo que se escribe.
+# leer_oculto VARIABLE MENSAJE [visible]: lee sin mostrar lo que se escribe
+# (con un tercer argumento, mostrándolo).
 leer_oculto() {
-    local __var=$1 __msg=$2 __valor=""
+    local __var=$1 __msg=$2 __valor="" __s="-s"
+    [ -z "${3:-}" ] || __s=""
     if [ -t 0 ]; then
-        read -r -s -p "$__msg" __valor
-        echo
+        read -r $__s -p "$__msg" __valor
+        [ -z "$__s" ] || echo
     elif { : < /dev/tty; } 2>/dev/null; then
-        read -r -s -p "$__msg" __valor < /dev/tty
-        echo
+        read -r $__s -p "$__msg" __valor < /dev/tty
+        [ -z "$__s" ] || echo
     else
         # Sin terminal (p. ej. el valor llega por una tubería).
         read -r __valor || true
@@ -102,11 +107,37 @@ case "$DATO" in
         fi
         PATRON='^[A-Za-z0-9_-]{30,100}$'
         ;;
+    api)
+        # De my.telegram.org → «API development tools». El api_hash es secreto.
+        [ -z "$VALOR" ] || fallo "Por seguridad no se escriben en el comando: ejecuta bash $0 $INSTANCIA api"
+        leer_oculto API_ID "api_id (el número de my.telegram.org): " visible
+        [[ "$API_ID" =~ ^[0-9]{3,12}$ ]] || fallo "Eso no parece un api_id (es un número)."
+        leer_oculto API_HASH "api_hash (no se verá al pegarlo): "
+        [[ "$API_HASH" =~ ^[0-9a-f]{32}$ ]] || fallo "Eso no parece un api_hash (32 letras y números)."
+        poner "$ENV" CAPTACION_API_ID "$API_ID"
+        poner "$ENV" CAPTACION_API_HASH "$API_HASH"
+        echo "✓ api_id y api_hash guardados"
+        exit 0
+        ;;
+    lector)
+        case "$VALOR" in
+            real) poner "$ENV" CAPTACION_LECTOR_SIMULAR 0 ;;
+            simulacion) poner "$ENV" CAPTACION_LECTOR_SIMULAR 1 ;;
+            *) fallo "Uso: bash $0 $INSTANCIA lector <simulacion|real>" ;;
+        esac
+        echo "✓ lector de carpetas en modo $VALOR"
+        if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
+            systemctl restart "captacion-lector@$INSTANCIA"
+            echo "✓ lector reiniciado"
+        fi
+        exit 0
+        ;;
     ver)
         echo "Configuración de $INSTANCIA ($ENV):"
         while IFS= read -r linea || [ -n "$linea" ]; do
             case "$linea" in
                 CAPTACION_BOT_TOKEN=?*) echo "  CAPTACION_BOT_TOKEN=*** (puesto)" ;;
+                CAPTACION_API_HASH=?*) echo "  CAPTACION_API_HASH=*** (puesto)" ;;
                 \#*|"") ;;
                 *=) echo "  $linea(vacío)" ;;
                 *) echo "  $linea" ;;

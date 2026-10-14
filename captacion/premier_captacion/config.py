@@ -26,11 +26,11 @@ class ErrorConfig(Exception):
 
 @dataclass(frozen=True)
 class Config:
-    bot_token: str
+    # None solo con cargar_config(requiere_bot=False) (lector).
+    bot_token: Optional[str]
     # @usuario (sin la @) al que llevan los botones de la bienvenida: el
-    # perfil del dueño (también en las pruebas de la fase 1). Solo en las
-    # pruebas de la fase 3 será la cuenta secundaria.
-    perfil: str
+    # perfil del dueño (también en las pruebas de la fase 1).
+    perfil: Optional[str]
     db_path: str
     # Canal cuyas solicitudes gestiona el bot. None = puesta en marcha.
     canal_id: Optional[int] = None
@@ -65,17 +65,25 @@ def _entero_opcional(entorno, clave):
         raise ErrorConfig(f"{clave} debe ser un número (está como {valor!r})") from None
 
 
-def cargar_config(entorno=None) -> Config:
+def cargar_config(entorno=None, requiere_bot=True) -> Config:
+    """Lee la configuración. Con requiere_bot=False (lector de la cuenta del
+    dueño) el token y el perfil pueden faltar: sin token no hay avisos."""
     entorno = os.environ if entorno is None else entorno
 
     token = entorno.get("CAPTACION_BOT_TOKEN", "").strip()
-    if not _RE_TOKEN.match(token):
-        # Nunca se muestra el token en el error.
-        raise ErrorConfig("CAPTACION_BOT_TOKEN vacío o con formato incorrecto")
+    if token or requiere_bot:
+        if not _RE_TOKEN.match(token):
+            # Nunca se muestra el token en el error.
+            raise ErrorConfig("CAPTACION_BOT_TOKEN vacío o con formato incorrecto")
+    else:
+        token = None
 
     perfil = entorno.get("CAPTACION_PERFIL", "").strip().lstrip("@")
-    if not _RE_USUARIO.match(perfil):
-        raise ErrorConfig(f"CAPTACION_PERFIL no es un @usuario válido: {perfil!r}")
+    if perfil or requiere_bot:
+        if not _RE_USUARIO.match(perfil):
+            raise ErrorConfig(f"CAPTACION_PERFIL no es un @usuario válido: {perfil!r}")
+    else:
+        perfil = None
 
     db_path = entorno.get("CAPTACION_DB", "").strip()
     if not db_path:

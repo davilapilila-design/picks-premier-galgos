@@ -55,6 +55,9 @@ def calcular(eventos):
         "aceptadas": 0,
         "sin_aceptar": Counter(),
         "escribieron_bot": set(),
+        "te_escribieron": set(),
+        "enlaces_venta": 0,
+        "con_lector": False,
     }
     for ev in eventos:
         tipo, d = ev["tipo"], ev["detalle"]
@@ -75,6 +78,12 @@ def calcular(eventos):
             est["sin_aceptar"][d.get("motivo") or "?"] += 1
         elif tipo == "mensaje_al_bot":
             est["escribieron_bot"].add(ev["user_id"])
+        # Fase 3 (lector de la cuenta del dueño). Lo que viene del histórico
+        # (fase 4) tiene fechas pasadas y no cae en el día del resumen.
+        elif tipo == "te_escribe":
+            est["te_escribieron"].add(ev["user_id"])
+        elif tipo == "enlace_venta":
+            est["enlaces_venta"] += 1
     return est
 
 
@@ -121,7 +130,20 @@ def _cuerpo(est, anterior=None):
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
     lineas.append(f"🤖 Escribieron al bot: {_personas(len(est['escribieron_bot']))}")
+    if est["con_lector"]:
+        lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{cmp('te_escribieron')}")
+        lineas.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}{cmp('enlaces_venta')}")
     return lineas
+
+
+def _marcar_lector(con, *estadisticas):
+    # Las líneas del lector solo salen cuando el lector está funcionando
+    # (si no, "0 te escribieron" confundiría).
+    activo = con.execute(
+        "SELECT 1 FROM eventos WHERE tipo IN ('te_escribe', 'enlace_venta', 'carpeta') LIMIT 1").fetchone()
+    for est in estadisticas:
+        if est is not None:
+            est["con_lector"] = activo is not None
 
 
 def texto_diario(con, tz, fecha, ahora_ts=None):
@@ -135,6 +157,7 @@ def texto_diario(con, tz, fecha, ahora_ts=None):
     else:
         cabecera = f"📊 Resumen del {nombre_dia}"
     est = calcular(db.eventos_entre(con, desde, hasta))
+    _marcar_lector(con, est)
     return "\n".join([cabecera, ""] + _cuerpo(est))
 
 
@@ -166,6 +189,7 @@ def texto_semanal(con, tz, lunes, ahora_ts=None):
             por_dia[datetime.fromtimestamp(ev["ts"], tz).weekday()] += 1
     dias = " · ".join(f"{DIAS[i][:3]} {por_dia[i]}" for i in range(7))
 
+    _marcar_lector(con, est, anterior)
     return "\n".join([cabecera, ""] + _cuerpo(est, anterior) + ["", f"📈 Solicitudes por día: {dias}"])
 
 

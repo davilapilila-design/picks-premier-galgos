@@ -20,6 +20,7 @@ una migración nueva al final de MIGRACIONES, nunca se edita una existente.
 """
 import json
 import sqlite3
+import time
 
 MIGRACIONES = [
     # 1 (fase 1)
@@ -53,27 +54,68 @@ MIGRACIONES = [
         valor TEXT
     );
     """,
+    # 2 (fase 3: programa de carpetas, que lee la cuenta del dueño)
+    """
+    ALTER TABLE usuarios ADD COLUMN primer_mensaje_ts INTEGER;
+    ALTER TABLE usuarios ADD COLUMN ultimo_mensaje_ts INTEGER;
+    ALTER TABLE usuarios ADD COLUMN ultimo_msg_id INTEGER;
+    ALTER TABLE usuarios ADD COLUMN boton TEXT;
+    ALTER TABLE usuarios ADD COLUMN enlace_venta_ts INTEGER;
+    ALTER TABLE usuarios ADD COLUMN enlace_venta TEXT;
+    ALTER TABLE usuarios ADD COLUMN canal_venta TEXT;
+    ALTER TABLE usuarios ADD COLUMN carpeta TEXT;
+    CREATE TABLE enlaces (
+        hash TEXT PRIMARY KEY,
+        chat_id INTEGER,
+        titulo TEXT,
+        comprobado_ts INTEGER NOT NULL
+    );
+    """,
 ]
 
 
 def abrir(ruta):
-    con = sqlite3.connect(ruta, timeout=10)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA journal_mode=WAL")
-    con.execute("PRAGMA busy_timeout=10000")
-    _migrar(con)
-    return con
+    # Si varios procesos crean/migran la base a la vez, el paso a WAL puede
+    # dar "database is locked" sin esperar al busy_timeout: se reintenta.
+    for intento in range(30):
+        con = sqlite3.connect(ruta, timeout=10)
+        try:
+            con.row_factory = sqlite3.Row
+            con.execute("PRAGMA busy_timeout=10000")
+            con.execute("PRAGMA journal_mode=WAL")
+            _migrar(con)
+            return con
+        except sqlite3.OperationalError as e:
+            con.close()
+            if "locked" not in str(e) or intento == 29:
+                raise
+            time.sleep(0.02 * (intento + 1))
 
 
 def _migrar(con):
-    version = con.execute("PRAGMA user_version").fetchone()[0]
-    for numero in range(version + 1, len(MIGRACIONES) + 1):
-        con.executescript(
-            "BEGIN;\n"
-            f"{MIGRACIONES[numero - 1]}\n"
-            f"PRAGMA user_version = {numero};\n"
-            "COMMIT;"
-        )
+    objetivo = len(MIGRACIONES)
+    if con.execute("PRAGMA user_version").fetchone()[0] >= objetivo:
+        return
+    # Varios procesos (bot, resúmenes, Sheet, lector) abren la misma base de
+    # datos: BEGIN IMMEDIATE hace que solo uno migre y el resto espere y
+    # vuelva a mirar la versión, en vez de intentar repetir los ALTER.
+    nivel = con.isolation_level
+    con.isolation_level = None
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            version = con.execute("PRAGMA user_version").fetchone()[0]
+            for numero in range(version + 1, objetivo + 1):
+                for sentencia in MIGRACIONES[numero - 1].split(";"):
+                    if sentencia.strip():
+                        con.execute(sentencia)
+            con.execute(f"PRAGMA user_version = {max(version, objetivo)}")
+            con.execute("COMMIT")
+        except BaseException:
+            con.execute("ROLLBACK")
+            raise
+    finally:
+        con.isolation_level = nivel
 
 
 def nombre_completo(usuario):
@@ -137,6 +179,35 @@ def obtener_usuario(con, user_id):
     return con.execute("SELECT * FROM usuarios WHERE user_id = ?", (user_id,)).fetchone()
 
 
+def es_del_embudo(fila):
+    """¿Recibió alguna bienvenida (del bot o, con la fase 4, manual)?"""
+    return fila is not None and fila["bienvenida_ts"] is not None
+
+
+def actualizar_campos(con, user_id, ts, **campos):
+    """UPDATE de las columnas dadas (nombres fijos del código, nunca del usuario)."""
+    if not campos:
+        return
+    asignaciones = ", ".join(f"{columna} = ?" for columna in campos)
+    con.execute(
+        f"UPDATE usuarios SET {asignaciones}, actualizado_ts = ? WHERE user_id = ?",
+        (*campos.values(), int(ts), user_id),
+    )
+
+
+def enlace_guardado(con, hash_enlace):
+    return con.execute("SELECT * FROM enlaces WHERE hash = ?", (hash_enlace,)).fetchone()
+
+
+def guardar_enlace(con, hash_enlace, chat_id, titulo, ts):
+    con.execute(
+        "INSERT INTO enlaces (hash, chat_id, titulo, comprobado_ts) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (hash) DO UPDATE SET chat_id = excluded.chat_id, titulo = excluded.titulo, "
+        "comprobado_ts = excluded.comprobado_ts",
+        (hash_enlace, chat_id, titulo, int(ts)),
+    )
+
+
 def registrar_evento(con, ts, tipo, user_id=None, **detalle):
     con.execute(
         "INSERT INTO eventos (ts, user_id, tipo, detalle) VALUES (?, ?, ?, ?)",
@@ -147,6 +218,12 @@ def registrar_evento(con, ts, tipo, user_id=None, **detalle):
             json.dumps(detalle, ensure_ascii=False, sort_keys=True) if detalle else None,
         ),
     )
+
+
+def existe_evento(con, user_id, tipo, ts):
+    return con.execute(
+        "SELECT 1 FROM eventos WHERE user_id = ? AND tipo = ? AND ts = ? LIMIT 1", (user_id, tipo, int(ts))
+    ).fetchone() is not None
 
 
 def eventos_entre(con, desde_ts, hasta_ts):

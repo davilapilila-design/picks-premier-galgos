@@ -41,11 +41,15 @@ def negrita(texto):
 
 # --- Tipos de mensaje de bienvenida -----------------------------------------
 # Los dos manuales (los que el dueño enviaba desde su cuenta) se registran
-# en la fase 4, al leer el histórico de sus chats.
+# en la fase 4, al leer el histórico de sus chats (historico.py).
 TIPO_BIENVENIDA_BOT = "bot_b_v1"
+TIPO_MANUAL_BUENAS = "manual_buenas"
+TIPO_MANUAL_BUENOS_DIAS = "manual_buenos_dias"
 
 TIPOS_MENSAJE = {
     TIPO_BIENVENIDA_BOT: "Bienvenida del bot, versión B (dos botones), desde 2026-10",
+    TIPO_MANUAL_BUENAS: "Bienvenida manual «Buenas! Bienvenido a PREMIER GALGOS», antes del bot",
+    TIPO_MANUAL_BUENOS_DIAS: "Bienvenida manual «Buenos días y bienvenido a Premier Galgos», antes del bot",
 }
 
 
@@ -84,10 +88,39 @@ BOTONES = (
 )
 
 
+# Textos que el dueño enviaba a mano antes del bot, tal y como los pasó
+# (2026-10-14). Solo para la pestaña «Tipos de mensaje»; nadie los envía.
+TEXTO_MANUAL_BUENAS = (
+    f"Buenas! Bienvenido a {negrita('PREMIER GALGOS')} 🐕\n"
+    "\n"
+    f"Para empezar {negrita('te regalo una apuesta de pago')} para que veas "
+    f"cómo trabajo. Aquí todo va con {negrita('TRANSPARENCIA')}.\n"
+    "\n"
+    "Cualquier duda, escríbeme por aquí sin problema 💙\n"
+    "\n"
+    "¿Ya has apostado en galgos o es tu primera vez?"
+)
+TEXTO_MANUAL_BUENOS_DIAS = (
+    "Buenos dias y bienvenido a Premier Galgos! 🐾\n"
+    "\n"
+    "Si tienes cualquier duda sobre el canal, el funcionamiento del servicio, las apuestas "
+    "de galgos o la gestión de los stakes, puedes escribirnos por aquí sin ningún problema. "
+    "Estaremos encantados de ayudarte en todo lo que necesites.\n"
+    "\n"
+    "Y para empezar en la comunidad te voy a dar una apuesta de pago de manera gratuita.\n"
+    "\n"
+    "Para darte el acceso, responde a este mensaje:\n"
+    "Tienes experiencia en las carreras de galgos o es la primera vez?"
+)
+
 # Para la pestaña «Tipos de mensaje» del Sheet: de dónde sale cada tipo y
-# su texto completo. Los manuales se añaden en la fase 4.
-ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot"}
-TEXTOS_TIPO = {TIPO_BIENVENIDA_BOT: TEXTO_BIENVENIDA}
+# su texto completo.
+ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot", TIPO_MANUAL_BUENAS: "manual", TIPO_MANUAL_BUENOS_DIAS: "manual"}
+TEXTOS_TIPO = {
+    TIPO_BIENVENIDA_BOT: TEXTO_BIENVENIDA,
+    TIPO_MANUAL_BUENAS: TEXTO_MANUAL_BUENAS,
+    TIPO_MANUAL_BUENOS_DIAS: TEXTO_MANUAL_BUENOS_DIAS,
+}
 
 
 def enlace_perfil(usuario, texto):

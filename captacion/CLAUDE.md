@@ -12,12 +12,22 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   cuenta secundaria.
 - **Nunca enviar mensajes desde la cuenta personal del dueño.** El programa
   que usa su cuenta (Telethon, fases 3-6) solo lee y organiza carpetas; no
-  debe tener ninguna función de enviar, y no marca chats como leídos.
+  debe tener ninguna función de enviar, y no marca chats como leídos. Lo
+  garantiza la lista blanca de `premier_captacion/guardia.py`: no se amplía
+  sin el visto bueno explícito del dueño, y nunca con nada que envíe,
+  marque como leído, se una o salga de chats.
+- El lector arranca siempre en **simulación**; pasarlo a real
+  (`configurar.sh <instancia> lector real`) es decisión del dueño.
+- Una sesión de Telethon no se usa desde dos programas a la vez (Telegram
+  la anula): `lector.sh`, `conectar-cuenta.sh` y `leer-historico.sh` paran
+  antes el servicio. Iniciar sesión lo hace SIEMPRE el dueño en su terminal
+  (el código de Telegram nunca pasa por un chat).
 - **Secrets** (token del bot, api_id/api_hash, sesión de Telethon) solo en
   la VM: `/etc/premier-captacion/*.env` y el directorio de estado
   `/var/lib/premier-captacion/`. Nunca en el repo ni en el chat.
-- **El repositorio es público**: tampoco van aquí enlaces de invitación de
-  canales de prueba ni datos de clientes.
+- **El repositorio es público**: tampoco van aquí enlaces de invitación
+  (de prueba ni de los canales de venta), ids de Telegram reales, ids de
+  Sheets ni datos de clientes. En los tests, valores inventados.
 - En la VM se instala/actualiza con `deploy/instalar.sh <prueba|real>` y se
   configura con `deploy/configurar.sh` (ver README.md). El dueño no es
   técnico: darle siempre comandos completos para copiar y pegar.
@@ -27,5 +37,8 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   `mensajes.negrita()` y comprobarlos contra el original
   (`tests/test_mensajes.py`). Cambiar un texto de bienvenida = tipo de
   mensaje nuevo en `TIPOS_MENSAJE`, nunca reutilizar un id.
-- Python solo con librería estándar en el bot (fase 1); compatible con
-  Python 3.9+. Tests: `cd captacion && python3 -m unittest discover -s tests -t .`
+- El bot (fase 1) usa solo la librería estándar; el Sheet (gspread 6.1.4) y
+  el lector (Telethon 1.45.0) usan el venv `/opt/premier-captacion/venv`.
+  Compatible con Python 3.9+. Tests: `cd captacion && python3 -m unittest
+  discover -s tests -t .` (los de `test_*_real.py` se saltan si no están
+  gspread/Telethon; conviene pasarlos también con un venv que los tenga).

@@ -75,10 +75,13 @@ uno explícito aparte.
    (2026-10-15); falta activarlo en la VM. Hoja de pruebas ya creada.*
 3. **Carpetas, probadas en la cuenta secundaria** (que hace de "dueño";
    la cuenta real del dueño hace de "cliente"): `MM.DD`, `free send`,
-   filtro del canal principal, rotación de 5 días.
+   filtro del canal principal, rotación de 5 días. ⏳ *Programado y probado
+   sin conectar a nada (2026-10-15): falta que el dueño saque api_id/api_hash
+   y conecte la secundaria (README, fase 3). Empieza en simulación.*
 4. **Lectura del histórico de la cuenta real** (solo lectura): bienvenidas
    manuales antiguas y respuestas pasadas, para no repetir bienvenidas y
-   comparar manual frente a bot.
+   comparar manual frente a bot. ⏳ *Programado (2026-10-15): se prueba
+   antes con la secundaria; en la cuenta real, solo con su visto bueno.*
 5. **Producción del bot**: el bot real pasa a administrar PREMIER GALGOS.
    Justo antes, el dueño acepta a mano las solicitudes que haya pendientes
    (el bot no ve las anteriores a su activación).

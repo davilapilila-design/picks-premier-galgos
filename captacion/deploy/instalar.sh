@@ -21,10 +21,13 @@
 #   5. Crea /etc/premier-captacion/<instancia>.env (solo root) si no existe,
 #      pide el token si falta (no se ve al pegarlo) y pone el perfil
 #      Dronwhite si está vacío. Los datos que ya haya no se tocan.
-#   6. Copia al Google Sheet (opcional, fase 2): crea un entorno de Python
-#      con gspread en /opt/premier-captacion/venv y copia la credencial de la
-#      cuenta de servicio de picks a /etc/premier-captacion/google.json.
+#   6. Crea un entorno de Python propio en /opt/premier-captacion/venv con
+#      gspread (copia al Google Sheet, fase 2) y Telethon (lector de la cuenta
+#      del dueño, fases 3 y 4), y copia la credencial de la cuenta de
+#      servicio de picks a /etc/premier-captacion/google.json.
 #   7. Arranca (o reinicia) el bot y activa los resúmenes y la copia al Sheet.
+#      El lector de carpetas NO lo activa: lo hace conectar-cuenta.sh. Si ya
+#      estaba activo, lo reinicia para que use el código nuevo.
 set -euo pipefail
 
 REPO=davilapilila-design/picks-premier-galgos
@@ -34,6 +37,7 @@ DIR_CONFIG=/etc/premier-captacion
 DIR_UNIDADES=/etc/systemd/system
 PY=/usr/bin/python3
 VERSION_GSPREAD=6.1.4
+VERSION_TELETHON=1.45.0
 # Cuenta de servicio de Google que ya usa el sistema de picks en la VM (solo
 # se lee, para copiarla a $DIR_CONFIG/google.json).
 ORIGEN_GOOGLE=/root/.config/picks-premier-galgos/service_account.json
@@ -98,7 +102,10 @@ rm -rf "$DESTINO/premier_captacion.nuevo"
 cp -r "$TMP/captacion/premier_captacion" "$DESTINO/premier_captacion.nuevo"
 rm -rf "$DESTINO/premier_captacion"
 mv "$DESTINO/premier_captacion.nuevo" "$DESTINO/premier_captacion"
-install -m 755 "$TMP/captacion/deploy/instalar.sh" "$TMP/captacion/deploy/configurar.sh" "$DESTINO/"
+for script in instalar configurar lector conectar-cuenta leer-historico; do
+    install -m 755 "$TMP/captacion/deploy/$script.sh" "$DESTINO/"
+done
+install -m 644 "$TMP/captacion/deploy/instancia.env.example" "$DESTINO/"
 printf '%s\n' "$VERSION" > "$DESTINO/VERSION"
 chmod -R a+rX "$DESTINO"
 echo "   ✓"
@@ -146,28 +153,30 @@ else
         || fallo "Sin token no se puede arrancar. Cuando lo tengas: bash $DESTINO/configurar.sh $INSTANCIA token  y después repite este instalador."
 fi
 
-# La copia al Google Sheet (fase 2) es opcional: si algo de esto falla, el
-# bot se instala y funciona igual; solo queda sin activar la copia.
-paso "Google Sheet: entorno de Python y credencial"
-SHEET_OK=1
+# El entorno de Python (Sheet y lector) es opcional: si algo de esto falla,
+# el bot se instala y funciona igual; solo quedan sin activar esas partes.
+paso "Entorno de Python (Google Sheet y lector de la cuenta) y credencial de Google"
+VENV_OK=1
 if [ ! -x "$DESTINO/venv/bin/python" ]; then
     if "$PY" -m venv "$DESTINO/venv" >/dev/null 2>&1; then
         echo "   entorno de Python creado en $DESTINO/venv"
     else
         rm -rf "$DESTINO/venv"
         echo "   ⚠️  No se pudo crear el entorno de Python (suele faltar el paquete python3-venv)."
-        SHEET_OK=0
+        VENV_OK=0
     fi
 fi
-if [ "$SHEET_OK" = 1 ]; then
-    if "$DESTINO/venv/bin/python" -m pip install --quiet --disable-pip-version-check "gspread==$VERSION_GSPREAD"; then
+if [ "$VENV_OK" = 1 ]; then
+    if "$DESTINO/venv/bin/python" -m pip install --quiet --disable-pip-version-check \
+            "gspread==$VERSION_GSPREAD" "telethon==$VERSION_TELETHON"; then
         chmod -R a+rX "$DESTINO/venv"
-        echo "   gspread $VERSION_GSPREAD ✓"
+        echo "   gspread $VERSION_GSPREAD y telethon $VERSION_TELETHON ✓"
     else
-        echo "   ⚠️  No se pudo instalar gspread."
-        SHEET_OK=0
+        echo "   ⚠️  No se pudieron instalar gspread y telethon."
+        VENV_OK=0
     fi
 fi
+SHEET_OK=$VENV_OK
 if [ -f "$ORIGEN_GOOGLE" ]; then
     # Copia solo para root; systemd se la pasa al servicio (LoadCredential).
     install -m 600 -o root -g root "$ORIGEN_GOOGLE" "$DIR_CONFIG/google.json"
@@ -192,6 +201,10 @@ if [ "$SHEET_OK" = 1 ]; then
     systemctl enable --quiet --now "captacion-sheet@$INSTANCIA.timer"
 else
     echo "   ⚠️  La copia al Google Sheet queda sin activar; el bot funciona igual."
+fi
+if [ "$VENV_OK" = 1 ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
+    systemctl restart "captacion-lector@$INSTANCIA"
+    echo "   lector de carpetas reiniciado con el código nuevo ✓"
 fi
 sleep 4
 if ! systemctl is-active --quiet "captacion-bot@$INSTANCIA"; then

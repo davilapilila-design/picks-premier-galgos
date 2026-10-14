@@ -184,6 +184,112 @@ la cuenta de servicio (el instalador dice cuál es).
 
 ---
 
+## Fase 3: lector de carpetas (se prueba con la cuenta SECUNDARIA)
+
+Un programa en la VM se conecta a una cuenta de Telegram y ordena sus
+carpetas (reglas completas en `premier_captacion/carpetas.py`):
+- Quien recibió la bienvenida y le escribe → carpeta del día («10.15»). Si
+  vuelve a escribir otro día sin tener enlace, pasa a la carpeta del nuevo día.
+- La cuenta le envía un enlace `t.me/+…` que no es del canal principal →
+  carpeta «free send», y ahí se queda.
+- Se quedan las 5 carpetas de días más recientes; «free send» guarda los ~90
+  más recientes. Solo toca chats del embudo y solo esas carpetas.
+
+**Seguridad**:
+- **Nunca envía nada.** Toda petición a Telegram pasa por un candado
+  (`premier_captacion/guardia.py`) que solo deja leer y organizar carpetas.
+  Enviar, marcar como leído, unirse a canales o aparecer «en línea» está
+  bloqueado.
+- **Empieza siempre en SIMULACIÓN:** te avisa por el bot de lo que haría y no
+  toca ninguna carpeta. Solo actúa de verdad si se lo dices.
+- **La sesión se guarda solo en la VM** (`/var/lib/premier-captacion/`). En
+  Telegram aparece en Ajustes → Dispositivos como «Premier captación (VM)» y
+  se puede cerrar desde ahí cuando quieras.
+
+En la prueba los papeles cambian: **la secundaria hace de «dueño»** (el
+programa ordena sus carpetas) y **tu cuenta principal hace de cliente**.
+
+### Paso 1. api_id y api_hash (tú, en el navegador)
+Entra en <https://my.telegram.org> con tu cuenta principal → «API development
+tools» → crea una aplicación (nombre cualquiera, p. ej. «Premier captacion»).
+Apunta el **api_id** (un número) y el **api_hash** (32 letras y números,
+secreto: no lo pegues en ningún chat). Sirven para conectar cualquier cuenta.
+
+### Paso 2. Actualizar la VM
+```bash
+bash /opt/premier-captacion/instalar.sh prueba
+```
+Instala Telethon en el entorno de Python. No conecta ninguna cuenta.
+
+### Paso 3. Conectar la cuenta secundaria (tú, en TU terminal SSH)
+```bash
+bash /opt/premier-captacion/conectar-cuenta.sh prueba
+```
+Te pide el api_id y el api_hash, confirmación (escribe SI), el teléfono **de la
+cuenta secundaria**, el código que le llega por Telegram y, si la tiene, la
+contraseña de verificación en dos pasos. Al acabar arranca el lector en
+simulación y te llega por el bot «📁 Lector de carpetas conectado…».
+
+### Paso 4. Que tu cuenta principal cuente como «del embudo»
+Tu cuenta principal no pasó por la bienvenida (es la dueña del canal de
+prueba), así que se marca a mano, solo para la prueba, con tu id de
+Telegram (el de `/miid`):
+```bash
+bash /opt/premier-captacion/lector.sh prueba embudo-prueba TU_ID
+```
+
+### Paso 5. Probar en simulación
+- [ ] Desde tu cuenta principal, escribe a la secundaria → te llega por el bot
+      «🧪 Simulación (no he tocado nada): creo la carpeta 10.15 y meto a …».
+      Puede que también diga que borraría las carpetas de días más antiguas,
+      si la secundaria tiene más de 5.
+- [ ] Desde la secundaria, envíale a tu principal el enlace del canal de prueba
+      → no pasa nada (es el canal principal).
+- [ ] Desde la secundaria, envíale el enlace `t.me/+…` de otro canal →
+      «🧪 Simulación: … creo la carpeta «free send» y meto a …».
+- [ ] Vuelve a escribir desde la principal → no se mueve (ya tiene enlace).
+- [ ] Revisa que en la secundaria no ha cambiado ninguna carpeta y que los
+      mensajes siguen como no leídos.
+
+### Paso 6. Probar de verdad (con tu visto bueno)
+```bash
+bash /opt/premier-captacion/configurar.sh prueba lector real
+```
+Para repetir la prueba desde cero, borra la memoria de prueba
+(`systemctl stop captacion-bot@prueba captacion-lector@prueba`,
+`rm -f /var/lib/premier-captacion/prueba.db*`, arrancarlos otra vez) y vuelve
+al paso 4. Comprueba en la secundaria que se crean «10.15» y «free send» y que
+el chat pasa de una a otra.
+
+### Desconectar la cuenta
+```bash
+systemctl disable --now captacion-lector@prueba
+rm -f /var/lib/premier-captacion/prueba-cuenta.session
+```
+y cierra la sesión «Premier captación (VM)» en Telegram → Ajustes → Dispositivos.
+
+---
+
+## Fase 4: histórico de bienvenidas manuales (SOLO LECTURA)
+
+Busca en los chats de la cuenta conectada las bienvenidas que enviabas a mano
+(«Buenas! Bienvenido a 𝗣𝗥𝗘𝗠𝗜𝗘𝗥 𝗚𝗔𝗟𝗚𝗢𝗦 🐕…» y «Buenos dias y bienvenido a
+Premier Galgos! 🐾…», con variantes). A esas personas el bot no les volverá a
+enviar la bienvenida. Además apunta si contestaron y si recibieron enlace de
+venta, para comparar en el Sheet las bienvenidas manuales con la del bot. No
+toca carpetas ni envía nada (el candado no lo deja en este modo).
+
+- **Prueba**: desde la secundaria, envía a tu principal un texto de bienvenida
+  antiguo y luego `bash /opt/premier-captacion/leer-historico.sh prueba`. Te
+  llega el resumen por el bot.
+- **Tu cuenta real (solo con tu visto bueno)**:
+  `bash /opt/premier-captacion/conectar-cuenta.sh real` (en tu terminal; crea
+  la configuración de la instancia real, pero no instala ni arranca el bot
+  real ni el lector de carpetas) y después
+  `bash /opt/premier-captacion/leer-historico.sh real`.
+
+---
+
 ## Paso a producción (fase 5) — SOLO con el visto bueno del dueño
 Igual que la prueba pero con la instancia `real` (el instalador pide
 confirmación escribiendo SI): `bash /opt/premier-captacion/instalar.sh real`,
