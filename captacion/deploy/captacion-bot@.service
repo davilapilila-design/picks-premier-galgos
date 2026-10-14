@@ -19,6 +19,7 @@ WorkingDirectory=/opt/premier-captacion
 EnvironmentFile=/etc/premier-captacion/%i.env
 Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
 Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
 ExecStart=/usr/bin/python3 -m premier_captacion.bot
 Restart=always
 RestartSec=10

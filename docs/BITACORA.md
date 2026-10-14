@@ -48,9 +48,24 @@ quien responde y sacar estadísticas.
   falta dos cuentas porque quien crea un canal no puede pedir unirse a él.
   La secundaria como "dueño" queda para la fase 3 (programa de carpetas),
   para no conectar ese programa a la cuenta principal hasta probarlo.
-- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`.
+- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`. Canal de
+  prueba creado: «Prueba bot captación» (privado, enlace con aprobación).
+  Su enlace de invitación NO se guarda en el repo: el repositorio es
+  público y con el bot activo cualquiera con el enlace entraría.
+- Instalación simplificada para el dueño (no técnico): como el repo es
+  público, la VM descarga el código de GitHub directamente.
+  `captacion/deploy/instalar.sh` (instala/actualiza en un comando, fija el
+  commit exacto descargado y lo anota en `/opt/premier-captacion/VERSION`,
+  pide el token sin mostrarlo, activa bot y resúmenes; la instancia `real`
+  exige escribir SI) y `captacion/deploy/configurar.sh` (cambia propietario,
+  canal, perfil o token sin editar archivos, y reinicia). El token nunca se
+  acepta como argumento (quedaría en el historial de la terminal). `/estado`
+  muestra la versión instalada. El resumen ya no falla si aún no hay
+  propietario configurado (los timers se activan al instalar). Probados en
+  un contenedor desechable con systemctl simulado, y el bot instalado
+  arrancando con el usuario sin privilegios.
 - Commits: `3dc009a` (fase 1), `82876bc` (Iniciar en puesta en marcha),
-  (este commit)
+  `35d0a71` (papeles de la prueba), (este commit)
 
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos

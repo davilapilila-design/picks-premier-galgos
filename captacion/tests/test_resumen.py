@@ -1,5 +1,8 @@
+import os
+import tempfile
 import unittest
 from datetime import date, datetime
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from premier_captacion import db, resumen
@@ -94,6 +97,34 @@ class TestSemanal(Base):
         self.assertTrue(texto.startswith("📅 Semana en curso, desde el lunes 12.10"))
         # Hasta el martes a las 12:00 en ambas semanas: 1 frente a 1.
         self.assertIn("👥 Solicitudes: 1 (1 persona)  ➡️ +0 % vs semana anterior (1)", texto)
+
+
+class TestMain(unittest.TestCase):
+    def ejecutar(self, propietario):
+        with tempfile.TemporaryDirectory() as carpeta:
+            entorno = {
+                "CAPTACION_BOT_TOKEN": "123456:" + "Z" * 35,
+                "CAPTACION_PERFIL": "Dronwhite",
+                "CAPTACION_DB": os.path.join(carpeta, "prueba.db"),
+                "CAPTACION_PROPIETARIO_ID": propietario,
+            }
+            with mock.patch.dict(os.environ, entorno, clear=True), \
+                    mock.patch("premier_captacion.resumen.BotAPI") as api:
+                codigo = resumen.main(["diario"])
+        return codigo, api
+
+    def test_sin_propietario_no_falla_ni_envia(self):
+        # Durante la puesta en marcha los timers ya están activos.
+        codigo, api = self.ejecutar("")
+        self.assertEqual(codigo, 0)
+        api.assert_not_called()
+
+    def test_con_propietario_envia_el_resumen(self):
+        codigo, api = self.ejecutar("111")
+        self.assertEqual(codigo, 0)
+        metodo, = (c.args[0] for c in api.return_value.llamar.call_args_list)
+        self.assertEqual(metodo, "sendMessage")
+        self.assertEqual(api.return_value.llamar.call_args.kwargs["chat_id"], 111)
 
 
 class TestFechasPorDefecto(unittest.TestCase):

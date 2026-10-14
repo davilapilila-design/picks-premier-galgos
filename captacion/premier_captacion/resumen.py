@@ -194,20 +194,23 @@ def main(argv=None):
         return 2
     con = db.abrir(cfg.db_path)
     tz = cfg.tz
-
-    if args.tipo == "diario":
-        texto = texto_diario(con, tz, args.fecha or ayer(tz))
-    else:
-        hoy = ayer(tz) + timedelta(days=1)
-        lunes = lunes_de(args.fecha) if args.fecha else lunes_de(hoy) - timedelta(days=7)
-        texto = texto_semanal(con, tz, lunes)
+    try:
+        if args.tipo == "diario":
+            texto = texto_diario(con, tz, args.fecha or ayer(tz))
+        else:
+            hoy = ayer(tz) + timedelta(days=1)
+            lunes = lunes_de(args.fecha) if args.fecha else lunes_de(hoy) - timedelta(days=7)
+            texto = texto_semanal(con, tz, lunes)
+    finally:
+        con.close()
 
     if args.imprimir:
         print(texto)
         return 0
     if cfg.propietario_id is None:
-        log.error("CAPTACION_PROPIETARIO_ID vacío: no sé a quién enviar el resumen")
-        return 1
+        # Pasa durante la puesta en marcha (los timers ya están activos).
+        log.warning("CAPTACION_PROPIETARIO_ID vacío: no hay a quién enviar el resumen, se omite")
+        return 0
 
     api = BotAPI(cfg.bot_token)
     for intento in range(3):

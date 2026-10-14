@@ -16,6 +16,11 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
 - **Secrets** (token del bot, api_id/api_hash, sesión de Telethon) solo en
   la VM: `/etc/premier-captacion/*.env` y el directorio de estado
   `/var/lib/premier-captacion/`. Nunca en el repo ni en el chat.
+- **El repositorio es público**: tampoco van aquí enlaces de invitación de
+  canales de prueba ni datos de clientes.
+- En la VM se instala/actualiza con `deploy/instalar.sh <prueba|real>` y se
+  configura con `deploy/configurar.sh` (ver README.md). El dueño no es
+  técnico: darle siempre comandos completos para copiar y pegar.
 - La bienvenida se envía **siempre antes** de aceptar la solicitud (después
   Telegram ya no deja escribir a esa persona).
 - Los textos con "negrita" son letras Unicode: generarlos con

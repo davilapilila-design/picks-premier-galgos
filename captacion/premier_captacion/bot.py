@@ -24,6 +24,7 @@ Arranque (en la VM lo hace systemd, ver deploy/):
     python3 -m premier_captacion.bot
 """
 import logging
+import os
 import signal
 import sys
 import time
@@ -46,6 +47,16 @@ AYUDA_PROPIETARIO = (
     "/estado – comprobar que el bot funciona\n"
     "/miid – tu id de Telegram"
 )
+
+
+def version_instalada():
+    """Versión que dejó deploy/instalar.sh en /opt/premier-captacion/VERSION."""
+    ruta = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            return f.read().strip() or "desconocida"
+    except OSError:
+        return "sin instalar (desarrollo)"
 
 
 def nombre_enlace(invite_link):
@@ -107,7 +118,7 @@ class BotCaptacion:
     def comprobar_arranque(self):
         yo = self.api.llamar("getMe")
         self.bot_id = yo["id"]
-        log.info("Bot @%s (id %s) arrancando", yo.get("username"), self.bot_id)
+        log.info("Bot @%s (id %s) arrancando, versión %s", yo.get("username"), self.bot_id, version_instalada())
         # Con un webhook activo getUpdates no funciona; este bot no usa webhook.
         self.api.llamar("deleteWebhook")
         if self.cfg.propietario_id is None:
@@ -343,7 +354,8 @@ class BotCaptacion:
                 "SELECT COUNT(*) FROM usuarios WHERE bienvenida_ts IS NOT NULL").fetchone()[0]
             canal = self.cfg.canal_id if self.cfg.canal_id is not None else "sin configurar (no acepto a nadie)"
             texto = (f"✅ Funcionando.\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
-                     f"Personas que ya tienen bienvenida: {con_bienvenida}")
+                     f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
+                     f"Versión: {version_instalada()}")
         elif comando == "/start":
             texto = "✅ Bot de captación activo. Aquí te llegarán los avisos y los resúmenes.\n\n" + AYUDA_PROPIETARIO
         else:

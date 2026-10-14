@@ -4,6 +4,9 @@ Bot que da la bienvenida y acepta automáticamente a quien solicita entrar
 en el canal, y (fases siguientes) organiza los chats del dueño. Decisiones y
 fases: [`PLAN.md`](PLAN.md).
 
+> El repositorio es **público**: aquí nunca van secretos (token, ids
+> privados, sesiones) ni enlaces de invitación de canales de prueba.
+
 ## Estructura
 ```
 captacion/
@@ -15,7 +18,8 @@ captacion/
 │   ├── config.py           configuración (variables de entorno)
 │   └── telegram_api.py     cliente mínimo de la Bot API
 ├── tests/                  pruebas automáticas (sin red)
-└── deploy/                 servicios systemd y plantilla de configuración
+└── deploy/                 instalador, configurador, servicios systemd y
+                            plantilla de configuración
 ```
 
 ## Pruebas automáticas
@@ -48,79 +52,52 @@ principal.
 El **token** que da BotFather no se copia a ningún sitio: se queda en ese
 chat y solo se usa en el paso 3. Si se escapa, `/revoke` en BotFather.
 
-### Paso 2. Canal de prueba (con tu cuenta principal)
-Crea un canal **privado** (p. ej. "Prueba captación"). Dentro: Administrar
-canal → Enlaces de invitación → Crear enlace → nombre `prueba-1` y
-**«Solicitar aprobación de administrador»** activado. Todavía no añadas el
-bot (eso es el paso 5).
+### Paso 2. Canal de prueba (con tu cuenta principal) ✅
+Canal **privado** «Prueba bot captación», con un enlace de invitación con
+**«Solicitar aprobación de administrador»** activado (si se le pone de
+nombre `prueba-1`, el bot lo usará para saber por qué enlace entra cada
+uno). El bot todavía no se añade (paso 5).
 
-### Paso 3. Instalar el bot en la VM (por SSH)
-1. Comprueba Python (vale 3.9 o superior):
-   ```bash
-   python3 --version
-   ```
-2. Usuario de sistema sin privilegios para el bot:
-   ```bash
-   sudo useradd --system --no-create-home --shell /usr/sbin/nologin captacion
-   ```
-3. Copia el código. Desde tu ordenador, con el repo en la rama
-   `captacion-bienvenida`:
-   ```bash
-   scp -r captacion root@galgos-vm.tailc02685.ts.net:/tmp/
-   ```
-   y en la VM:
-   ```bash
-   sudo mkdir -p /opt/premier-captacion
-   sudo cp -r /tmp/captacion/premier_captacion /opt/premier-captacion/
-   sudo cp /tmp/captacion/deploy/*.service /tmp/captacion/deploy/*.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   ```
-4. Configuración (aquí va el token; solo la puede leer root):
-   ```bash
-   sudo mkdir -p /etc/premier-captacion
-   sudo chmod 700 /etc/premier-captacion
-   sudo install -m 600 /tmp/captacion/deploy/instancia.env.example /etc/premier-captacion/prueba.env
-   sudo nano /etc/premier-captacion/prueba.env
-   ```
-   Rellena **solo** `CAPTACION_BOT_TOKEN` y `CAPTACION_PERFIL=Dronwhite`.
-   Deja los otros dos vacíos.
-5. Arranca el bot y mira el log:
-   ```bash
-   sudo systemctl enable --now captacion-bot@prueba
-   journalctl -u captacion-bot@prueba -f
-   ```
-   Debe salir `Bot @… arrancando`. (Ctrl+C para salir del log; el bot sigue.)
+### Paso 3. Instalar el bot en la VM
+Entra en la VM por SSH (`ssh root@galgos-vm.tailc02685.ts.net`; si Tailscale
+pide verificar en el navegador, se acepta) y ejecuta:
+```bash
+curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion-bienvenida/captacion/deploy/instalar.sh
+bash /tmp/instalar-captacion.sh prueba
+```
+El instalador comprueba la VM, descarga el código de GitHub, lo instala en
+`/opt/premier-captacion` y **pide el token**: cópialo del chat con
+@BotFather (más cómodo desde Telegram en el ordenador) y pégalo en la
+terminal. No se ve al pegarlo; es normal. Pulsa Enter. Al final debe decir
+«✅ Bot «prueba» instalado y funcionando».
 
 ### Paso 4. Decirle al bot quién eres
 Con tu **cuenta principal**, abre `@premiergalgos_pruebas_bot` y pulsa
 **«Iniciar»**. Contesta «🛠️ Bot en puesta en marcha. Tu id de Telegram es:
-…». Pon ese número en `CAPTACION_PROPIETARIO_ID` y reinicia:
+…». En la VM, con ese número:
 ```bash
-sudo nano /etc/premier-captacion/prueba.env
-sudo systemctl restart captacion-bot@prueba
+bash /opt/premier-captacion/configurar.sh prueba propietario TU_ID
 ```
-Escribe `/start` otra vez: ahora contesta «✅ Bot de captación activo».
+(reinicia el bot solo). Escribe `/start` otra vez: ahora contesta «✅ Bot
+de captación activo».
 
 ### Paso 5. Hacer administrador al bot en el canal de prueba
 Con tu cuenta principal: canal de prueba → Administrar canal →
 Administradores → Añadir administrador → busca `premiergalgos_pruebas_bot`
 → deja activado **solo «Añadir suscriptores»** → Guardar. El bot te escribe
-el id del canal (`CAPTACION_CANAL_ID=-100…`). Ponlo en el `.env` y reinicia
-como en el paso 4. Después escribe `/estado` al bot: debe decir el canal y
-`Botones apuntan a: @Dronwhite`.
-
-### Paso 6. Activar los resúmenes
+el id del canal (`-100…`). En la VM:
 ```bash
-sudo systemctl enable --now captacion-resumen-diario@prueba.timer captacion-resumen-semanal@prueba.timer
-systemctl list-timers 'captacion-*'
+bash /opt/premier-captacion/configurar.sh prueba canal -100XXXXXXXXXX
 ```
+Después escribe `/estado` al bot: debe decir el canal y `Botones apuntan a:
+@Dronwhite`. Los resúmenes (00:05 y lunes 9:00) ya los activó el instalador.
 
-### Paso 7. Lista de pruebas (la secundaria hace de cliente)
-Para pasarle el enlace `prueba-1` a la secundaria basta con copiarlo y
+### Paso 6. Lista de pruebas (la secundaria hace de cliente)
+Para pasarle el enlace de invitación a la secundaria basta con copiarlo y
 pegarlo (o enviárselo por privado desde tu cuenta principal).
-- [ ] **Bienvenida**: con la secundaria, abre el enlace `prueba-1` y pide
-      unirte. En segundos llega el mensaje del bot con los dos botones, y
-      el bot acepta la solicitud. Comprueba las negritas y los emojis.
+- [ ] **Bienvenida**: con la secundaria, abre el enlace y pide unirte. En
+      segundos llega el mensaje del bot con los dos botones, y el bot
+      acepta la solicitud. Comprueba las negritas y los emojis.
 - [ ] **Botones**: pulsa «🏁 Ya he apostado»: se abre el chat con
       @Dronwhite con el texto ya escrito. Igual con «🆕 Es mi primera vez».
       Pruébalo en el móvil y, si puedes, en Telegram de ordenador. (No
@@ -132,36 +109,42 @@ pegarlo (o enviárselo por privado desde tu cuenta principal).
 - [ ] **Volver a entrar**: la secundaria sale del canal y vuelve a pedir
       unirse: la acepta **sin** enviarle nada.
 - [ ] **Comandos** (desde tu cuenta principal): `/resumen`, `/semana`, `/estado`.
-- [ ] **Resumen programado ya**: `sudo systemctl start captacion-resumen-diario@prueba`
+- [ ] **Resumen programado ya**: `systemctl start captacion-resumen-diario@prueba`
       (envía el de ayer, que estará vacío: sirve para ver que llega).
 - [ ] **Permisos**: quita al bot de administrador → te avisa con 🚨. Vuelve
       a ponerlo (solo «Añadir suscriptores») → te avisa con ✅.
 - [ ] **Bot parado más de 5 min** (opcional). Para repetir pruebas desde
       cero hay que borrar la memoria de la prueba:
       ```bash
-      sudo systemctl stop captacion-bot@prueba
-      sudo rm -f /var/lib/premier-captacion/prueba.db*
+      systemctl stop captacion-bot@prueba
+      rm -f /var/lib/premier-captacion/prueba.db*
       ```
       Con el bot parado: la secundaria sale del canal, pide unirse, espera 6
-      minutos y arrancas el bot (`sudo systemctl start captacion-bot@prueba`).
+      minutos y arrancas el bot (`systemctl start captacion-bot@prueba`).
       La acepta sin bienvenida y te avisa de «1 solicitud(es) llevaban más
       de 5 minutos esperando».
 
-### Cosas útiles
+### Cosas útiles (en la VM)
 ```bash
-systemctl status captacion-bot@prueba        # ¿está funcionando?
-journalctl -u captacion-bot@prueba --since today
-sudo systemctl restart captacion-bot@prueba  # tras cambiar el .env o el código
+bash /opt/premier-captacion/configurar.sh prueba ver   # configuración (sin el token)
+bash /opt/premier-captacion/instalar.sh prueba         # actualizar a la última versión
+systemctl status captacion-bot@prueba                  # ¿está funcionando?
+journalctl -u captacion-bot@prueba --since today       # registro de hoy
+journalctl -u captacion-bot@prueba -f                  # registro en directo (Ctrl+C sale)
+systemctl list-timers 'captacion-*'                    # próximos resúmenes
 ```
-Para actualizar el código: repetir el punto 3 del paso 3 y reiniciar.
+Si el token se ha escapado: `/revoke` en @BotFather y después
+`bash /opt/premier-captacion/configurar.sh prueba token` con el nuevo.
+
+Sin `root` hay que poner `sudo` delante de cada orden.
 
 ---
 
 ## Paso a producción (fase 5) — SOLO con el visto bueno del dueño
-Igual que la prueba pero con la instancia `real`:
-`/etc/premier-captacion/real.env` con el token del bot real
-(PREMIER GALGOS + logo), `CAPTACION_PERFIL=Dronwhite` y tu id real, y los
-servicios `captacion-bot@real` y los timers `@real`. Antes de activarlo:
-ponles nombre a los enlaces de entrada del canal, y acepta a mano las
-solicitudes que haya pendientes en ese momento. El detalle se preparará
+Igual que la prueba pero con la instancia `real` (el instalador pide
+confirmación escribiendo SI): `bash /opt/premier-captacion/instalar.sh real`,
+con el token del bot real (PREMIER GALGOS + logo), y después
+`configurar.sh real propietario …` y `configurar.sh real canal …`. Antes de
+activarlo: ponles nombre a los enlaces de entrada del canal, y acepta a mano
+las solicitudes que haya pendientes en ese momento. El detalle se preparará
 cuando toque.

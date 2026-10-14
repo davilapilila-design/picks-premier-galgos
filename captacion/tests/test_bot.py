@@ -189,6 +189,7 @@ class TestMensajesAlBot(Base):
         textos = [e["text"] for e in self.api.envios_a(PROPIETARIO)]
         self.assertTrue(textos[0].startswith("📊 Hoy"))
         self.assertTrue(textos[1].startswith("✅ Funcionando"))
+        self.assertIn("Versión: ", textos[1])
         self.assertIn("/resumen", textos[2])
         self.assertNotIn(mensajes.TEXTO_REDIRECCION, textos)
 
