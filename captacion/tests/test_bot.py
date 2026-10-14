@@ -168,6 +168,20 @@ class TestMensajesAlBot(Base):
         self.bot.procesar(update_mensaje(2, uid=500, texto="/miid@bot_prueba"))
         self.assertEqual([e["text"] for e in self.api.envios_a(500)], ["Tu id de Telegram es: 500"] * 2)
 
+    def test_en_puesta_en_marcha_iniciar_devuelve_el_id(self):
+        bot = self.crear_bot(propietario_id=None, canal_id=None)
+        bot.procesar(update_mensaje(1, uid=500, texto="/start"))
+        envios = self.api.envios_a(500)
+        self.assertEqual(len(envios), 1)
+        self.assertIn("Tu id de Telegram es: 500", envios[0]["text"])
+        self.assertNotIn("reply_markup", envios[0])
+
+    def test_con_canal_configurado_iniciar_es_un_cliente_mas(self):
+        # Si ya hay canal (aunque falte el dueño), quien escribe es un cliente.
+        bot = self.crear_bot(propietario_id=None)
+        bot.procesar(update_mensaje(1, uid=500, texto="/start"))
+        self.assertEqual(self.api.envios_a(500)[0]["text"], mensajes.TEXTO_REDIRECCION)
+
     def test_el_propietario_recibe_comandos_no_redireccion(self):
         self.bot.procesar(update_mensaje(1, uid=PROPIETARIO, texto="/resumen"))
         self.bot.procesar(update_mensaje(2, uid=PROPIETARIO, texto="/estado"))

@@ -32,19 +32,23 @@ En la prueba los papeles se cambian para no tocar tu cuenta real: la
 **cuenta secundaria hace de "tú"** (dueña del canal de prueba, recibe los
 avisos, los botones llevan a ella) y **tu cuenta real hace de "cliente"**.
 
-### A. En Telegram (lo haces tú)
-1. **Cuenta secundaria → @usuario**: Ajustes → Nombre de usuario. Apúntalo.
-2. **@BotFather** (desde cualquier cuenta): `/newbot`, nombre por ejemplo
-   `PREMIER GALGOS (pruebas)`, y un @ que acabe en `bot`. Te da un
-   **token**: no lo pegues en ningún chat, solo en la VM (paso B4).
-3. **Cuenta secundaria → canal de prueba**: crea un canal privado (p. ej.
-   "Prueba captación"). Dentro: Administrar canal → Enlaces de invitación
-   → Crear enlace. Ponle de nombre `prueba-1` y activa **«Solicitar
-   aprobación de administrador»**.
-4. **Cuenta secundaria → abre el bot de prueba y pulsa «Iniciar»** (sin
-   esto el bot no puede enviarle avisos).
+### Paso 1. Bot de prueba con @BotFather (desde tu cuenta real) ✅
+`/newbot` → nombre `PREMIER GALGOS (pruebas)` → @ `premiergalgos_pruebas_bot`.
+El **token** que da BotFather no se copia a ningún sitio: se queda en ese
+chat y solo se usa en el paso 4. Si se escapa, `/revoke` en BotFather.
 
-### B. En la VM (por SSH)
+### Paso 2. @usuario de la cuenta secundaria
+Ajustes → Nombre de usuario (en iPhone: Ajustes → Editar → Nombre de
+usuario). Mínimo 5 caracteres; mejor uno que no se parezca a la marca, para
+que nadie lo confunda con el canal.
+
+### Paso 3. Canal de prueba (con la cuenta secundaria)
+Crea un canal **privado** (p. ej. "Prueba captación"). Dentro: Administrar
+canal → Enlaces de invitación → Crear enlace → nombre `prueba-1` y
+**«Solicitar aprobación de administrador»** activado. Todavía no añadas el
+bot (eso es el paso 6).
+
+### Paso 4. Instalar el bot en la VM (por SSH)
 1. Comprueba Python (vale 3.9 o superior):
    ```bash
    python3 --version
@@ -81,27 +85,31 @@ avisos, los botones llevan a ella) y **tu cuenta real hace de "cliente"**.
    ```
    Debe salir `Bot @… arrancando`. (Ctrl+C para salir del log; el bot sigue.)
 
-### C. Completar la configuración con ayuda del bot
-1. **Tu id**: desde la **cuenta secundaria**, escribe `/miid` al bot. Pon
-   ese número en `CAPTACION_PROPIETARIO_ID` y reinicia:
-   ```bash
-   sudo nano /etc/premier-captacion/prueba.env
-   sudo systemctl restart captacion-bot@prueba
-   ```
-2. **El canal**: en la cuenta secundaria, haz administrador al bot en el
-   canal de prueba (Administrar canal → Administradores → Añadir
-   administrador → el bot) dejando activado **solo «Añadir
-   suscriptores»**. El bot te escribirá el id del canal
-   (`CAPTACION_CANAL_ID=-100…`). Ponlo en el `.env` y reinicia como antes.
-3. Escribe `/estado` al bot desde la cuenta secundaria: debe decir el canal
-   y `Botones apuntan a: @<secundaria>`.
-4. Activa los resúmenes:
-   ```bash
-   sudo systemctl enable --now captacion-resumen-diario@prueba.timer captacion-resumen-semanal@prueba.timer
-   systemctl list-timers 'captacion-*'
-   ```
+### Paso 5. Decirle al bot quién eres
+Con la **cuenta secundaria**, abre `@premiergalgos_pruebas_bot` y pulsa
+**«Iniciar»**. Contesta «🛠️ Bot en puesta en marcha. Tu id de Telegram es:
+…». Pon ese número en `CAPTACION_PROPIETARIO_ID` y reinicia:
+```bash
+sudo nano /etc/premier-captacion/prueba.env
+sudo systemctl restart captacion-bot@prueba
+```
+Escribe `/start` otra vez: ahora contesta «✅ Bot de captación activo».
 
-### D. Lista de pruebas (tu cuenta real hace de cliente)
+### Paso 6. Hacer administrador al bot en el canal de prueba
+Con la cuenta secundaria: canal de prueba → Administrar canal →
+Administradores → Añadir administrador → busca `premiergalgos_pruebas_bot`
+→ deja activado **solo «Añadir suscriptores»** → Guardar. El bot te escribe
+el id del canal (`CAPTACION_CANAL_ID=-100…`). Ponlo en el `.env` y reinicia
+como en el paso 5. Después escribe `/estado` al bot: debe decir el canal y
+`Botones apuntan a: @<secundaria>`.
+
+### Paso 7. Activar los resúmenes
+```bash
+sudo systemctl enable --now captacion-resumen-diario@prueba.timer captacion-resumen-semanal@prueba.timer
+systemctl list-timers 'captacion-*'
+```
+
+### Paso 8. Lista de pruebas (tu cuenta real hace de cliente)
 - [ ] **Bienvenida**: abre el enlace `prueba-1` y pide unirte. En segundos
       llega el mensaje del bot con los dos botones, y te acepta. Comprueba
       las negritas y los emojis.
@@ -137,7 +145,7 @@ systemctl status captacion-bot@prueba        # ¿está funcionando?
 journalctl -u captacion-bot@prueba --since today
 sudo systemctl restart captacion-bot@prueba  # tras cambiar el .env o el código
 ```
-Para actualizar el código: repetir B3 y reiniciar.
+Para actualizar el código: repetir el punto 3 del paso 4 y reiniciar.
 
 ---
 

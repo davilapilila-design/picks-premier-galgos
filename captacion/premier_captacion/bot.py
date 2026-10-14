@@ -300,6 +300,13 @@ class BotCaptacion:
         if comando == "/miid":
             self._responder(uid, f"Tu id de Telegram es: {uid}")
             return
+        if self.cfg.propietario_id is None and self.cfg.canal_id is None:
+            # Puesta en marcha (aún sin dueño ni canal): al abrir el bot por
+            # primera vez Telegram envía /start ("Iniciar"); se contesta con
+            # el id en vez de con la respuesta "escríbeme" de los clientes.
+            self._responder(uid, f"🛠️ Bot en puesta en marcha.\nTu id de Telegram es: {uid}\n"
+                                 "Ponlo en CAPTACION_PROPIETARIO_ID y reinicia el bot.")
+            return
         if uid == self.cfg.propietario_id:
             self._comando_propietario(comando)
             return
