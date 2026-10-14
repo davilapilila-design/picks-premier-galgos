@@ -3,6 +3,44 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-14 — Captación: plan aprobado y fase 1 (bot de bienvenida)
+Subsistema nuevo e independiente del de picks, en `captacion/` y en la rama
+`captacion-bienvenida` (no toca `src/`). Objetivo: dejar de aceptar a mano
+las ~20-30 solicitudes diarias de unión al canal y de enviar la bienvenida
+desde la cuenta personal; después, organizar en carpetas los chats de
+quien responde y sacar estadísticas.
+- **Plan aprobado** por el dueño tras varias rondas de preguntas: todas las
+  decisiones (texto versión B con dos botones, carpetas `MM.DD` con
+  rotación de 5 días, `free send`, Sheet privado aparte, resúmenes a las
+  00:05 y lunes 9:00, fases y riesgos) en `captacion/PLAN.md`.
+- Por qué un bot y no la cuenta del dueño: Telegram solo deja a un bot
+  escribir a alguien mientras su solicitud está pendiente (5 min). Por eso
+  las solicitudes pasan a autoaceptarse y la bienvenida se envía siempre
+  antes de aceptar. Enviar mensajes automáticos desde la cuenta personal
+  se descartó (riesgo de denuncias por spam y de suspensión).
+- **Fase 1 hecha (pendiente de probar en el canal de prueba)**: bot en
+  Python solo con librería estándar (`captacion/premier_captacion/`):
+  bienvenida + aceptación, memoria por `user_id` en SQLite local (quien ya
+  la recibió y vuelve se acepta sin mensaje), respuesta «escríbeme» a
+  quien escribe al bot (una por ráfaga), avisos al dueño (fallos, bot
+  parado más de 5 min, cambios de permisos), comandos `/resumen`,
+  `/semana`, `/estado`, `/miid`, y resúmenes diario/semanal por timers de
+  systemd. Nunca acepta solicitudes de un chat que no sea el configurado.
+- Corrección sobre lo hablado: Telegram no avisa al bot cuando se pulsa un
+  botón de enlace, así que qué botón eligió cada persona se sabrá por el
+  texto que le llegue al dueño (fase 3), no por el bot.
+- Despliegue previsto en la VM como servicios propios
+  (`captacion-bot@prueba`, usuario de sistema `captacion` sin privilegios,
+  configuración con el token en `/etc/premier-captacion/`, fuera del repo).
+  Guía paso a paso en `captacion/README.md`.
+- Verificado: 45 tests (`cd captacion && python3 -m unittest discover -s
+  tests -t .`) en Python 3.9, 3.11, 3.12 y 3.13; prueba de punta a punta del
+  proceso real contra un Telegram falso local (orden bienvenida→aceptación,
+  parada limpia con SIGTERM); unidades systemd validadas con
+  `systemd-analyze`. Las negritas Unicode de la bienvenida se comprueban
+  contra el texto original del dueño.
+- Commits: (este commit)
+
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos
 reales de producción tras el lanzamiento del 8 sept. Desplegados en su

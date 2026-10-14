@@ -1,0 +1,36 @@
+# Bot de bienvenida de PREMIER GALGOS. Plantilla: la instancia (%i) es
+# "prueba" o "real", y cada una tiene su propio archivo de configuración
+# (/etc/premier-captacion/%i.env) y su propia base de datos.
+#   sudo systemctl enable --now captacion-bot@prueba
+#   journalctl -u captacion-bot@prueba -f
+[Unit]
+Description=Premier Galgos captacion: bot de bienvenida (%i)
+Wants=network-online.target
+After=network-online.target
+# Sin límite de reintentos: si la red o Telegram fallan un rato, el bot
+# tiene que volver solo.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/bin/python3 -m premier_captacion.bot
+Restart=always
+RestartSec=10
+# Código 2 = configuración incorrecta: reintentar no sirve, se queda parado
+# (lo dice `systemctl status`) hasta corregir el .env.
+RestartPreventExitStatus=2
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

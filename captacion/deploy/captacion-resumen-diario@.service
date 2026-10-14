@@ -1,0 +1,21 @@
+[Unit]
+Description=Premier Galgos captacion: resumen diario por Telegram (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/bin/python3 -m premier_captacion.resumen diario
+TimeoutStartSec=5m
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
