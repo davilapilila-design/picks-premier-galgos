@@ -3,10 +3,9 @@ import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from premier_captacion import carpetas, db, guardia, lector
+from premier_captacion import db, guardia, lector
 from premier_captacion.config import ErrorConfig, cargar_config
 
-from .apoyo import conexion
 
 
 def peticion(nombre, **atributos):

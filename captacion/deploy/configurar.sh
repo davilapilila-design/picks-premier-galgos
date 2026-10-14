@@ -54,14 +54,18 @@ poner() {
 # leer_oculto VARIABLE MENSAJE [visible]: lee sin mostrar lo que se escribe
 # (con un tercer argumento, mostrándolo).
 leer_oculto() {
-    local __var=$1 __msg=$2 __valor="" __s="-s"
-    [ -z "${3:-}" ] || __s=""
+    local __var=$1 __msg=$2 __valor="" __oculto=1
+    local -a __opciones=(-r -s)
+    if [ -n "${3:-}" ]; then
+        __oculto=0
+        __opciones=(-r)
+    fi
     if [ -t 0 ]; then
-        read -r $__s -p "$__msg" __valor
-        [ -z "$__s" ] || echo
+        read "${__opciones[@]}" -p "$__msg" __valor
+        [ "$__oculto" = 0 ] || echo
     elif { : < /dev/tty; } 2>/dev/null; then
-        read -r $__s -p "$__msg" __valor < /dev/tty
-        [ -z "$__s" ] || echo
+        read "${__opciones[@]}" -p "$__msg" __valor < /dev/tty
+        [ "$__oculto" = 0 ] || echo
     else
         # Sin terminal (p. ej. el valor llega por una tubería).
         read -r __valor || true
@@ -149,7 +153,7 @@ case "$DATO" in
 esac
 
 if [ "$DATO" = token ]; then
-    for intento in 1 2 3; do
+    for _ in 1 2 3; do
         leer_oculto VALOR "Pega el token del bot y pulsa Enter (no se verá al pegarlo): "
         [[ "$VALOR" =~ $PATRON ]] && break
         echo "   Eso no parece un token (debe ser como 123456789:AAH...). Prueba otra vez." >&2
