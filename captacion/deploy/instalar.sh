@@ -8,6 +8,10 @@
 # Para actualizar más adelante a la última versión del código:
 #   bash /opt/premier-captacion/instalar.sh prueba
 #
+# Si lo ejecuta una sesión de Claude (sin terminal), con
+# CAPTACION_SIN_TERMINAL=1 delante: instala todo y se para a falta del
+# token, que el dueño pega desde su propia terminal (configurar.sh).
+#
 # Se puede repetir sin miedo. Pasos:
 #   1. Comprueba Python 3.9+ y las zonas horarias.
 #   2. Crea el usuario de sistema "captacion" (sin privilegios) si no existe.
@@ -107,7 +111,11 @@ fi
 chown root:root "$ENV"
 chmod 600 "$ENV"
 valor_de() { sed -n "s/^$1=//p" "$ENV" | tail -n 1; }
-hay_terminal() { [ -t 0 ] || { : < /dev/tty; } 2>/dev/null; }
+# CAPTACION_SIN_TERMINAL=1 fuerza el modo sin terminal (para que una
+# sesión de Claude nunca se quede esperando a que alguien escriba).
+hay_terminal() {
+    [ -z "${CAPTACION_SIN_TERMINAL:-}" ] && { [ -t 0 ] || { : < /dev/tty; } 2>/dev/null; }
+}
 
 if [ -z "$(valor_de CAPTACION_PERFIL)" ]; then
     CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" perfil Dronwhite >/dev/null
