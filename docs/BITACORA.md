@@ -61,7 +61,7 @@ suyos (api_id/api_hash, conectar la cuenta secundaria) y su visto bueno.
   contenedor desechable. Al revisar se quitaron del código de pruebas los
   ids reales de Telegram y los enlaces de los canales de venta que el dueño
   pasó como ejemplo (el repo es público).
-- Commits: (este commit)
+- Commits: `5d79627` (código y pruebas), (este commit)
 
 ## 2026-10-15 — Captación: fase 2 (copia al Google Sheet)
 El dueño eligió hacer el Sheet antes de pasar el bot a producción, y pidió

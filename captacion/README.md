@@ -290,11 +290,46 @@ toca carpetas ni envía nada (el candado no lo deja en este modo).
 
 ---
 
-## Paso a producción (fase 5) — SOLO con el visto bueno del dueño
-Igual que la prueba pero con la instancia `real` (el instalador pide
-confirmación escribiendo SI): `bash /opt/premier-captacion/instalar.sh real`,
-con el token del bot real (PREMIER GALGOS + logo), y después
-`configurar.sh real propietario …` y `configurar.sh real canal …`. Antes de
-activarlo: ponles nombre a los enlaces de entrada del canal, y acepta a mano
-las solicitudes que haya pendientes en ese momento. El detalle se preparará
-cuando toque.
+## Paso a producción — SOLO con el visto bueno explícito del dueño
+
+Orden recomendado: fase 4 en la cuenta real (solo lectura) antes de la fase
+5, para que el bot real no repita la bienvenida a quien ya la recibió a mano.
+Si se hace al revés no se pierde nada: como mucho, alguien que vuelve recibe
+también la del bot.
+
+### Fase 5: el bot real en PREMIER GALGOS
+1. **@BotFather (tu cuenta principal)**: `/newbot` → nombre `PREMIER GALGOS`
+   → un @ libre que acabe en `bot`. Después `/setuserpic` con el logo del
+   canal. El token se queda en ese chat.
+2. **Enlaces de entrada del canal real**: en cada uno (Administrar canal →
+   Enlaces de invitación → el enlace → Editar) ponle nombre, p. ej.
+   `descripcion-web` y `landing`, y comprueba que «Solicitar aprobación de
+   administrador» sigue activado. La URL no cambia.
+3. **VM**: `bash /opt/premier-captacion/instalar.sh real` (pide escribir SI y
+   el token del bot real; los botones llevan a @Dronwhite).
+4. Abre el bot real con tu cuenta principal → «Iniciar» → te da tu id →
+   `bash /opt/premier-captacion/configurar.sh real propietario TU_ID`.
+5. **Justo antes de activarlo**: acepta a mano las solicitudes pendientes del
+   canal (el bot solo ve las que lleguen después).
+6. Haz administrador al bot en PREMIER GALGOS **solo con «Añadir
+   suscriptores»** → te escribe el id del canal →
+   `bash /opt/premier-captacion/configurar.sh real canal -100…`. Desde ese
+   momento las solicitudes se aceptan solas.
+7. `/estado` al bot real, y mira las primeras solicitudes reales.
+8. Sheet real: una hoja nueva («Captación PREMIER GALGOS»), compartida como
+   editor con la cuenta de servicio →
+   `bash /opt/premier-captacion/configurar.sh real sheet <enlace>`.
+9. Cuando estés contento, apaga lo de prueba:
+   `systemctl disable --now captacion-bot@prueba captacion-resumen-diario@prueba.timer captacion-resumen-semanal@prueba.timer captacion-sheet@prueba.timer`
+   (y `captacion-lector@prueba` si está activo).
+
+Para volver atrás en cualquier momento: quita al bot de administrador del
+canal (vuelves a aceptar a mano) y `systemctl disable --now captacion-bot@real`.
+
+### Fase 6: carpetas en tu cuenta real
+1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
+2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.
+   Durante un día o dos te avisará por el bot de cada cosa que haría. Al
+   arrancar dirá que borraría tus carpetas de días más antiguas que las 5
+   más recientes (tienes 7): es lo acordado.
+3. Si todo cuadra: `bash /opt/premier-captacion/configurar.sh real lector real`.
