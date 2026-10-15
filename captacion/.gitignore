@@ -1,0 +1,7 @@
+# Secretos y datos de clientes: nunca al repo.
+*.env
+*.db
+*.db-wal
+*.db-shm
+*.session
+*.session-journal

@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer: resumen semanal de captacion (%i), lunes 9:00 hora de España
+
+[Timer]
+OnCalendar=Mon *-*-* 09:00:00 Europe/Madrid
+# Si la VM estaba apagada a esa hora, se envía al arrancar.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

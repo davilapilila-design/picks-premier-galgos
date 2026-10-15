@@ -1,0 +1,38 @@
+# Lector de la cuenta de Telegram del dueño (fase 3): ordena sus carpetas.
+# NO lo activa instalar.sh: lo activa conectar-cuenta.sh después de que el
+# dueño conecte la cuenta, y siempre empieza en modo simulación.
+#   journalctl -u captacion-lector@prueba -f
+[Unit]
+Description=Premier Galgos captacion: lector de carpetas de la cuenta del dueño (%i)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="CAPTACION_SESION=/var/lib/premier-captacion/%i-cuenta"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+ExecStart=/opt/premier-captacion/venv/bin/python -m premier_captacion.lector
+Restart=always
+RestartSec=30
+# Código 2 = falta configuración o la cuenta no está conectada: reintentar
+# no sirve.
+RestartPreventExitStatus=2
+# La sesión de la cuenta equivale a acceso total: solo la puede leer
+# el usuario captacion (y root).
+UMask=0077
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

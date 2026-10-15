@@ -1,0 +1,29 @@
+# Copia la base de datos de captación al Google Sheet (fase 2). La lanza
+# captacion-sheet@<instancia>.timer cada 10 minutos.
+#   systemctl start captacion-sheet@prueba      (copia ahora mismo)
+#   journalctl -u captacion-sheet@prueba -n 20
+[Unit]
+Description=Premier Galgos captacion: copia al Google Sheet (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+# systemd lee la credencial (solo root puede) y se la da al servicio en una
+# carpeta privada ($CREDENTIALS_DIRECTORY/google) que nadie más ve.
+LoadCredential=google:/etc/premier-captacion/google.json
+ExecStart=/opt/premier-captacion/venv/bin/python -m premier_captacion.sheet
+TimeoutStartSec=5m
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

@@ -3,6 +3,236 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-15 — Captación: la fase 3 se prueba con la cuenta principal, en simulación
+- **Qué**: el dueño pidió probar las carpetas en su propia cuenta en vez de
+  en la secundaria, porque ya tiene ahí sus carpetas de días. Su cuenta se
+  conectará a la instancia `prueba`, en simulación. En esa instancia solo
+  cuenta como cliente quien está en la memoria de prueba (la secundaria, que
+  recibió la bienvenida del bot de prueba), así que sus clientes reales se
+  ignoran, y el «canal principal» es el de prueba.
+- **Candado más estricto en simulación**: nuevo modo `simulacion` en
+  `guardia.py` (lectura + «no en línea», sin `UpdateDialogFilterRequest`).
+  El lector lo usa cuando está en simulación, así que aunque hubiera un
+  fallo en el código, Telegram no recibiría ningún cambio de carpetas.
+- **Simulación fiel a lo que hace el dueño a mano**: las carpetas simuladas
+  se tomaban de las reales solo al arrancar. Ahora, al cambiar de día,
+  vuelven a leerse las reales, por si el dueño crea la carpeta del día a
+  mano (antes habría dicho «creo la carpeta 10.16» aunque ya existiera).
+  Dentro del mismo día no repite avisos.
+- README (fase 3) reescrito con los pasos para su cuenta; avisos de no pasar
+  el lector de `prueba` a real (borraría de verdad sus carpetas de días más
+  antiguas) ni ejecutar el histórico en `prueba` con su cuenta conectada
+  (metería a sus clientes reales en la memoria de prueba). Pruebas: 123,
+  pasan en Python 3.9, 3.12 y 3.13.
+- Commits: (este commit)
+
+## 2026-10-15 — Captación: hoja de pruebas funcionando en la VM; instalador de una sola pasada
+- La sesión de Claude de la VM (con autorización ampliada solo para crear el
+  venv y copiar la credencial de picks) actualizó a `744efd5` y activó la
+  copia al Sheet de pruebas: «Sheet actualizado: 1 usuarios, 3 eventos
+  nuevos, 1 días». Comprobado leyendo la hoja con el conector de Drive: las
+  cuatro pestañas (la pestaña vacía inicial reutilizada como «Usuarios»),
+  fechas en hora de España, y el Resumen diario calcula bien con las
+  fórmulas en inglés y separador «;» (COUNTIFS y COUNTUNIQUEIFS), con el
+  día como «jue 15/10/2026». No hizo falta instalar python3-venv.
+- Problema encontrado: hubo que ejecutar `instalar.sh` dos veces, porque se
+  ejecutaba el instalador viejo (el de `/opt`), que aún no sabía crear el
+  venv; la primera pasada solo instalaba el script nuevo. Arreglado: si el
+  instalador descargado es distinto del que se está ejecutando, se reejecuta
+  el nuevo con el código ya descargado (sin volver a descargar, sin pedir
+  otra vez la confirmación de «real», y borrando la carpeta temporal al
+  final). Probado en contenedor desechable simulando un instalador antiguo.
+  Ojo: la PRÓXIMA actualización todavía parte de `744efd5`, que no tiene
+  esto, así que esa vez aún harán falta dos pasadas; a partir de ahí, una.
+- Commits: `9f9f142`
+
+## 2026-10-15 — Captación: fases 3 y 4 programadas (carpetas e histórico)
+Avanzado de noche sin el dueño, como pidió: solo código y pruebas; **nada
+instalado ni conectado a ninguna cuenta**. Para activarlo hacen falta pasos
+suyos (api_id/api_hash, conectar la cuenta secundaria) y su visto bueno.
+- **Lector de la cuenta del dueño** (`captacion/premier_captacion/lector.py`,
+  Telethon 1.45.0): servicio `captacion-lector@<instancia>` que ordena sus
+  carpetas con las reglas acordadas (`carpetas.py`): carpeta del día «MM.DD»
+  para quien recibió bienvenida y le escribe (pasa al día nuevo si vuelve a
+  escribir sin enlace), «free send» cuando el dueño envía un enlace
+  `t.me/+…` que no es del canal principal (se pregunta a Telegram a qué
+  canal lleva, sin unirse, con caché en la base de datos), rotación a las 5
+  carpetas de días más recientes, «free send» con los ~90 más recientes del
+  embudo, nunca se quitan chats puestos a mano, nunca se tocan carpetas
+  compartidas ni las que no son de días/free send, aviso si no hay hueco.
+- **Seguridad**: `guardia.py` es una lista blanca de peticiones a Telegram
+  enganchada en `TelegramClient._call` (por donde pasan todas): en modo
+  lector solo lectura + carpetas + «no en línea»; en modo histórico, solo
+  lectura. Enviar, marcar como leído, unirse, reenviar, borrar, salir,
+  «escribiendo…», reaccionar o aparecer «en línea» quedan bloqueados. Se
+  comprobó contra las clases reales de Telethon que cada nombre de la lista
+  existe y que 11 peticiones peligrosas se bloquean en todos los modos.
+- El lector **empieza siempre en simulación**: avisa por el bot de lo que
+  haría («🧪 Simulación (no he tocado nada): …») sin tocar carpetas, sobre
+  una copia en memoria de las carpetas reales. Solo actúa con
+  `configurar.sh <instancia> lector real`. Recupera al arrancar lo llegado
+  mientras estuvo parado (punto de control por persona: `ultimo_msg_id`).
+- **Histórico** (`historico.py`, fase 4, solo lectura): busca las
+  bienvenidas manuales del dueño (dos versiones, ahora tipos
+  `manual_buenas` y `manual_buenos_dias` con sus textos en «Tipos de
+  mensaje»), marca a esas personas como del embudo (el bot no les repetirá
+  la bienvenida) y reconstruye si contestaron y si recibieron enlace de
+  venta, para comparar manual frente a bot. Repetible sin duplicar.
+- Base de datos: migración 2 (columnas de mensajes, botón, enlace y canal de
+  venta, carpeta; tabla `enlaces`). Las migraciones ahora usan `BEGIN
+  IMMEDIATE` y `abrir()` reintenta si la base está bloqueada (una prueba de
+  6 procesos abriendo a la vez fallaba ~1 de cada 20 veces; ahora 0 de 80).
+- Sheet y resúmenes ampliados: columnas de Usuarios (primer mensaje, botón,
+  enlace y canal de venta, carpeta), columnas nuevas en Resumen diario y
+  líneas «Te escribieron» / «Enlaces de venta» en los resúmenes por
+  Telegram cuando el lector está activo.
+- Despliegue: `instalar.sh` añade Telethon al venv y reinicia el lector si
+  ya estaba activo (no lo activa); `conectar-cuenta.sh` (solo con terminal:
+  lo hace el dueño; para la instancia `real` crea la configuración pero no
+  arranca nada), `leer-historico.sh` y `lector.sh` (para el lector si
+  estaba en marcha: una sesión usada por dos programas a la vez se anula);
+  `configurar.sh` con `api` (api_hash oculto, nunca por argumento) y
+  `lector simulacion|real`. La sesión de la cuenta vive en
+  `/var/lib/premier-captacion/<instancia>-cuenta.session` (umask 077).
+- Para probar con la secundaria como "dueño", la cuenta principal se marca
+  del embudo con `lector.sh prueba embudo-prueba <id>` (solo pruebas).
+- Verificado: 122 tests en Python 3.9, 3.12 (con gspread y Telethon reales)
+  y 3.13; el adaptador de Telethon con sus tipos reales (`DialogFilter`,
+  `TextWithEntities`, invitaciones) y el servicio entero con un cliente
+  falso (simulación sin escrituras; modo real crea «MM.DD» y «free send» y
+  todas las peticiones pasan la lista blanca). Scripts probados en
+  contenedor desechable. Al revisar se quitaron del código de pruebas los
+  ids reales de Telegram y los enlaces de los canales de venta que el dueño
+  pasó como ejemplo (el repo es público).
+- Commits: `5d79627` (código y pruebas), (este commit)
+
+## 2026-10-15 — Captación: fase 2 (copia al Google Sheet)
+El dueño eligió hacer el Sheet antes de pasar el bot a producción, y pidió
+avanzar de noche con lo posible sin él (nada de producción).
+- Hoja de pruebas **«Captación PREMIER GALGOS (pruebas)»** creada en su
+  Drive con el conector de Google Drive, privada y compartida como editor
+  solo con la cuenta de servicio que ya usa la VM para picks (el correo se
+  sacó de los permisos de la hoja de picks; no se apunta aquí). Sin datos
+  todavía: la llena la VM.
+- `captacion/premier_captacion/sheet.py`: copia la base de datos local al
+  Sheet cada 10 min (`captacion-sheet@<instancia>.timer`). Pestañas
+  `Usuarios` (una fila por user_id), `Eventos` (solo añade lo nuevo; si se
+  borran filas, se rellenan), `Resumen diario` (una fila por día con
+  fórmulas COUNTIFS/COUNTUNIQUEIFS sobre Eventos, siguiendo la norma de que
+  los números derivados sean fórmulas trazables) y `Tipos de mensaje`.
+  Datos en modo RAW (un nombre que empiece por "=" no se convierte en
+  fórmula); solo el Resumen va como fórmulas. Fechas como número de serie
+  con formato de fecha, en hora de España.
+- Fórmulas con nombres en inglés y separador ";", como las de
+  `src/Setup.gs` de picks (hoja del mismo dueño, en español): por eso el
+  volcado fija la configuración regional del libro en `es_ES` y la zona
+  horaria en `Europe/Madrid`.
+- Instalación: `instalar.sh` crea un venv propio
+  (`/opt/premier-captacion/venv`, gspread 6.1.4) para no tocar el Python del
+  sistema ni el venv de Proyecto Galgos, y copia (solo lectura del
+  original) la credencial de picks a `/etc/premier-captacion/google.json`
+  (root, 600); systemd se la pasa al servicio con `LoadCredential=`, así el
+  usuario `captacion` no puede leerla fuera del servicio. Si algo de esto
+  falla, el bot se instala igual y solo la copia queda sin activar.
+  `configurar.sh <instancia> sheet <enlace>` acepta el enlace entero y hace
+  la primera copia en el acto.
+- Verificado sin red: 62 tests (incluida una hoja simulada que, como la
+  API, falla al escribir fuera de la cuadrícula), y el volcado ejecutado con
+  el gspread real sobre un cliente HTTP falso para ver las peticiones
+  exactas que haría. Eso destapó un fallo ya corregido: gspread devuelve
+  `[[]]` para una pestaña vacía, y la pestaña inicial no se reutilizaba.
+  Instalador probado en contenedor desechable (venv + gspread + credencial
+  falsa → error claro de credencial). **Falta probarlo contra Google de
+  verdad en la VM.**
+- Commits: `a8e337c`
+
+## 2026-10-14 — Captación: plan aprobado y fase 1 (bot de bienvenida)
+Subsistema nuevo e independiente del de picks, en `captacion/` y en la rama
+`captacion-bienvenida` (no toca `src/`). Objetivo: dejar de aceptar a mano
+las ~20-30 solicitudes diarias de unión al canal y de enviar la bienvenida
+desde la cuenta personal; después, organizar en carpetas los chats de
+quien responde y sacar estadísticas.
+- **Plan aprobado** por el dueño tras varias rondas de preguntas: todas las
+  decisiones (texto versión B con dos botones, carpetas `MM.DD` con
+  rotación de 5 días, `free send`, Sheet privado aparte, resúmenes a las
+  00:05 y lunes 9:00, fases y riesgos) en `captacion/PLAN.md`.
+- Por qué un bot y no la cuenta del dueño: Telegram solo deja a un bot
+  escribir a alguien mientras su solicitud está pendiente (5 min). Por eso
+  las solicitudes pasan a autoaceptarse y la bienvenida se envía siempre
+  antes de aceptar. Enviar mensajes automáticos desde la cuenta personal
+  se descartó (riesgo de denuncias por spam y de suspensión).
+- **Fase 1 hecha (pendiente de probar en el canal de prueba)**: bot en
+  Python solo con librería estándar (`captacion/premier_captacion/`):
+  bienvenida + aceptación, memoria por `user_id` en SQLite local (quien ya
+  la recibió y vuelve se acepta sin mensaje), respuesta «escríbeme» a
+  quien escribe al bot (una por ráfaga), avisos al dueño (fallos, bot
+  parado más de 5 min, cambios de permisos), comandos `/resumen`,
+  `/semana`, `/estado`, `/miid`, y resúmenes diario/semanal por timers de
+  systemd. Nunca acepta solicitudes de un chat que no sea el configurado.
+- Corrección sobre lo hablado: Telegram no avisa al bot cuando se pulsa un
+  botón de enlace, así que qué botón eligió cada persona se sabrá por el
+  texto que le llegue al dueño (fase 3), no por el bot.
+- Despliegue previsto en la VM como servicios propios
+  (`captacion-bot@prueba`, usuario de sistema `captacion` sin privilegios,
+  configuración con el token en `/etc/premier-captacion/`, fuera del repo).
+  Guía paso a paso en `captacion/README.md`.
+- Verificado: 45 tests (`cd captacion && python3 -m unittest discover -s
+  tests -t .`) en Python 3.9, 3.11, 3.12 y 3.13; prueba de punta a punta del
+  proceso real contra un Telegram falso local (orden bienvenida→aceptación,
+  parada limpia con SIGTERM); unidades systemd validadas con
+  `systemd-analyze`. Las negritas Unicode de la bienvenida se comprueban
+  contra el texto original del dueño.
+- Ajuste tras empezar la puesta en marcha: al abrir el bot por primera vez
+  ("Iniciar") en plena configuración, contesta con el id de quien escribe
+  en vez de con la respuesta para clientes.
+- Papeles en la prueba de la fase 1, cambiados a petición del dueño: su
+  cuenta principal hace de dueño (canal de prueba suyo, avisos y botones a
+  @Dronwhite, igual que en producción) y la secundaria de cliente. Hacen
+  falta dos cuentas porque quien crea un canal no puede pedir unirse a él.
+  La secundaria como "dueño" queda para la fase 3 (programa de carpetas),
+  para no conectar ese programa a la cuenta principal hasta probarlo.
+- Bot de prueba creado por el dueño: `@premiergalgos_pruebas_bot`. Los
+  enlaces de invitación de prueba NO se guardan en el repo: el repositorio
+  es público y con el bot activo cualquiera con el enlace entraría.
+- Instalación simplificada para el dueño (no técnico): como el repo es
+  público, la VM descarga el código de GitHub directamente.
+  `captacion/deploy/instalar.sh` (instala/actualiza en un comando, fija el
+  commit exacto descargado y lo anota en `/opt/premier-captacion/VERSION`,
+  pide el token sin mostrarlo, activa bot y resúmenes; la instancia `real`
+  exige escribir SI) y `captacion/deploy/configurar.sh` (cambia propietario,
+  canal, perfil o token sin editar archivos, y reinicia). El token nunca se
+  acepta como argumento (quedaría en el historial de la terminal). `/estado`
+  muestra la versión instalada. El resumen ya no falla si aún no hay
+  propietario configurado (los timers se activan al instalar). Probados en
+  un contenedor desechable con systemctl simulado, y el bot instalado
+  arrancando con el usuario sin privilegios.
+- **Instalado y probado en la VM** (instancia `prueba`, versión `6bbb6e7`).
+  Lo ejecutó una sesión de Claude en la propia VM con autorización expresa
+  del dueño limitada a lo de captación (usuario `captacion`,
+  `/opt|/etc|/var/lib/premier-captacion`, servicios `captacion-*`; nada de
+  Proyecto Galgos ni de picks); el token lo puso el dueño desde su terminal
+  SSH con `configurar.sh prueba token`, sin pasar por ningún chat.
+  Propietario y canal configurados con `configurar.sh` (los ids no se
+  apuntan aquí: repo público).
+- Tropiezo de la puesta en marcha: el primer intento («Prueba bot
+  captación») era un **grupo** con el bot como simple miembro, y no sirve.
+  Tiene que ser un **canal** con el bot **administrador** con «Añadir
+  suscriptores». Canal de prueba definitivo: «Prueba canal captación con
+  bot» (privado, enlace de «Solicitar unirse»). Ojo al pasar a producción.
+- Prueba de punta a punta OK: la cuenta secundaria pide entrar → recibe la
+  bienvenida nueva → el bot acepta solo; el botón abre el chat de
+  @Dronwhite con el texto ya escrito. Primer resumen diario: madrugada del
+  16-10 (hora de España); primer semanal: lunes 19-10 a las 9:00.
+- Primer cambio tras probarlo: el texto que
+  dejan escrito los botones pasa de «¡Hola! Vengo de PREMIER GALGOS 🐕 …» a
+  «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» /
+  «… Es mi primera vez con los galgos 🐕» (al dueño no le gustaba «Vengo
+  de PREMIER GALGOS»). Se mantiene el tipo de mensaje `bot_b_v1` porque aún
+  no hay datos reales que separar.
+- Commits: `3dc009a` (fase 1), `82876bc` (Iniciar en puesta en marcha),
+  `35d0a71` (papeles de la prueba), `4e7b881`/`4f234e6`/`2616cfa`
+  (instalador y configurador), (este commit)
+
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos
 reales de producción tras el lanzamiento del 8 sept. Desplegados en su
