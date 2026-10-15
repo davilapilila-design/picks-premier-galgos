@@ -71,8 +71,8 @@ uno explícito aparte.
    probado en la VM (2026-10-14).*
 2. **Google Sheet**: pestañas `Usuarios`, `Eventos`, `Resumen diario` y
    `Tipos de mensaje`; volcado automático desde la VM cada 10 min con la
-   cuenta de servicio de picks. ⏳ *Programado y probado sin red
-   (2026-10-15); falta activarlo en la VM. Hoja de pruebas ya creada.*
+   cuenta de servicio de picks. ✅ *Funcionando en la VM con la hoja de
+   pruebas (2026-10-15). La instancia real tendrá su propia hoja.*
 3. **Carpetas, probadas en la cuenta secundaria** (que hace de "dueño";
    la cuenta real del dueño hace de "cliente"): `MM.DD`, `free send`,
    filtro del canal principal, rotación de 5 días. ⏳ *Programado y probado

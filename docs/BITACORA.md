@@ -3,6 +3,26 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-15 — Captación: hoja de pruebas funcionando en la VM; instalador de una sola pasada
+- La sesión de Claude de la VM (con autorización ampliada solo para crear el
+  venv y copiar la credencial de picks) actualizó a `744efd5` y activó la
+  copia al Sheet de pruebas: «Sheet actualizado: 1 usuarios, 3 eventos
+  nuevos, 1 días». Comprobado leyendo la hoja con el conector de Drive: las
+  cuatro pestañas (la pestaña vacía inicial reutilizada como «Usuarios»),
+  fechas en hora de España, y el Resumen diario calcula bien con las
+  fórmulas en inglés y separador «;» (COUNTIFS y COUNTUNIQUEIFS), con el
+  día como «jue 15/10/2026». No hizo falta instalar python3-venv.
+- Problema encontrado: hubo que ejecutar `instalar.sh` dos veces, porque se
+  ejecutaba el instalador viejo (el de `/opt`), que aún no sabía crear el
+  venv; la primera pasada solo instalaba el script nuevo. Arreglado: si el
+  instalador descargado es distinto del que se está ejecutando, se reejecuta
+  el nuevo con el código ya descargado (sin volver a descargar, sin pedir
+  otra vez la confirmación de «real», y borrando la carpeta temporal al
+  final). Probado en contenedor desechable simulando un instalador antiguo.
+  Ojo: la PRÓXIMA actualización todavía parte de `744efd5`, que no tiene
+  esto, así que esa vez aún harán falta dos pasadas; a partir de ahí, una.
+- Commits: (este commit)
+
 ## 2026-10-15 — Captación: fases 3 y 4 programadas (carpetas e histórico)
 Avanzado de noche sin el dueño, como pidió: solo código y pruebas; **nada
 instalado ni conectado a ninguna cuenta**. Para activarlo hacen falta pasos

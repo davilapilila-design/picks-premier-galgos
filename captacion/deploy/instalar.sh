@@ -50,9 +50,11 @@ INSTANCIA="${1:-}"
 case "$INSTANCIA" in
     prueba) ;;
     real)
-        echo "⚠️  Vas a instalar el bot REAL, el del canal PREMIER GALGOS."
-        read -r -p "   Escribe SI para continuar: " confirmacion
-        [ "$confirmacion" = "SI" ] || fallo "Cancelado."
+        if [ -z "${CAPTACION_REEJECUTADO:-}" ]; then  # ya se confirmó antes de reejecutarse
+            echo "⚠️  Vas a instalar el bot REAL, el del canal PREMIER GALGOS."
+            read -r -p "   Escribe SI para continuar: " confirmacion
+            [ "$confirmacion" = "SI" ] || fallo "Cancelado."
+        fi
         ;;
     *) fallo "Uso: bash $0 prueba   (o «real», solo para producción)" ;;
 esac
@@ -73,14 +75,23 @@ else
     echo "   creado ✓"
 fi
 
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-if [ -n "${CAPTACION_ORIGEN:-}" ]; then
+if [ -n "${CAPTACION_DESCARGA:-}" ]; then
+    # Lo descargó un instalador anterior, que se ha reejecutado con este
+    # (ver más abajo): se usa tal cual, sin volver a descargar.
+    TMP=$CAPTACION_DESCARGA
+    trap 'rm -rf "$TMP"' EXIT
+    VERSION=$CAPTACION_VERSION_DESCARGA
+    paso "Código ya descargado"
+elif [ -n "${CAPTACION_ORIGEN:-}" ]; then
+    TMP=$(mktemp -d)
+    trap 'rm -rf "$TMP"' EXIT
     # Solo para pruebas: copia de una carpeta local en vez de descargar.
     paso "Copiando el código de $CAPTACION_ORIGEN"
     cp -r "$CAPTACION_ORIGEN/captacion" "$TMP/captacion"
     VERSION="local $(date '+%Y-%m-%d %H:%M')"
 else
+    TMP=$(mktemp -d)
+    trap 'rm -rf "$TMP"' EXIT
     paso "Descargando el código (rama $RAMA)"
     # Se fija el commit exacto para que lo descargado y la versión anotada
     # coincidan aunque alguien suba cambios justo a la vez.
@@ -95,6 +106,17 @@ else
 fi
 [ -f "$TMP/captacion/premier_captacion/bot.py" ] || fallo "Lo descargado no trae el código del bot"
 echo "   versión $VERSION ✓"
+
+# Si el instalador descargado no es el que se está ejecutando (al actualizar
+# desde una versión anterior), se sigue con el nuevo: así una sola ejecución
+# aplica siempre todos los pasos de la versión nueva.
+NUEVO="$TMP/captacion/deploy/instalar.sh"
+if [ -z "${CAPTACION_REEJECUTADO:-}" ] && ! cmp -s "$0" "$NUEVO"; then
+    echo "   el instalador ha cambiado: sigo con el nuevo"
+    trap - EXIT  # la carpeta descargada la borrará el instalador nuevo
+    CAPTACION_REEJECUTADO=1 CAPTACION_DESCARGA="$TMP" CAPTACION_VERSION_DESCARGA="$VERSION" \
+        exec bash "$NUEVO" "$INSTANCIA"
+fi
 
 paso "Instalando en $DESTINO"
 install -d -m 755 "$DESTINO"
