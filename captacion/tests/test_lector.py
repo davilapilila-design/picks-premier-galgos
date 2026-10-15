@@ -33,9 +33,12 @@ class TestGuardia(unittest.TestCase):
                 with self.subTest(nombre=nombre, modo=modo), self.assertRaises(guardia.PeticionProhibida):
                     guardia.comprobar(peticion(nombre), modo)
 
-    def test_en_el_historico_no_se_tocan_carpetas(self):
-        with self.assertRaises(guardia.PeticionProhibida):
-            guardia.comprobar(peticion("messages.UpdateDialogFilterRequest"), "historico")
+    def test_en_el_historico_y_en_simulacion_no_se_tocan_carpetas(self):
+        for modo in ("historico", "simulacion"):
+            with self.subTest(modo), self.assertRaises(guardia.PeticionProhibida):
+                guardia.comprobar(peticion("messages.UpdateDialogFilterRequest"), modo)
+        guardia.comprobar(peticion("account.UpdateStatusRequest", offline=True), "simulacion")
+        guardia.comprobar(peticion("messages.GetDialogFiltersRequest"), "simulacion")
 
     def test_estado_solo_no_en_linea(self):
         guardia.comprobar(peticion("account.UpdateStatusRequest", offline=True), "lector")

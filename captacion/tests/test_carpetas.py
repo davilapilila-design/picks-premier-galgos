@@ -285,6 +285,26 @@ class TestSimulacion(Base):
         self.assertEqual(real.cambios, [])
         self.assertEqual(self.usuarios_de("free send"), {500})
 
+    def test_cada_dia_vuelve_a_partir_de_las_carpetas_reales(self):
+        real = CarpetasEnMemoria(cuenta_tipica(), destinos=dict([VENTA]))
+        self.tg = self.correr(CarpetasEnMemoria.desde(real))
+        self.org = self.organizador(simular=True)
+        self.del_embudo(500)
+        self.recibe(500, 1)
+        self.assertTrue(any("creo la carpeta 10.15" in a for a in self.avisos))
+        # El mismo día no repite nada: ni al volver a escribir ni en cada revisión.
+        self.avisos.clear()
+        self.recibe(500, 2)
+        self.correr(self.org.rotar())
+        self.assertEqual(self.avisos, [])
+        # Al día siguiente el dueño ya ha creado a mano la carpeta del día.
+        self.correr(real.crear_carpeta("10.16", {777}))
+        self.ahora = ts(2026, 10, 16, 9, 0)
+        self.recibe(500, 3)
+        self.assertTrue(any("meto a Ana (@ana) en la carpeta 10.16" in a for a in self.avisos), self.avisos)
+        self.assertFalse(any("creo la carpeta" in a for a in self.avisos), self.avisos)
+        self.assertEqual(real.cambios, [("crear", "10.16", frozenset({777}))])  # solo lo del dueño
+
 
 class TestAyudas(unittest.TestCase):
     def test_titulos_de_dias(self):

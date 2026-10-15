@@ -56,6 +56,9 @@ INICIO_SESION = frozenset({
 MODOS = {
     "iniciar-sesion": LECTURA | INICIO_SESION,
     "historico": LECTURA,
+    # El lector en simulación no puede ni pedir cambios de carpetas: aunque
+    # hubiera un fallo en el código, Telegram no recibiría nada que escriba.
+    "simulacion": LECTURA | {"account.UpdateStatusRequest"},
     "lector": LECTURA | CARPETAS | {"account.UpdateStatusRequest"},
 }
 

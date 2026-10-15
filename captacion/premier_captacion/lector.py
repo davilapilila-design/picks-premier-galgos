@@ -115,7 +115,7 @@ def crear_cliente(sesion, api_id, api_hash, modo):
         sesion, api_id, api_hash,
         # Así aparece en Telegram → Ajustes → Dispositivos.
         device_model="Premier captación (VM)", system_version="Linux", app_version="1.0",
-        receive_updates=(modo == "lector"), catch_up=False, flood_sleep_threshold=120,
+        receive_updates=(modo in ("lector", "simulacion")), catch_up=False, flood_sleep_threshold=120,
     )
 
 
@@ -289,7 +289,8 @@ async def servicio(cfg, entorno):
     aj = ajustes_desde(entorno, cfg)
     avisar = crear_avisador(cfg)
     con = db.abrir(cfg.db_path)
-    client = crear_cliente(sesion, api_id, api_hash, "lector")
+    # En simulación el candado ni siquiera deja pedir cambios de carpetas.
+    client = crear_cliente(sesion, api_id, api_hash, "simulacion" if aj.simular else "lector")
     await client.connect()
     try:
         if not await client.is_user_authorized():

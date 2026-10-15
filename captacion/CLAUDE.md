@@ -17,7 +17,14 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   sin el visto bueno explícito del dueño, y nunca con nada que envíe,
   marque como leído, se una o salga de chats.
 - El lector arranca siempre en **simulación**; pasarlo a real
-  (`configurar.sh <instancia> lector real`) es decisión del dueño.
+  (`configurar.sh <instancia> lector real`) es decisión del dueño. En
+  simulación el candado usa el modo `simulacion`, que no deja pedir cambios
+  de carpetas.
+- La fase 3 se prueba con la **cuenta principal del dueño conectada a la
+  instancia `prueba`** (decisión suya del 2026-10-15). Por eso, en `prueba`:
+  nunca pasar el lector a real (borraría de verdad sus carpetas de días) ni
+  ejecutar el histórico (metería a sus clientes reales en la memoria de
+  prueba).
 - Una sesión de Telethon no se usa desde dos programas a la vez (Telegram
   la anula): `lector.sh`, `conectar-cuenta.sh` y `leer-historico.sh` paran
   antes el servicio. Iniciar sesión lo hace SIEMPRE el dueño en su terminal

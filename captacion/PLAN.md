@@ -73,11 +73,14 @@ uno explícito aparte.
    `Tipos de mensaje`; volcado automático desde la VM cada 10 min con la
    cuenta de servicio de picks. ✅ *Funcionando en la VM con la hoja de
    pruebas (2026-10-15). La instancia real tendrá su propia hoja.*
-3. **Carpetas, probadas en la cuenta secundaria** (que hace de "dueño";
-   la cuenta real del dueño hace de "cliente"): `MM.DD`, `free send`,
-   filtro del canal principal, rotación de 5 días. ⏳ *Programado y probado
-   sin conectar a nada (2026-10-15): falta que el dueño saque api_id/api_hash
-   y conecte la secundaria (README, fase 3). Empieza en simulación.*
+3. **Carpetas**: `MM.DD`, `free send`, filtro del canal principal, rotación
+   de 5 días. Se prueban **con la cuenta principal del dueño, en
+   simulación**, conectada a la instancia `prueba` (decisión del dueño,
+   2026-10-15: ya tiene ahí sus carpetas de días). Allí solo cuenta como
+   cliente la secundaria; sus clientes reales se ignoran. En simulación el
+   candado no deja ni pedir cambios de carpetas. ⏳ *Programado y probado
+   sin conectar a nada (2026-10-15): falta que el dueño saque
+   api_id/api_hash y conecte su cuenta (README, fase 3).*
 4. **Lectura del histórico de la cuenta real** (solo lectura): bienvenidas
    manuales antiguas y respuestas pasadas, para no repetir bienvenidas y
    comparar manual frente a bot. ⏳ *Programado (2026-10-15): se prueba

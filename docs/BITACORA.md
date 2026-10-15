@@ -3,6 +3,29 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-15 — Captación: la fase 3 se prueba con la cuenta principal, en simulación
+- **Qué**: el dueño pidió probar las carpetas en su propia cuenta en vez de
+  en la secundaria, porque ya tiene ahí sus carpetas de días. Su cuenta se
+  conectará a la instancia `prueba`, en simulación. En esa instancia solo
+  cuenta como cliente quien está en la memoria de prueba (la secundaria, que
+  recibió la bienvenida del bot de prueba), así que sus clientes reales se
+  ignoran, y el «canal principal» es el de prueba.
+- **Candado más estricto en simulación**: nuevo modo `simulacion` en
+  `guardia.py` (lectura + «no en línea», sin `UpdateDialogFilterRequest`).
+  El lector lo usa cuando está en simulación, así que aunque hubiera un
+  fallo en el código, Telegram no recibiría ningún cambio de carpetas.
+- **Simulación fiel a lo que hace el dueño a mano**: las carpetas simuladas
+  se tomaban de las reales solo al arrancar. Ahora, al cambiar de día,
+  vuelven a leerse las reales, por si el dueño crea la carpeta del día a
+  mano (antes habría dicho «creo la carpeta 10.16» aunque ya existiera).
+  Dentro del mismo día no repite avisos.
+- README (fase 3) reescrito con los pasos para su cuenta; avisos de no pasar
+  el lector de `prueba` a real (borraría de verdad sus carpetas de días más
+  antiguas) ni ejecutar el histórico en `prueba` con su cuenta conectada
+  (metería a sus clientes reales en la memoria de prueba). Pruebas: 123,
+  pasan en Python 3.9, 3.12 y 3.13.
+- Commits: (este commit)
+
 ## 2026-10-15 — Captación: hoja de pruebas funcionando en la VM; instalador de una sola pasada
 - La sesión de Claude de la VM (con autorización ampliada solo para crear el
   venv y copiar la credencial de picks) actualizó a `744efd5` y activó la
@@ -21,7 +44,7 @@ Entradas más recientes arriba.
   final). Probado en contenedor desechable simulando un instalador antiguo.
   Ojo: la PRÓXIMA actualización todavía parte de `744efd5`, que no tiene
   esto, así que esa vez aún harán falta dos pasadas; a partir de ahí, una.
-- Commits: (este commit)
+- Commits: `9f9f142`
 
 ## 2026-10-15 — Captación: fases 3 y 4 programadas (carpetas e histórico)
 Avanzado de noche sin el dueño, como pidió: solo código y pruebas; **nada

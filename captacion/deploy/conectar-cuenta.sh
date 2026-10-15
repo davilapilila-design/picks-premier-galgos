@@ -2,8 +2,8 @@
 # Conecta la cuenta de Telegram que leerá el programa de carpetas (fase 3)
 # o el histórico (fase 4). Lo ejecuta el DUEÑO en su propia terminal SSH:
 #
-#   bash /opt/premier-captacion/conectar-cuenta.sh prueba    (cuenta secundaria, pruebas)
-#   bash /opt/premier-captacion/conectar-cuenta.sh real      (tu cuenta, solo con tu visto bueno)
+#   bash /opt/premier-captacion/conectar-cuenta.sh prueba    (pruebas; el lector arranca en simulación)
+#   bash /opt/premier-captacion/conectar-cuenta.sh real      (producción, solo con tu visto bueno)
 #
 # Pide el teléfono, el código que llega por Telegram y, si la tienes, la
 # contraseña de verificación en dos pasos. NO PEGUES el código en ningún

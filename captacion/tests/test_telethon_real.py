@@ -240,8 +240,9 @@ class TestServicio(unittest.TestCase):
                 evento(500, "Ana", 12, "aquí tienes", out=True, url="https://t.me/+VENTA0000000001"),
             ])
             cliente.respuesta_invitacion = types.ChatInviteAlready(chat=SimpleNamespace(id=555, title="Canal VIP"))
-            with mock.patch.object(lector, "crear_cliente", return_value=cliente):
+            with mock.patch.object(lector, "crear_cliente", return_value=cliente) as crear:
                 codigo = asyncio.run(lector.servicio(cfg, entorno))
+            self.modo_candado = crear.call_args.args[3]
             con = db.abrir(cfg.db_path)
             fila = db.obtener_usuario(con, 500)
             otro = db.obtener_usuario(con, 999)
@@ -254,7 +255,10 @@ class TestServicio(unittest.TestCase):
     def test_simulacion_no_toca_carpetas(self):
         codigo, peticiones, fila, otro = self.ejecutar(simular=True)
         self.assertEqual(codigo, 1)  # se "desconectó" sin que nadie lo parase
+        self.assertEqual(self.modo_candado, "simulacion")
         self.assertNotIn("messages.UpdateDialogFilterRequest", self.nombres(peticiones))
+        for p in peticiones:  # todo lo pedido pasa el candado más estricto
+            guardia.comprobar(p, "simulacion")
         self.assertIn("account.UpdateStatusRequest", self.nombres(peticiones))
         self.assertEqual((fila["boton"], fila["canal_venta"]), ("primera_vez", "Canal VIP"))
         self.assertIsNone(fila["carpeta"])
@@ -262,6 +266,7 @@ class TestServicio(unittest.TestCase):
 
     def test_real_crea_y_mueve_carpetas(self):
         codigo, peticiones, fila, _ = self.ejecutar(simular=False)
+        self.assertEqual(self.modo_candado, "lector")
         cambios = [p for p in peticiones if isinstance(p, functions.messages.UpdateDialogFilterRequest)]
         titulos = [p.filter.title.text if p.filter else f"borrar {p.id}" for p in cambios]
         self.assertEqual(titulos[0][2], ".")  # «MM.DD» de hoy

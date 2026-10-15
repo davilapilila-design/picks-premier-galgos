@@ -116,6 +116,7 @@ class Organizador:
         self.avisar = avisar or (lambda texto: None)
         self.reloj = reloj
         self._candado_creado = None
+        self._dia_simulado = None
 
     @property
     def _candado(self):
@@ -146,6 +147,17 @@ class Organizador:
         if fila["nombre"] and fila["username"]:
             return f"{fila['nombre']} (@{fila['username']})"
         return fila["nombre"] or (f"@{fila['username']}" if fila["username"] else str(user_id))
+
+    async def _al_dia(self):
+        """Simulación: al cambiar de día se vuelve a partir de las carpetas
+        reales, para ver las que el dueño haya creado o borrado a mano (lo
+        simulado el día anterior se olvida)."""
+        if not self.aj.simular:
+            return
+        hoy = self._hoy()
+        if self._dia_simulado not in (None, hoy) and hasattr(self.tg, "refrescar"):
+            await self.tg.refrescar()
+        self._dia_simulado = hoy
 
     def _informar(self, texto):
         if self.aj.simular:
@@ -278,6 +290,7 @@ class Organizador:
                 db.registrar_evento(self.con, ahora, "carpeta_borrada", None, carpeta=carpeta.titulo)
 
     async def _a_carpeta_del_dia(self, user_id, dia):
+        await self._al_dia()
         titulo = titulo_dia(dia)
         await self._quitar_de_dias(user_id, salvo=titulo)
         carpetas = await self.tg.carpetas()
@@ -300,6 +313,7 @@ class Organizador:
         await self._rotar_sin_candado()
 
     async def _a_free_send(self, user_id):
+        await self._al_dia()
         await self._quitar_de_dias(user_id)
         carpetas = await self.tg.carpetas()
         fs = next((c for c in carpetas if self._es_free_send(c)), None)
@@ -337,6 +351,7 @@ class Organizador:
 
     async def rotar(self):
         async with self._candado:
+            await self._al_dia()
             await self._rotar_sin_candado()
 
     async def _rotar_sin_candado(self):
@@ -371,6 +386,14 @@ class CarpetasEnMemoria:
     @classmethod
     async def desde(cls, real, **kwargs):
         return cls(await real.carpetas(), real=real, **kwargs)
+
+    async def refrescar(self):
+        """Olvida lo simulado y vuelve a partir de las carpetas reales de ahora."""
+        if self.real is None:
+            return
+        carpetas = await self.real.carpetas()
+        self._carpetas = {c.id: c for c in carpetas}
+        self._orden = [c.id for c in carpetas]
 
     async def carpetas(self):
         return [self._carpetas[i] for i in self._orden]
