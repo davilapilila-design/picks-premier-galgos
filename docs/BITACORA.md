@@ -47,9 +47,18 @@ Entradas más recientes arriba.
 - No resuelto, de antes: la barra superior del panel (`position:sticky`)
   nunca se queda fija al hacer scroll (el `overflow-x:hidden` de
   `html,body` lo impide) - igual en las dos versiones.
-- **Pendiente del dueño**: sustituir en WordPress el bloque del iframe por
-  el de `docs/wordpress-panel.html`. Hasta entonces la web sigue con el
-  iframe, que funciona como antes.
+- El dueño pegó el bloque en WordPress el mismo día. Primera carga suya:
+  >20 s; medido después en la web real `premiergalgos.com` (Playwright,
+  navegador limpio): panel con datos en 2,0-3,3 s (WordPress 0,6-1,5 s +
+  Apps Script ~1 s + entrega 0,2-0,6 s), y `?formato=js` cada 3 min:
+  1,9-2,2 s. Lo de >20 s fue casi seguro un arranque en frío de Apps
+  Script justo tras desplegar + caché fría (segunda petición a json). El
+  dueño confirmó que ya no tarda y prefirió dejarlo así. Si los arranques en
+  frío molestan en el futuro, opciones valoradas y NO hechas: (A) guardar el
+  último panel en localStorage del visitante y refrescar en segundo plano;
+  (B) que Apps Script publique el panel con los datos dentro de la propia
+  página de WordPress vía REST (contraseña de aplicación) - ningún visitante
+  esperaría a Google.
 - Commits: (este commit)
 
 ## 2026-10-18 (cont.) — Panel en móvil: viewport en la página exterior (desplegado, v33)
