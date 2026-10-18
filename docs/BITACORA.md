@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 (cont.) — Panel en móvil: viewport en la página exterior (desplegado, v33)
+- Revisando el panel en vivo con Playwright (URL pública, ya con
+  `script.google.com` y `*.googleusercontent.com` permitidos en la red del
+  entorno): abriendo el **enlace directo en un móvil** se pintaba a 980 px
+  de ancho, el diseño de escritorio encogido. Fallo de siempre, no de la v32:
+  Apps Script sirve el panel en un iframe y la página exterior de Google no
+  lleva `<meta name="viewport">` (el de Panel.html no cuenta ahí). Dentro de
+  WordPress no pasaba (manda el viewport de la web).
+- Arreglo: `.addMetaTag('viewport', 'width=device-width, initial-scale=1')`
+  en `doGet` (método oficial de HtmlService). Comprobado en vivo: ancho 390
+  px, sin scroll horizontal, diseño móvil.
+- Medido en vivo (6 cargas en frío, navegador limpio cada vez): datos en
+  pantalla en ~2,6 s de mediana (2,2-2,9 s), de los que 1,0-1,5 s son la
+  página envoltorio de Google. Datos incrustados en el HTML, sin error JS;
+  filtros, "Ver más", mensaje original y resumen OK en móvil y escritorio.
+- Commits: (este commit)
+
 ## 2026-10-18 — Panel: velocidad de carga (caché + datos incrustados + lectura acotada)
 Revisión de por qué el panel tardaba tanto en cargar. Causas encontradas, por
 orden de peso:

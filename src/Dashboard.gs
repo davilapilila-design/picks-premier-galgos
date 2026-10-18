@@ -639,6 +639,12 @@ function doGet(e) {
   return plantilla
     .evaluate()
     .setTitle('Panel de métricas - Picks Premier Galgos')
+    // El <meta name="viewport"> de Panel.html no basta: Apps Script sirve el
+    // panel dentro de un iframe, y la página EXTERIOR (la de Google) no lo
+    // lleva - en el móvil, abriendo el enlace directo, se pintaba a 980 px
+    // de ancho (diseño de escritorio encogido). Visto con Playwright
+    // 2026-10-18. Dentro de WordPress no pasaba (manda el viewport de la web).
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     // Permite que el panel se incruste en un <iframe> desde otro dominio
     // (petición del dueño: quiere el panel dentro de su web de WordPress).
     // Por defecto Apps Script solo deja enmarcarlo desde el propio Google -
