@@ -60,10 +60,21 @@ function normalizarTexto_(v) {
   return String(v).trim().toLowerCase();
 }
 
+// La zona horaria de la hoja no cambia dentro de una ejecución: se lee una
+// sola vez (es una llamada al servicio de Sheets) en vez de una vez por
+// cada fecha normalizada - el panel (Dashboard.gs) la llamaba una vez POR
+// PATA, cientos de llamadas por visita (2026-10-18, ver docs/BITACORA.md).
+let tzHojaMemo_ = null;
+function tzHoja_() {
+  if (tzHojaMemo_ === null) {
+    tzHojaMemo_ = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  }
+  return tzHojaMemo_;
+}
+
 function normalizarFechaISO_(v) {
-  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   if (v instanceof Date && !isNaN(v.getTime())) {
-    return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+    return Utilities.formatDate(v, tzHoja_(), 'yyyy-MM-dd');
   }
   if (typeof v === 'number' && !isNaN(v)) {
     // Serial de fecha de Sheets: días desde 1899-12-30.
@@ -75,7 +86,7 @@ function normalizarFechaISO_(v) {
     const dmy = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (dmy) return dmy[3] + '-' + ('0' + dmy[2]).slice(-2) + '-' + ('0' + dmy[1]).slice(-2);
     const d = new Date(texto);
-    if (!isNaN(d.getTime())) return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    if (!isNaN(d.getTime())) return Utilities.formatDate(d, tzHoja_(), 'yyyy-MM-dd');
     return texto;
   }
   return '';

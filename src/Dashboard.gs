@@ -284,6 +284,28 @@ function formatearFechaCarreraLabel_(v) {
 }
 
 /**
+ * Filas de datos de una pestaña SIN las filas de margen: `apuestas` y
+ * `apuestas_patas` traen las columnas fórmula pre-rellenadas hasta la fila
+ * 2000/5000 (ver Setup.gs), así que `getLastRow()` devuelve esa fila lejana
+ * y leer hasta ahí hacía que el panel trajera ~120.000 celdas en cada
+ * visita cuando solo unos cientos de filas tienen un pick (2026-10-18, ver
+ * docs/BITACORA.md). Se lee primero solo la columna `message_id` (nunca
+ * tiene fórmulas, mismo criterio que proximaFilaVacia_ en Sheets.gs) para
+ * saber dónde acaba el último pick real, y después solo ese bloque. Busca
+ * el ÚLTIMO message_id no vacío (no el primer hueco), así que un hueco a
+ * mitad de la hoja no corta la lectura. Devuelve [] si no hay ninguno.
+ */
+function leerFilasConDatos_(sheet, index) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const ids = sheet.getRange(2, index['message_id'] + 1, lastRow - 1, 1).getValues();
+  let numFilas = ids.length;
+  while (numFilas > 0 && String(ids[numFilas - 1][0]) === '') numFilas--;
+  if (numFilas === 0) return [];
+  return sheet.getRange(2, 1, numFilas, sheet.getLastColumn()).getValues();
+}
+
+/**
  * Lee `apuestas_patas` completa de una vez (igual que Auditoria.gs, más
  * barato que una lectura por fila) y la agrupa por `message_id`, una
  * entrada por CARRERA del pick (dobles/triples incluidos), ordenadas por
@@ -293,11 +315,9 @@ function formatearFechaCarreraLabel_(v) {
 function obtenerPatasPorMensaje_() {
   const sheet = getSheet_(SHEET_APUESTAS_PATAS);
   const index = getHeaderIndex_(sheet);
-  const lastRow = sheet.getLastRow();
   const porMensaje = {};
-  if (lastRow < 2) return porMensaje;
 
-  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const datos = leerFilasConDatos_(sheet, index);
   datos.forEach(function (fila) {
     const messageId = String(fila[index['message_id']] || '');
     if (!messageId) return;
@@ -328,10 +348,8 @@ function obtenerPatasPorMensaje_() {
 function obtenerFilasExoticasNormalizadas_() {
   const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
   const index = getHeaderIndex_(sheet);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
 
-  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const datos = leerFilasConDatos_(sheet, index);
   return datos.map(function (fila) {
     const tipoApuesta = fila[index['tipo_apuesta']];
     const nombre = tipoApuesta === 'trio' ? 'Trío' : 'Gemela';
@@ -355,7 +373,8 @@ function obtenerFilasExoticasNormalizadas_() {
 }
 
 /**
- * Llamada desde el cliente (Panel.html) vía google.script.run. Lee
+ * Calcula desde la hoja todo lo que pinta el panel (lo sirve
+ * getMetricasPanel, normalmente desde caché - ver más abajo). Lee
  * `apuestas` completa una sola vez y la reparte en dos vistas, ambas de
  * TODO el histórico (sin ventana de fecha ni límite de filas - revertido
  * 2026-08-27, ver el historial de cambios en la cabecera del archivo):
@@ -370,13 +389,12 @@ function obtenerFilasExoticasNormalizadas_() {
  * unidades reales de la hoja). Ver TASA_EUR_POR_UNIDAD en Config.gs y la
  * excepción documentada en CLAUDE.md.
  */
-function getMetricasPanel() {
+function construirDatosPanel_() {
   const sheet = getSheet_(SHEET_APUESTAS);
   const index = getHeaderIndex_(sheet);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { hayDatos: false, historicoPicks: [] };
 
-  const datos = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const datos = leerFilasConDatos_(sheet, index);
+  if (datos.length === 0) return { hayDatos: false, historicoPicks: [] };
   const filas = datos.map(function (fila) {
     return {
       messageId: String(fila[index['message_id']] || ''),
@@ -398,10 +416,14 @@ function getMetricasPanel() {
   const patasPorMensaje = obtenerPatasPorMensaje_();
 
   const historicoPicks = calcularHistoricoPicks_(filasCombinadas).map(function (p) {
+    // Un solo formatDate por pick (antes 3, uno por etiqueta) y las tres
+    // etiquetas se recortan de ahí - mismo resultado, menos llamadas.
+    const f = Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'yyyy-MM-dd HH:mm');
+    const fechaLabel = f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4);
     return {
-      fechaLabel: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'dd/MM/yyyy'),
-      fechaISO: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'yyyy-MM-dd'),
-      fechaHoraLabel: Utilities.formatDate(p.fechaPick, 'Europe/Madrid', 'dd/MM/yyyy HH:mm'),
+      fechaLabel: fechaLabel,
+      fechaISO: f.slice(0, 10),
+      fechaHoraLabel: fechaLabel + ' ' + f.slice(11, 16),
       cuota: p.cuota,
       unidades: Math.round(p.unidadesNetas * 100) / 100,
       stake: Math.round(p.stake * 100) / 100,
@@ -434,6 +456,156 @@ function getMetricasPanel() {
   };
 }
 
+// Caché del panel (2026-10-18, ver docs/BITACORA.md). Sin ella, CADA
+// visita abría la hoja y recalculaba todo (varios segundos). La respuesta
+// de construirDatosPanel_ se guarda en CacheService comprimida (gzip +
+// base64: los mensajes originales de todos los picks pasan de los 100 KB
+// que admite un solo valor) y troceada por si aun así no cabe.
+// - TTL de 15 min y disparador refrescarCachePanel cada 10 min
+//   (configurarTriggerCachePanel): la caché no llega a caducar nunca, así
+//   que ningún visitante paga el cálculo. Retraso máximo de un cambio
+//   hecho directamente en la hoja (o por la VM en resultados_galgos) en
+//   verse en el panel: ~10 min.
+// - Los cambios que pasan por el bot (doPost, resolverApuestasExoticas)
+//   la invalidan al momento (invalidarCachePanel_), así que un "ganó"/
+//   "perdió" se ve en la siguiente carga.
+// - Si la caché falla por lo que sea, se calcula en directo como antes: la
+//   caché nunca puede dejar el panel sin datos, solo hacerlo más rápido.
+// El prefijo lleva versión: si cambia la forma de los datos, subir v1->v2
+// para que no se lea nunca un formato viejo tras un despliegue.
+const CACHE_PANEL_PREFIJO = 'panel_v1_';
+const CACHE_PANEL_TTL_SEG = 15 * 60;
+const CACHE_PANEL_TROZO = 90000; // < 100 KB por valor de CacheService
+
+function serializarCachePanel_(datos) {
+  const blob = Utilities.newBlob('', 'application/json').setDataFromString(JSON.stringify(datos), 'UTF-8');
+  const b64 = Utilities.base64Encode(Utilities.gzip(blob).getBytes());
+  const trozos = [];
+  for (let i = 0; i < b64.length; i += CACHE_PANEL_TROZO) {
+    trozos.push(b64.slice(i, i + CACHE_PANEL_TROZO));
+  }
+  return trozos;
+}
+
+function deserializarCachePanel_(trozos) {
+  const bytes = Utilities.base64Decode(trozos.join(''));
+  const json = Utilities.ungzip(Utilities.newBlob(bytes, 'application/x-gzip')).getDataAsString('UTF-8');
+  return JSON.parse(json);
+}
+
+function guardarCachePanel_(datos) {
+  const trozos = serializarCachePanel_(datos);
+  const valores = {};
+  trozos.forEach(function (t, i) { valores[CACHE_PANEL_PREFIJO + i] = t; });
+  // El índice va en el mismo putAll que los trozos: si no está, no se lee.
+  valores[CACHE_PANEL_PREFIJO + 'n'] = String(trozos.length);
+  CacheService.getScriptCache().putAll(valores, CACHE_PANEL_TTL_SEG);
+}
+
+/** null si no hay caché (o falta algún trozo) - nunca lanza. */
+function leerCachePanel_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const n = Number(cache.get(CACHE_PANEL_PREFIJO + 'n'));
+    if (!n) return null;
+    const claves = [];
+    for (let i = 0; i < n; i++) claves.push(CACHE_PANEL_PREFIJO + i);
+    const valores = cache.getAll(claves);
+    const trozos = claves.map(function (k) { return valores[k]; });
+    if (trozos.some(function (t) { return !t; })) return null;
+    return deserializarCachePanel_(trozos);
+  } catch (err) {
+    Logger.log('leerCachePanel_: ' + err);
+    return null;
+  }
+}
+
+/** Basta con borrar el índice: sin él leerCachePanel_ ya no lee los trozos. */
+function invalidarCachePanel_() {
+  try {
+    CacheService.getScriptCache().remove(CACHE_PANEL_PREFIJO + 'n');
+  } catch (err) {
+    Logger.log('invalidarCachePanel_: ' + err);
+  }
+}
+
+/**
+ * Llamada desde el cliente (Panel.html) vía google.script.run cuando la
+ * página no trae ya los datos incrustados (ver doGet) o al pulsar
+ * "Reintentar". Sirve de la caché si la hay; si no, calcula y la rellena.
+ */
+function getMetricasPanel() {
+  const enCache = leerCachePanel_();
+  if (enCache) return enCache;
+  const datos = construirDatosPanel_();
+  try {
+    guardarCachePanel_(datos);
+  } catch (err) {
+    Logger.log('getMetricasPanel: no se pudo guardar en caché: ' + err);
+  }
+  return datos;
+}
+
+/**
+ * Lo llama el disparador de configurarTriggerCachePanel: recalcula SIEMPRE
+ * (no mira la caché) y la reescribe, para que los visitantes nunca la
+ * encuentren caducada.
+ */
+function refrescarCachePanel() {
+  guardarCachePanel_(construirDatosPanel_());
+}
+
+/**
+ * Ejecutar UNA VEZ a mano desde el editor para instalar el disparador
+ * periódico - mismo patrón que configurarTriggerReintentos (Main.gs). Sin
+ * él el panel sigue funcionando (la caché se rellena en la primera visita
+ * tras caducar), solo que esa visita va lenta.
+ */
+function configurarTriggerCachePanel() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'refrescarCachePanel') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger('refrescarCachePanel').timeBased().everyMinutes(10).create();
+  refrescarCachePanel();
+  Logger.log('Disparador instalado: refrescarCachePanel cada 10 minutos (y caché ya rellenada).');
+}
+
+/**
+ * Ejecutar A MANO desde el editor (Ejecutar > test_cachePanel) tras cada
+ * cambio en la serialización - mismo patrón que los demás test_ de este
+ * archivo. No toca la caché real: solo comprueba ida y vuelta.
+ */
+function test_cachePanel() {
+  // Texto pseudoaleatorio (comprime mal) para forzar más de un trozo.
+  let semilla = 1;
+  let ruido = '';
+  for (let i = 0; i < 200000; i++) {
+    semilla = (semilla * 16807) % 2147483647;
+    ruido += String.fromCharCode(33 + Math.floor(semilla / 65536) % 90);
+  }
+  const datos = { hayDatos: true, roiPct: 12.3, pctCuotaBajada: null, historicoPicks: [{ mensaje: 'ñ € 🐕 </script> ' + ruido }] };
+  const trozos = serializarCachePanel_(datos);
+  if (trozos.length < 2) throw new Error('FALLO en test_cachePanel: se esperaban varios trozos, hay ' + trozos.length);
+  const vuelta = deserializarCachePanel_(trozos);
+  assertIguales_(JSON.stringify(vuelta), JSON.stringify(datos), 'ida y vuelta de la caché (varios trozos, acentos, emoji, null)');
+  Logger.log('test_cachePanel: OK, todas las comprobaciones pasaron.');
+}
+
+/**
+ * JSON para incrustar dentro de un <script> del HTML: se escapan "<"
+ * (un "</script>" dentro de un mensaje de Telegram cerraría la etiqueta)
+ * y los separadores de línea U+2028/U+2029 (válidos en JSON, no en JS
+ * antiguo). Sigue siendo JSON válido, JSON.parse da lo mismo.
+ */
+function jsonParaScript_(datos) {
+  return JSON.stringify(datos)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 /**
  * Punto de entrada web (GET). Apps Script enruta GET -> doGet y POST ->
  * doPost (webhook de Telegram, en Main.gs) dentro del mismo despliegue de
@@ -447,7 +619,14 @@ function getMetricasPanel() {
  * como pide el plan; el HTML se renombró para evitar el choque.
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Panel')
+  const plantilla = HtmlService.createTemplateFromFile('Panel');
+  // Si la caché está caliente, los datos van ya dentro del HTML y el panel
+  // se pinta sin el segundo viaje de google.script.run (que es lo que más
+  // tardaba). Si no, "null" y Panel.html los pide como siempre - aquí NO
+  // se calcula nunca en directo: dejaría la página en blanco (sin el
+  // esqueleto de carga) mientras tanto.
+  plantilla.datosInicialesJson = jsonParaScript_(leerCachePanel_());
+  return plantilla
     .evaluate()
     .setTitle('Panel de métricas - Picks Premier Galgos')
     // Permite que el panel se incruste en un <iframe> desde otro dominio

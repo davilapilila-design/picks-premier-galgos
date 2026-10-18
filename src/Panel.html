@@ -6,7 +6,10 @@
 <title>Premier Galgos · Track Record</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Fuente sin bloquear el primer pintado: se carga como "print" y pasa a
+     "all" al llegar (con display=swap se ve la fuente del sistema mientras). -->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 <style>
   *,*::before,*::after{box-sizing:border-box}
   :root{
@@ -681,7 +684,11 @@
   var rt; window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(drawChart,120); });
   bindChart();
 
-  cargar();
+  // doGet incrusta los datos si la caché del servidor está caliente (ver
+  // Dashboard.gs): se pinta al instante, sin el viaje de google.script.run.
+  // Si vienen a null (caché fría), se piden como siempre.
+  var inicial = <?!= datosInicialesJson ?>;
+  if (inicial) pintarPanel(inicial); else cargar();
 })();
 </script>
 </body>

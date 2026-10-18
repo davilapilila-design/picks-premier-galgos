@@ -3,6 +3,50 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Panel: velocidad de carga (caché + datos incrustados + lectura acotada)
+Revisión de por qué el panel tardaba tanto en cargar. Causas encontradas, por
+orden de peso:
+1. **Sin caché**: cada visita abría la hoja y recalculaba todo en directo.
+2. **Dos viajes en serie**: primero llegaba el HTML (`doGet`) y solo después
+   el navegador pedía los datos con `google.script.run` (otro arranque del
+   runtime de Apps Script + lectura de la hoja).
+3. **Lectura de filas de margen**: `getLastRow()` en `apuestas`/
+   `apuestas_patas` devuelve la fila 2000/5000 (columnas fórmula
+   pre-rellenadas por `setupSheet`), así que el panel leía ~120.000 celdas
+   por visita aunque solo unos cientos de filas tengan un pick.
+4. `normalizarFechaISO_` (Auditoria.gs) llamaba a
+   `getSpreadsheetTimeZone()` (llamada al servicio de Sheets) **una vez por
+   pata** - cientos por visita.
+5. La fuente de Google Fonts bloqueaba el primer pintado.
+
+Cambios (sin tocar ningún cálculo, ni la hoja, ni sus fórmulas):
+- `Dashboard.gs`: `leerFilasConDatos_` lee primero la columna `message_id` y
+  después solo hasta el último pick real. `getMetricasPanel` pasa a servir
+  desde `CacheService` (gzip+base64, troceado en valores <100 KB, TTL 15 min);
+  el cálculo de siempre vive ahora en `construirDatosPanel_`. Un formatDate
+  por pick en vez de tres.
+- `doGet` incrusta los datos en el HTML **solo si la caché está caliente**
+  (si no, `null` y el panel los pide como antes: el peor caso es el de
+  siempre, nunca una página en blanco). JSON escapado (`<`, U+2028/2029)
+  para que un `</script>` en un mensaje de Telegram no rompa la página.
+- Nuevo disparador `refrescarCachePanel` cada 10 min
+  (`configurarTriggerCachePanel`, ejecutar UNA VEZ a mano) para que la caché
+  no caduque nunca. `doPost` y `resolverApuestasExoticas` la invalidan al
+  escribir, así un "ganó"/"perdió" se ve en la siguiente carga. Retraso
+  máximo de un cambio hecho a mano en la hoja o por la VM: ~10 min.
+- `Auditoria.gs`: la zona horaria de la hoja se lee una vez por ejecución
+  (`tzHoja_`), misma firma de `normalizarFechaISO_`.
+- `Panel.html`: usa los datos incrustados si vienen; fuente no bloqueante.
+- Verificado fuera de Apps Script (arnés en Node con la hoja simulada, 350
+  picks + filas de margen): salida JSON **idéntica byte a byte** a la del
+  código anterior; celdas leídas 122.221 → 21.971; llamadas a la zona
+  horaria 400 → 1; `test_calcularMetricas`, `test_calcularHistoricoPicks`,
+  `test_calcularPctCuotaBajada` y el nuevo `test_cachePanel` en OK. Panel
+  probado en Chromium por los dos caminos (incrustado y caché fría).
+- Pendiente en producción: `clasp push`, nueva versión del despliegue web,
+  ejecutar `configurarTriggerCachePanel` y `test_cachePanel` desde el editor.
+- Commits: (este commit)
+
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos
 reales de producción tras el lanzamiento del 8 sept. Desplegados en su

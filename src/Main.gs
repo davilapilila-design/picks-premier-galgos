@@ -48,6 +48,9 @@ function doPost(e) {
     } else {
       manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward);
     }
+    // El panel cachea sus datos (Dashboard.gs): un "ganó"/"perdió"/
+    // "ocultar" recién procesado debe verse en la siguiente carga.
+    invalidarCachePanel_();
 
     return HtmlService.createHtmlOutput('ok');
   } catch (err) {
@@ -598,6 +601,9 @@ function resolverApuestasExoticas() {
       resueltos++;
     }
 
+    // El panel cachea sus datos (Dashboard.gs): una gemela/trío recién
+    // resuelta debe verse ya, no tras el siguiente refresco.
+    if (resueltos > 0) invalidarCachePanel_();
     Logger.log('resolverApuestasExoticas: ' + resueltos + ' resuelta(s).');
   } finally {
     lock.releaseLock();
