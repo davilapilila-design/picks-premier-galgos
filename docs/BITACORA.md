@@ -26,7 +26,9 @@ Entradas más recientes arriba.
   si ya había uno reconocido, se queda el primero. La carpeta del día no
   depende del texto: vale cualquier mensaje. 131 pruebas, pasan en Python
   3.9, 3.12 y 3.13; la nueva falla sin el cambio.
-- Commits: (este commit)
+- Instalado en la VM por el dueño (`75355e0`, 21:43 UTC), con el lector
+  reiniciado con el código nuevo; sigue en simulación.
+- Commits: `75355e0`
 
 ## 2026-10-18 — Captación: cuenta principal del dueño conectada a la instancia de prueba (simulación)
 - **Qué**: el dueño actualizó la VM a `35b5530`, sacó el api_id/api_hash
