@@ -3,6 +3,31 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Captación: fase 4 preparada para la cuenta real (canal principal y api_id reutilizado)
+- **Qué**: el dueño da el visto bueno a la fase 4 en su cuenta real (solo
+  lectura). Antes de dársela a ejecutar, tres cambios:
+  - **Canal principal**: la instancia real aún no sabe cuál es (lo diría el
+    bot real, que es la fase 5). Sin él, los enlaces del canal principal
+    contarían como de venta. Ahora `leer-historico.sh`, si falta, pide un
+    enlace de invitación del canal, comprueba a qué canal lleva sin unirse
+    (modo nuevo `lector canal-de-enlace`, con el candado de solo lectura),
+    enseña su nombre y, si el dueño escribe SI, lo guarda en la
+    configuración. Sin terminal, se niega.
+  - **api_id/api_hash**: `conectar-cuenta.sh` ofrece reutilizar los de la
+    otra instancia (`configurar.sh <instancia> api-de <otra>`, solo con
+    órdenes internas de bash), para no copiarlos otra vez desde el móvil.
+  - **Histórico más aguantador**: espera sola hasta 15 min si Telegram pide
+    esperar (antes, a partir de 2 min se cortaba) y va diciendo por dónde
+    va (búsqueda y «Repasando chats: N de M»).
+- README: pasos de la fase 4 para la cuenta real; en la fase 5, `/miid`
+  para saber el id (con el canal ya guardado, «Iniciar» no lo da) y el
+  canal ya no hace falta configurarlo si se guardó en la fase 4.
+- Pruebas: 135, pasan en Python 3.9, 3.12 y 3.13. Los scripts, probados en
+  un entorno desechable con Telegram y systemd simulados: reutilizar o no
+  el api_id, confirmar o cancelar el canal, segunda pasada sin preguntas,
+  sin terminal.
+- Commits: (este commit)
+
 ## 2026-10-18 — Captación: fase 3 probada en simulación; el botón se reconoce también en mensajes posteriores
 - **Resto de la prueba** (cuenta principal, simulación), todo según las
   reglas:

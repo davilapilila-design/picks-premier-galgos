@@ -8,6 +8,7 @@
 #   bash /opt/premier-captacion/configurar.sh prueba canal -1001234567890
 #   bash /opt/premier-captacion/configurar.sh prueba sheet <enlace o id del Google Sheet>
 #   bash /opt/premier-captacion/configurar.sh prueba api               (api_id y api_hash de my.telegram.org; los pide)
+#   bash /opt/premier-captacion/configurar.sh real api-de prueba       (copia el api_id y el api_hash de la otra instancia)
 #   bash /opt/premier-captacion/configurar.sh prueba lector simulacion (el lector de carpetas solo avisa)
 #   bash /opt/premier-captacion/configurar.sh prueba lector real       (el lector de carpetas actúa)
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
@@ -121,6 +122,29 @@ case "$DATO" in
         poner "$ENV" CAPTACION_API_ID "$API_ID"
         poner "$ENV" CAPTACION_API_HASH "$API_HASH"
         echo "✓ api_id y api_hash guardados"
+        exit 0
+        ;;
+    api-de)
+        # Copia el api_id y el api_hash de la otra instancia: la misma
+        # aplicación de my.telegram.org vale para las dos. Solo con órdenes
+        # internas de bash (el api_hash no aparece en la lista de procesos).
+        case "$VALOR" in prueba|real) ;; *) fallo "Uso: bash $0 $INSTANCIA api-de <prueba|real>" ;; esac
+        [ "$VALOR" != "$INSTANCIA" ] || fallo "Tiene que ser la otra instancia."
+        ORIGEN="$DIR_CONFIG/$VALOR.env"
+        [ -f "$ORIGEN" ] || fallo "No existe $ORIGEN."
+        API_ID=""
+        API_HASH=""
+        while IFS= read -r linea || [ -n "$linea" ]; do
+            case "$linea" in
+                CAPTACION_API_ID=*) API_ID=${linea#*=} ;;
+                CAPTACION_API_HASH=*) API_HASH=${linea#*=} ;;
+            esac
+        done < "$ORIGEN"
+        [[ "$API_ID" =~ ^[0-9]{3,12}$ && "$API_HASH" =~ ^[0-9a-f]{32}$ ]] \
+            || fallo "En «$VALOR» no hay un api_id y un api_hash válidos."
+        poner "$ENV" CAPTACION_API_ID "$API_ID"
+        poner "$ENV" CAPTACION_API_HASH "$API_HASH"
+        echo "✓ api_id y api_hash copiados de «$VALOR»"
         exit 0
         ;;
     lector)

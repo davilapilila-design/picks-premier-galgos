@@ -84,8 +84,9 @@ uno explícito aparte.
    «free send». El modo real es la fase 6.*
 4. **Lectura del histórico de la cuenta real** (solo lectura): bienvenidas
    manuales antiguas y respuestas pasadas, para no repetir bienvenidas y
-   comparar manual frente a bot. ⏳ *Programado (2026-10-15): se prueba
-   antes con la secundaria; en la cuenta real, solo con su visto bueno.*
+   comparar manual frente a bot. ⏳ *Visto bueno del dueño para hacerla en
+   su cuenta real (2026-10-18). Como el bot real aún no existe, la primera
+   vez se pregunta cuál es el canal principal con un enlace suyo.*
 5. **Producción del bot**: el bot real pasa a administrar PREMIER GALGOS.
    Justo antes, el dueño acepta a mano las solicitudes que haya pendientes
    (el bot no ve las anteriores a su activación).

@@ -313,5 +313,61 @@ class TestIniciarSesion(unittest.TestCase):
         self.assertEqual(self.iniciar(fallos=3), (1, 3))
 
 
+@unittest.skipIf(types is None, "telethon no está instalado")
+class TestCanalDeEnlace(unittest.TestCase):
+    """leer-historico.sh pregunta así cuál es el canal principal."""
+
+    def ejecutar(self, respuesta, enlace="https://t.me/+PRINCIPAL000001"):
+        from unittest import mock
+
+        from premier_captacion import lector
+
+        self.peticiones = []
+        peticiones = self.peticiones
+
+        class Cliente:
+            async def connect(self):
+                pass
+
+            async def is_user_authorized(self):
+                return True
+
+            async def __call__(self, peticion):
+                peticiones.append(peticion)
+                if isinstance(respuesta, Exception):
+                    raise respuesta
+                return respuesta
+
+            async def disconnect(self):
+                pass
+
+        with mock.patch.object(lector, "crear_cliente", return_value=Cliente()) as crear, \
+                mock.patch("builtins.print") as impreso:
+            codigo = asyncio.run(lector.canal_de_enlace(TestIniciarSesion.ENTORNO, enlace))
+        self.crear = crear
+        return codigo, [c.args[0] for c in impreso.call_args_list]
+
+    def canal(self, **extra):
+        return types.Channel(id=555, title="PREMIER GALGOS", photo=types.ChatPhotoEmpty(), date=None, **extra)
+
+    def test_dice_el_id_y_el_nombre_del_canal(self):
+        codigo, impreso = self.ejecutar(types.ChatInviteAlready(chat=self.canal(broadcast=True)))
+        self.assertEqual((codigo, impreso), (0, ["-100555\tPREMIER GALGOS"]))
+        self.assertEqual(self.crear.call_args.args[3], "historico")  # solo lectura
+        self.assertEqual(self.peticiones[0].hash, "PRINCIPAL000001")
+        guardia.comprobar(self.peticiones[0], "historico")
+
+    def test_si_no_es_un_canal_tuyo_no_dice_nada(self):
+        for respuesta in (types.ChatInviteAlready(chat=self.canal(megagroup=True)),  # un grupo
+                          SimpleNamespace(title="Otro canal"),                        # no estás dentro
+                          errors.InviteHashExpiredError(request=None)):
+            with self.subTest(respuesta=type(respuesta).__name__):
+                self.assertEqual(self.ejecutar(respuesta), (1, []))
+
+    def test_sin_enlace_ni_se_conecta(self):
+        self.assertEqual(self.ejecutar(None, enlace="hola"), (1, []))
+        self.crear.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

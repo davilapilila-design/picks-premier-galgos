@@ -310,11 +310,18 @@ toca carpetas ni envía nada (el candado no lo deja en este modo).
   `prueba` es la secundaria: desde ella, envía a tu principal un texto de
   bienvenida antiguo y luego
   `bash /opt/premier-captacion/leer-historico.sh prueba`.
-- **Tu cuenta real (solo con tu visto bueno)**:
-  `bash /opt/premier-captacion/conectar-cuenta.sh real` (en tu terminal; crea
-  la configuración de la instancia real, pero no instala ni arranca el bot
-  real ni el lector de carpetas) y después
-  `bash /opt/premier-captacion/leer-historico.sh real`.
+- **Tu cuenta real (solo con tu visto bueno)**. Desde el móvil, todo dentro
+  de `tmux new -s tg` (si se corta: `tmux attach -t tg`):
+  1. `bash /opt/premier-captacion/conectar-cuenta.sh real`: crea la
+     configuración de la instancia real (no instala ni arranca el bot real
+     ni el lector de carpetas). Te ofrece usar el mismo api_id y api_hash que
+     en «prueba» (escribe SI); después SI, tu teléfono y el código (a mano).
+  2. `bash /opt/premier-captacion/leer-historico.sh real`: la primera vez te
+     pide un enlace de invitación de tu canal principal (p. ej. el de la
+     descripción) para saber cuál es; comprueba a qué canal lleva, sin
+     unirse, te dice su nombre y, si escribes SI, lo guarda. Luego lee el
+     histórico: puede tardar un rato (si Telegram pide esperar, espera solo)
+     y va diciendo por dónde va. Al final escribe el resumen.
 
 ---
 
@@ -335,14 +342,16 @@ también la del bot.
    administrador» sigue activado. La URL no cambia.
 3. **VM**: `bash /opt/premier-captacion/instalar.sh real` (pide escribir SI y
    el token del bot real; los botones llevan a @Dronwhite).
-4. Abre el bot real con tu cuenta principal → «Iniciar» → te da tu id →
-   `bash /opt/premier-captacion/configurar.sh real propietario TU_ID`.
+4. Abre el bot real con tu cuenta principal y escríbele `/miid` → te da tu
+   id → `bash /opt/premier-captacion/configurar.sh real propietario TU_ID`.
 5. **Justo antes de activarlo**: acepta a mano las solicitudes pendientes del
    canal (el bot solo ve las que lleguen después).
 6. Haz administrador al bot en PREMIER GALGOS **solo con «Añadir
-   suscriptores»** → te escribe el id del canal →
-   `bash /opt/premier-captacion/configurar.sh real canal -100…`. Desde ese
-   momento las solicitudes se aceptan solas.
+   suscriptores»**. Si el canal ya quedó guardado en la fase 4 (te lo
+   preguntó `leer-historico.sh`), desde ese momento las solicitudes se
+   aceptan solas. Si no, te escribe el id del canal →
+   `bash /opt/premier-captacion/configurar.sh real canal -100…`, y desde
+   entonces se aceptan solas.
 7. `/estado` al bot real, y mira las primeras solicitudes reales.
 8. Sheet real: una hoja nueva («Captación PREMIER GALGOS»), compartida como
    editor con la cuenta de servicio →

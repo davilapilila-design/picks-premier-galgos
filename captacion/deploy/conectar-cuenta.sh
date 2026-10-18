@@ -34,8 +34,19 @@ if [ ! -f "$ENV" ]; then
     echo "Creada la configuración $ENV (el bot de esta instancia no se instala ni arranca)."
 fi
 if ! grep -qE '^CAPTACION_API_HASH=[0-9a-f]{32}$' "$ENV"; then
-    echo "Falta el api_id / api_hash de my.telegram.org (sección «API development tools»)."
-    CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" api
+    # La misma aplicación de my.telegram.org vale para las dos instancias.
+    OTRA=prueba
+    [ "$INSTANCIA" = prueba ] && OTRA=real
+    MISMOS=""
+    if grep -qE '^CAPTACION_API_HASH=[0-9a-f]{32}$' "/etc/premier-captacion/$OTRA.env" 2>/dev/null; then
+        read -r -p "¿Uso el mismo api_id y api_hash que en «$OTRA»? Escribe SI (si no, te los pido): " MISMOS
+    fi
+    if [ "$MISMOS" = SI ]; then
+        CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" api-de "$OTRA"
+    else
+        echo "Falta el api_id / api_hash de my.telegram.org (sección «API development tools»)."
+        CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" api
+    fi
 fi
 
 ESTABA=0

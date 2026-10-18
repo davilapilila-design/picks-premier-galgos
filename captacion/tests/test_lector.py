@@ -140,6 +140,20 @@ class TestEmbudoPrueba(unittest.TestCase):
             self.assertTrue(db.es_del_embudo(db.obtener_usuario(con, 123456789)))
 
 
+class TestLineaDeOrdenes(unittest.TestCase):
+    def test_argumentos(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as carpeta, \
+                mock.patch.dict(os.environ, {"CAPTACION_DB": os.path.join(carpeta, "p.db")}), \
+                mock.patch("builtins.print"):
+            self.assertEqual(lector.main(["embudo-prueba", "123456789"]), 0)
+            for malo in (["embudo-prueba"], ["embudo-prueba", "abc"], ["canal-de-enlace"]):
+                with self.subTest(malo), self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+                    lector.main(malo)
+
+
 class TestAvisador(unittest.TestCase):
     def test_los_avisos_llegan_en_orden(self):
         enviados = []

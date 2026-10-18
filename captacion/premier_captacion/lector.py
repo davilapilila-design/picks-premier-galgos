@@ -14,6 +14,9 @@ Modos:
                                                          (deploy/leer-historico.sh)
     python -m premier_captacion.lector embudo-prueba ID  solo pruebas: marca a alguien
                                                          como si hubiera recibido bienvenida
+    python -m premier_captacion.lector canal-de-enlace ENLACE
+                                                         a qué canal lleva un enlace (solo
+                                                         lectura; lo usa leer-historico.sh)
 
 Empieza SIEMPRE en modo simulación (CAPTACION_LECTOR_SIMULAR=1): avisa por
 el bot de lo que haría, sin tocar las carpetas. Para que actúe de verdad:
@@ -35,7 +38,7 @@ import sys
 import time
 
 from . import carpetas, db, guardia
-from .enlaces import textos_de
+from .enlaces import hashes_invitacion, textos_de
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
 
@@ -403,6 +406,38 @@ async def iniciar_sesion(entorno):
     return 0
 
 
+async def canal_de_enlace(entorno, texto):
+    """A qué canal lleva un enlace de invitación, sin unirse (solo lectura).
+    Lo usa leer-historico.sh para saber cuál es el canal principal: imprime
+    «-100…<tabulador>título», con el id en el formato de la Bot API."""
+    from telethon import errors
+    from telethon.tl import functions, types
+
+    hashes = hashes_invitacion([texto])
+    if not hashes:
+        log.error("Eso no parece un enlace de invitación (t.me/+…)")
+        return 1
+    api_id, api_hash, sesion = credenciales_api(entorno)
+    client = crear_cliente(sesion, api_id, api_hash, "historico")
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
+            return 2
+        try:
+            respuesta = await client(functions.messages.CheckChatInviteRequest(hash=hashes[0]))
+        except (errors.InviteHashExpiredError, errors.InviteHashInvalidError, errors.InviteHashEmptyError):
+            respuesta = None
+    finally:
+        await client.disconnect()
+    chat = getattr(respuesta, "chat", None)
+    if not isinstance(chat, types.Channel) or not chat.broadcast:
+        log.error("Ese enlace no lleva a un canal en el que estés (o ha caducado)")
+        return 1
+    print(f"-100{chat.id}\t{chat.title}")
+    return 0
+
+
 def marcar_embudo_prueba(cfg, user_id):
     """Solo pruebas: marca a alguien como si hubiera recibido la bienvenida."""
     con = db.abrir(cfg.db_path)
@@ -422,16 +457,20 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
-                        choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba"])
-    parser.add_argument("user_id", nargs="?", type=int, help="para embudo-prueba")
+                        choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace"])
+    parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba) o enlace (canal-de-enlace)")
     args = parser.parse_args(argv)
     entorno = os.environ
     try:
         cfg = cargar_config(entorno, requiere_bot=False)
         if args.modo == "embudo-prueba":
-            if args.user_id is None:
-                parser.error("embudo-prueba necesita el id de Telegram")
-            return marcar_embudo_prueba(cfg, args.user_id)
+            if not (args.dato or "").isdigit():
+                parser.error("embudo-prueba necesita el id de Telegram (un número)")
+            return marcar_embudo_prueba(cfg, int(args.dato))
+        if args.modo == "canal-de-enlace":
+            if not args.dato:
+                parser.error("canal-de-enlace necesita el enlace")
+            return asyncio.run(canal_de_enlace(entorno, args.dato))
         if args.modo == "iniciar-sesion":
             if not sys.stdin.isatty():
                 log.error("iniciar-sesion lo ejecuta el dueño en su terminal (pide el código de Telegram)")

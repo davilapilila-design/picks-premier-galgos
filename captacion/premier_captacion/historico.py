@@ -30,6 +30,10 @@ PALABRAS_BUSQUEDA = ("bienvenido", "bienvenida")
 _NEGRITA_PREMIER = mensajes.negrita("PREMIER GALGOS")
 MAX_MENSAJES_POR_CHAT = 500
 PAUSA_ENTRE_CHATS_S = 0.3
+# Si Telegram pide esperar (muchas consultas seguidas), se espera solo hasta
+# este tope en vez de dejarlo a medias: es una lectura larga que se hace una vez.
+ESPERA_MAXIMA_S = 15 * 60
+AVISO_PROGRESO_CADA = 100
 
 
 def tipo_bienvenida_manual(texto):
@@ -49,6 +53,7 @@ async def buscar_bienvenidas(client):
     encontradas = {}
     vistas = set()
     for palabra in PALABRAS_BUSQUEDA:
+        log.info("Buscando «%s» en tus chats…", palabra)
         async for m in client.iter_messages(None, search=palabra):
             clave = (getattr(m, "chat_id", None), m.id)
             if clave in vistas or not m.out or not m.is_private:
@@ -123,7 +128,10 @@ async def leer(client, con, org):
     log.info("Bienvenidas manuales encontradas: %d", len(encontradas))
     por_tipo = {}
     respondieron = con_enlace = 0
-    for user_id, (ts, tipo, msg_id, usuario) in sorted(encontradas.items(), key=lambda par: par[1][0]):
+    for n, (user_id, (ts, tipo, msg_id, usuario)) in enumerate(
+            sorted(encontradas.items(), key=lambda par: par[1][0]), start=1):
+        if n % AVISO_PROGRESO_CADA == 0:
+            log.info("Repasando chats: %d de %d", n, len(encontradas))
         por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
         apuntar_bienvenida(con, user_id, ts, tipo, usuario)
         await repasar_chat(client, con, org, user_id, msg_id)
@@ -152,6 +160,7 @@ async def ejecutar(cfg, entorno):
     aj = ajustes_desde(entorno, cfg)
     con = db.abrir(cfg.db_path)
     client = crear_cliente(sesion, api_id, api_hash, "historico")
+    client.flood_sleep_threshold = ESPERA_MAXIMA_S
     await client.connect()
     try:
         if not await client.is_user_authorized():
