@@ -1,0 +1,34 @@
+<!--
+  Panel de Premier Galgos para WordPress (bloque "HTML personalizado" de
+  https://premiergalgos.com/?page_id=9). Sustituye al <iframe> anterior.
+  Ver docs/BITACORA.md 2026-10-18 y construirScriptWordpress_ en
+  src/Dashboard.gs.
+
+  - Pide el panel a Apps Script SIN cookies (credentials: "omit"): así
+    Google lo trata siempre como visitante anónimo y no sale el error de
+    Google Drive "No se puede abrir el archivo en estos momentos" a quien
+    tenga sesión de Google abierta (varias cuentas).
+  - Ocupa la pantalla completa por encima del tema, igual que el iframe
+    (se mueve a hijo directo de <body>, mismo truco que el 2026-08-27).
+  - Los cambios del panel se publican con clasp push + desplegar: este
+    bloque no hay que volver a tocarlo.
+-->
+<div id="pg-panel" style="margin:0;padding:0;border:0;max-width:none;width:auto;position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;overflow-y:auto;overflow-x:hidden;background:#0a0e13;-webkit-overflow-scrolling:touch"></div>
+<script>
+(function () {
+  var URL_PANEL = "https://script.google.com/macros/s/AKfycbynXi-jwc8nA4Z3wEx3NNrcVxDwiBKMRQHdrXx_5vdXzrYcItxBlijtD68k4g72ww/exec";
+  var host = document.getElementById("pg-panel");
+  document.body.appendChild(host);
+  window.PG_PANEL_URL = URL_PANEL;
+  fetch(URL_PANEL + "?formato=js", { credentials: "omit" })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .then(function (codigo) {
+      var s = document.createElement("script");
+      s.text = codigo;
+      document.head.appendChild(s);
+    })
+    .catch(function () {
+      host.innerHTML = '<p style="color:#9fb0bd;font-family:system-ui,sans-serif;text-align:center;padding:48px 16px">No se ha podido cargar el panel. <a style="color:#39FF14" target="_blank" rel="noopener" href="' + URL_PANEL + '">Ábrelo aquí</a>.</p>';
+    });
+})();
+</script>

@@ -3,6 +3,55 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 (cont. 2) — Panel en WordPress sin iframe ni cookies: adiós al "No se puede abrir el archivo" (desplegado, v34)
+- **Problema** (captura del dueño, móvil con sesión de Google abierta como
+  premiergalgos@gmail.com): `premiergalgos.com` mostraba la pantalla de
+  Google Drive "No se puede abrir el archivo en estos momentos" en vez del
+  panel. Mismo síntoma que el `/u/2/` del 2026-08-27. Causa: el iframe a
+  `script.google.com` lleva las cookies de Google del visitante y, con
+  sesión abierta (sobre todo con varias cuentas, lo normal en Android),
+  Google lo enruta por `/u/N/` y falla con las apps web anónimas. Fallo de
+  Google, sin arreglo dentro del panel (sale antes de ejecutar nuestro
+  código). Afecta a cualquier visitante con Google abierto, no solo al dueño.
+- **Solución**: el bloque de WordPress ya no es un iframe.
+  `docs/wordpress-panel.html` (pegar en el bloque "HTML personalizado" de
+  `?page_id=9`) pide `/exec?formato=js` con `fetch(..., {credentials:
+  "omit"})` - SIN cookies, siempre anónimo - y ejecuta lo que recibe.
+  `doGet` (`construirScriptWordpress_`) devuelve el panel entero montado en
+  un Shadow DOM (estilos aislados del tema en los dos sentidos) con los
+  datos de la caché ya dentro; si la caché está fría, el panel los pide a
+  `/exec?formato=json`, también sin cookies. Sigue a pantalla completa por
+  encima del tema (el contenedor se mueve a hijo de `<body>`, como el
+  arreglo del 2026-08-27).
+- `Panel.html` se partió en `PanelEstilos`/`PanelCuerpo`/`PanelScript`
+  (`iniciarPanelPG(root, inicial, pedirDatos)`), que usan TANTO el enlace
+  directo como el bloque de WordPress: una sola fuente. Para cambiar el
+  panel basta `clasp push` + desplegar; el bloque de WordPress no hay que
+  volver a tocarlo.
+- Las reglas `:root`/`html,body` pasan a un envoltorio `.pg-raiz` dentro
+  del shadow, no a `:host`: con `:host`, un tema con estilos sobre el
+  `div#pg-panel` colaba color/tamaño por herencia (visto en la prueba con
+  un tema agresivo a propósito).
+- `?formato=json` expone exactamente lo mismo que el panel público ya
+  enseñaba a cualquiera (sin login): no hay datos nuevos expuestos. No es
+  un endpoint para la VM (regla de CLAUDE.md intacta).
+- **Verificado en vivo** (v34) con Playwright, con una página que simula la
+  de WordPress y una cookie de Google puesta en el navegador: todas las
+  peticiones a Google salen **sin cookie**; panel con datos en ~1,6 s de
+  mediana (1,2-4,9 s; el iframe anterior ~2,6 s), sin aviso azul de Google,
+  sin errores JS, sin scroll horizontal en móvil; "Ver más", filtros y
+  mensaje original OK; también el camino con caché fría (fetch a json). El
+  enlace directo `/exec` sigue igual (2,6 s, datos incrustados). Los picos
+  de varios segundos son arranques en frío de Apps Script (también los
+  sufre el enlace directo): ejecución normal ~0,8-1,2 s + ~0,3 s de entrega.
+- No resuelto, de antes: la barra superior del panel (`position:sticky`)
+  nunca se queda fija al hacer scroll (el `overflow-x:hidden` de
+  `html,body` lo impide) - igual en las dos versiones.
+- **Pendiente del dueño**: sustituir en WordPress el bloque del iframe por
+  el de `docs/wordpress-panel.html`. Hasta entonces la web sigue con el
+  iframe, que funciona como antes.
+- Commits: (este commit)
+
 ## 2026-10-18 (cont.) — Panel en móvil: viewport en la página exterior (desplegado, v33)
 - Revisando el panel en vivo con Playwright (URL pública, ya con
   `script.google.com` y `*.googleusercontent.com` permitidos en la red del

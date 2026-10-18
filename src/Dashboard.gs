@@ -628,7 +628,93 @@ function obtenerFilasApuestas_() {
  * clasp push contra el proyecto real). Dashboard.gs conserva su nombre tal
  * como pide el plan; el HTML se renombró para evitar el choque.
  */
+/** Contenido de un .html del proyecto, para incluirlo desde Panel.html (`<?!= incluirHtml_('X') ?>`). */
+function incluirHtml_(nombre) {
+  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
+}
+
+/** Lo de dentro de la primera etiqueta <tag>...</tag> de un .html del proyecto. */
+function interiorDeEtiqueta_(nombre, tag) {
+  const html = incluirHtml_(nombre);
+  const ini = html.indexOf('<' + tag + '>');
+  const fin = html.lastIndexOf('</' + tag + '>');
+  if (ini === -1 || fin === -1) throw new Error('Falta <' + tag + '> en ' + nombre + '.html');
+  return html.slice(ini + tag.length + 2, fin);
+}
+
+const FUENTES_PANEL_URL = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap';
+
+/**
+ * Panel para WordPress (2026-10-18, ver docs/BITACORA.md). El iframe a
+ * script.google.com fallaba con "No se puede abrir el archivo en estos
+ * momentos" (pantalla de Google Drive) a cualquier visitante con sesión de
+ * Google abierta en el navegador, sobre todo con varias cuentas: el iframe
+ * lleva las cookies de Google y Google lo enruta por /u/N/, que falla con
+ * las apps web anónimas. Fallo de Google, sin arreglo desde el panel.
+ *
+ * Solución: el bloque de WordPress (docs/wordpress-panel.html) pide este
+ * JS con fetch(..., {credentials: 'omit'}) - SIN cookies, siempre anónimo -
+ * y lo ejecuta. Monta el panel en un Shadow DOM (sus estilos no chocan con
+ * los del tema y viceversa) con las MISMAS piezas que Panel.html
+ * (PanelEstilos/PanelCuerpo/PanelScript), y los datos de la caché ya
+ * dentro; si la caché está fría, los pide a ?formato=json, también sin
+ * cookies. Cambiar el panel = clasp push + desplegar, sin tocar WordPress.
+ */
+function construirScriptWordpress_() {
+  // En el Shadow DOM no hay <html>/<body> ni :root: esas reglas pasan a
+  // .pg-raiz, un envoltorio DENTRO del shadow. No vale ponerlas en :host:
+  // las reglas del tema que caigan sobre el propio div#pg-panel ganan a
+  // :host, y lo heredable (color, tamaño de letra...) se colaría dentro
+  // (visto en la prueba con un tema agresivo). Al envoltorio no llega
+  // ninguna regla del tema, y se le fija también lo heredable que el panel
+  // no define (lo que en una página normal pondría el navegador).
+  const css = interiorDeEtiqueta_('PanelEstilos', 'style')
+    .replace(':root{', '.pg-raiz{')
+    .replace('html,body{', '.pg-raiz{');
+  const reinicio = ':host{display:block;min-height:100%}' +
+    '.pg-raiz{min-height:100%;font-size:16px;line-height:normal;letter-spacing:normal;word-spacing:normal;' +
+    'text-transform:none;text-align:left;text-indent:0;font-weight:400;font-style:normal;white-space:normal}';
+  const cuerpo = '<div class="pg-raiz">' + incluirHtml_('PanelCuerpo') + '</div>';
+  const script = interiorDeEtiqueta_('PanelScript', 'script');
+  let urlServidor = '';
+  try { urlServidor = ScriptApp.getService().getUrl() || ''; } catch (err) { /* el bloque de WordPress la pasa igualmente */ }
+  return [
+    '(function(){',
+    '  var host = document.getElementById("pg-panel");',
+    '  if (!host || host.shadowRoot) return;',
+    '  var urlPanel = window.PG_PANEL_URL || ' + JSON.stringify(urlServidor) + ';',
+    '  if (!document.getElementById("pg-panel-fuentes")) {',
+    '    var l = document.createElement("link"); l.id = "pg-panel-fuentes"; l.rel = "stylesheet";',
+    '    l.href = ' + JSON.stringify(FUENTES_PANEL_URL) + '; document.head.appendChild(l);',
+    '  }',
+    '  var root = host.attachShadow({ mode: "open" });',
+    '  root.innerHTML = "<style>" + ' + jsonParaScript_(reinicio + css) + ' + "</style>" + ' + jsonParaScript_(cuerpo) + ';',
+    script,
+    '  iniciarPanelPG(root, ' + jsonParaScript_(leerCachePanel_()) + ', function(ok, fallo){',
+    '    fetch(urlPanel + "?formato=json", { credentials: "omit" })',
+    '      .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })',
+    '      .then(function(d){ if (d && d.error) fallo({ message: d.error }); else ok(d); }, fallo);',
+    '  });',
+    '})();',
+  ].join('\n');
+}
+
 function doGet(e) {
+  const formato = e && e.parameter && e.parameter.formato;
+  if (formato === 'json') {
+    let datos;
+    try {
+      datos = getMetricasPanel();
+    } catch (err) {
+      Logger.log('doGet formato=json: ' + err);
+      datos = { error: String(err && err.message || err) };
+    }
+    return ContentService.createTextOutput(JSON.stringify(datos)).setMimeType(ContentService.MimeType.JSON);
+  }
+  if (formato === 'js') {
+    return ContentService.createTextOutput(construirScriptWordpress_()).setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   const plantilla = HtmlService.createTemplateFromFile('Panel');
   // Si la caché está caliente, los datos van ya dentro del HTML y el panel
   // se pinta sin el segundo viaje de google.script.run (que es lo que más

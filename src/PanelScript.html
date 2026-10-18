@@ -1,0 +1,278 @@
+<script>
+/*
+ * Lógica del panel, compartida por las DOS formas de servirlo (2026-10-18,
+ * ver docs/BITACORA.md):
+ * - Panel.html (enlace directo /exec): root = document, pedirDatos usa
+ *   google.script.run.
+ * - Bloque de WordPress (doGet ?formato=js, Dashboard.gs): root = un
+ *   Shadow DOM dentro de la página de WordPress, pedirDatos usa fetch SIN
+ *   cookies contra ?formato=json.
+ * Por eso todo el acceso al DOM pasa por root ($ / root.addEventListener),
+ * nunca por document directamente.
+ * root: Document o ShadowRoot. inicial: datos de getMetricasPanel o null.
+ * pedirDatos(ok, fallo): pide los datos al servidor.
+ */
+function iniciarPanelPG(root, inicial, pedirDatos){
+  "use strict";
+  var $ = function(id){ return root.getElementById(id); };
+  var PAGE = 20;
+  var st = { data:null, filter:"all", shown:PAGE, pts:[], gran:"dia", desde:null, hasta:null };
+  var MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  function parseF(s){ var m=String(s||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m?new Date(+m[3],+m[2]-1,+m[1]):null; }
+  function granKey(s){
+    var d=parseF(s); if(!d) return s;
+    if(st.gran==="mes") return d.getFullYear()+"-"+d.getMonth();
+    var t=new Date(d); t.setDate(t.getDate()-((t.getDay()+6)%7));
+    return t.getFullYear()+"-"+t.getMonth()+"-"+t.getDate();
+  }
+  function granLabel(s){
+    var d=parseF(s); if(!d) return s;
+    if(st.gran==="mes") return MESES[d.getMonth()]+" "+d.getFullYear();
+    var t=new Date(d); t.setDate(t.getDate()-((t.getDay()+6)%7));
+    return ("0"+t.getDate()).slice(-2)+"/"+("0"+(t.getMonth()+1)).slice(-2);
+  }
+  function serie(){
+    var ev=(st.data&&st.data.evolucion)||[];
+    if(st.gran==="dia"||ev.length<3) return ev;
+    var out=[],k=null;
+    ev.forEach(function(p){
+      var kk=granKey(p.fechaLabel);
+      if(kk!==k){ out.push({fechaLabel:granLabel(p.fechaLabel),acumuladoEur:p.acumuladoEur,acumuladoUnidades:p.acumuladoUnidades}); k=kk; }
+      else { out[out.length-1].acumuladoEur=p.acumuladoEur; out[out.length-1].acumuladoUnidades=p.acumuladoUnidades; }
+    });
+    return out;
+  }
+
+  /* ---------- formato ---------- */
+  function nf(v,d){ return (v==null||isNaN(v)) ? "—" : Number(v).toLocaleString("es-ES",{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function eur(v,d){ return nf(v, d==null?2:d)+" €"; }
+  function sgn(v){ return v>0?"+":(v<0?"−":""); }
+  function signedEur(v){ return sgn(v)+eur(Math.abs(v)); }
+  function pct(v){ return sgn(v)+nf(Math.abs(v),1)+" %"; }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function show(id){ ["vLoad","vData","vEmpty","vError"].forEach(function(k){ $(k).classList.toggle("hidden", k!==id); }); }
+
+
+  /* ---------- gráfico SVG ---------- */
+  var ARROW_UP='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 12H4z"/></svg>';
+  var ARROW_DN='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20L4 8h16z"/></svg>';
+
+  function drawChart(){
+    var box=$("chartBox"), svg=$("chartSvg"), ev=serie();
+    if(!box||ev.length===0) return;
+    var w=box.clientWidth||320, h=box.clientHeight||190;
+    svg.setAttribute("viewBox","0 0 "+w+" "+h);
+    var pl=6, pr=8, pt=16, pb=10;
+    var vals=ev.map(function(p){ return Number(p.acumuladoEur)||0; });
+    var mn=Math.min.apply(null,vals.concat([0])), mx=Math.max.apply(null,vals.concat([0]));
+    if(mx===mn){ mx=mn+1; }
+    var pad=(mx-mn)*0.12; mx+=pad; mn-=pad*0.5;
+    var iw=w-pl-pr, ih=h-pt-pb, n=ev.length;
+    var X=function(i){ return n===1?pl+iw/2:pl+i*iw/(n-1); };
+    var Y=function(v){ return pt+(mx-v)/(mx-mn)*ih; };
+    st.pts=ev.map(function(p,i){ return {x:X(i), y:Y(Number(p.acumuladoEur)||0), v:Number(p.acumuladoEur)||0, u:Number(p.acumuladoUnidades)||0, d:p.fechaLabel}; });
+
+    var line="", area="";
+    st.pts.forEach(function(p,i){ line += (i?" L ":"M ")+p.x.toFixed(1)+" "+p.y.toFixed(1); });
+    area = line+" L "+st.pts[n-1].x.toFixed(1)+" "+(h-pb).toFixed(1)+" L "+st.pts[0].x.toFixed(1)+" "+(h-pb).toFixed(1)+" Z";
+    var zeroY=Y(0), last=st.pts[n-1];
+    var grid="";
+    [0.25,0.5,0.75].forEach(function(f){ var y=pt+ih*f; grid+='<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,.05)" stroke-width="1"/>'; });
+
+    svg.innerHTML =
+      '<defs><linearGradient id="pgFill" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="#39FF14" stop-opacity=".28"/><stop offset="100%" stop-color="#39FF14" stop-opacity="0"/></linearGradient>'+
+      '<filter id="pgBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="4"/></filter></defs>'+
+      grid+
+      (zeroY>pt&&zeroY<h-pb ? '<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+zeroY.toFixed(1)+'" y2="'+zeroY.toFixed(1)+'" stroke="rgba(255,255,255,.22)" stroke-width="1" stroke-dasharray="4 4"/>' : '')+
+      '<path d="'+area+'" fill="url(#pgFill)"/>'+
+      '<path d="'+line+'" fill="none" stroke="#39FF14" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity=".5" filter="url(#pgBlur)"/>'+
+      '<path d="'+line+'" fill="none" stroke="#39FF14" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
+      '<line id="pgCursor" x1="0" x2="0" y1="'+pt+'" y2="'+(h-pb)+'" stroke="rgba(57,255,20,.45)" stroke-width="1" opacity="0"/>'+
+      '<circle id="pgHover" r="5" fill="#0a0e13" stroke="#39FF14" stroke-width="2.5" opacity="0"/>'+
+      '<circle cx="'+last.x.toFixed(1)+'" cy="'+last.y.toFixed(1)+'" r="9" fill="#39FF14" opacity=".22" filter="url(#pgBlur)"/>'+
+      '<circle cx="'+last.x.toFixed(1)+'" cy="'+last.y.toFixed(1)+'" r="4.5" fill="#39FF14"/>';
+
+    $("xFirst").textContent = ev[0].fechaLabel||"";
+    $("xLast").textContent  = ev[n-1].fechaLabel||"";
+    var jorn=((st.data&&st.data.evolucion)||[]).length, np=((st.data&&st.data.historicoPicks)||[]).length;
+    var unidad = st.gran==="mes" ? " meses" : (st.gran==="sem" ? " semanas" : " jornadas");
+    $("chartSub").textContent = st.gran==="dia" ? (jorn+" jornadas · "+np+" picks") : (n+unidad+" · "+jorn+" jornadas · "+np+" picks");
+  }
+
+  function bindChart(){
+    var box=$("chartBox"), tip=$("chartTip");
+    if(!box) return;
+    function move(e){
+      if(!st.pts.length) return;
+      var r=box.getBoundingClientRect(), x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+      var best=0, bd=1e9;
+      st.pts.forEach(function(p,i){ var d=Math.abs(p.x-x); if(d<bd){ bd=d; best=i; } });
+      var p=st.pts[best], c=$("pgHover"), cur=$("pgCursor");
+      if(c){ c.setAttribute("cx",p.x); c.setAttribute("cy",p.y); c.setAttribute("opacity","1"); }
+      if(cur){ cur.setAttribute("x1",p.x); cur.setAttribute("x2",p.x); cur.setAttribute("opacity","1"); }
+      $("tipDate").textContent=p.d;
+      $("tipVal").textContent=sgn(p.u)+nf(Math.abs(p.u),2)+" UD";
+      $("tipVal").style.color = p.u>=0 ? "var(--acc)" : "var(--neg)";
+      $("tipSub").textContent=signedEur(p.v);
+      tip.style.top=p.y+"px"; tip.style.opacity="1";
+      var half=(tip.offsetWidth||140)/2, margin=6, boxW=box.clientWidth;
+      tip.style.left=Math.max(half+margin, Math.min(p.x, boxW-half-margin))+"px";
+    }
+    function out(){
+      tip.style.opacity="0";
+      var c=$("pgHover"), cur=$("pgCursor");
+      if(c) c.setAttribute("opacity","0");
+      if(cur) cur.setAttribute("opacity","0");
+    }
+    box.addEventListener("mousemove",move);
+    box.addEventListener("mouseleave",out);
+    box.addEventListener("touchstart",move,{passive:true});
+    box.addEventListener("touchmove",move,{passive:true});
+    box.addEventListener("touchend",out);
+  }
+
+  /* ---------- historial ---------- */
+  function filtered(){
+    var h=(st.data&&st.data.historicoPicks)||[];
+    if(st.filter==="win")  h=h.filter(function(p){ return Number(p.unidades)>0; });
+    if(st.filter==="loss") h=h.filter(function(p){ return Number(p.unidades)<=0; });
+    if(st.desde) h=h.filter(function(p){ return p.fechaISO && p.fechaISO>=st.desde; });
+    if(st.hasta) h=h.filter(function(p){ return p.fechaISO && p.fechaISO<=st.hasta; });
+    return h;
+  }
+
+  function fmtDur(mins){
+    if(mins==null||isNaN(mins)) return null;
+    var neg=mins<0, m=Math.abs(Math.round(mins)), h=Math.floor(m/60), r=m%60;
+    var txt=(h?h+"h ":"")+r+"m";
+    return neg ? txt+" después de la carrera" : txt+" antes de la carrera";
+  }
+  function parseFH(s){
+    var m=String(s||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    return m?new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]):null;
+  }
+  function patasHtml(p){
+    var envio=parseFH(p.fechaHoraLabel), patas=p.patas||[];
+    if(!patas.length) return "";
+    return patas.map(function(pt,i){
+      var carr=parseFH((pt.fechaCarreraLabel||p.fechaLabel)+" "+pt.horaCarrera);
+      var diff=(envio&&carr)?fmtDur((carr-envio)/60000):null;
+      var tag=patas.length>1?("Carrera "+(pt.numero||i+1)+": "):"";
+      return '<span>'+tag+esc(pt.horaCarrera)+(diff?' <s style="color:var(--dim2);text-decoration:none">· '+diff+'</s>':'')+'</span>';
+    }).join('<s style="color:var(--dim2);text-decoration:none"> &nbsp;·&nbsp; </s>');
+  }
+
+  function rowHtml(p,i){
+    var u=Number(p.unidades)||0, pos=u>0;
+    var msg=String(p.mensaje||"").trim();
+    return '<article class="row" data-open="false" style="animation-delay:'+Math.min(i*14,220)+'ms">'+
+      '<div class="row-main">'+
+        '<div class="row-meta"><span>'+esc(p.fechaLabel)+'</span><s class="row-hide-desk">·</s><span class="row-hide-desk">'+esc(p.canodromo)+'</span></div>'+
+        '<div class="row-id"><div class="row-dog">'+esc(p.galgo)+'</div><div class="row-cuota row-hide-desk">Cuota '+nf(p.cuota,2)+'</div></div>'+
+        '<div class="row-track row-track-desk">'+esc(p.canodromo)+'</div>'+
+        '<div class="row-cuota row-track-desk" style="font-size:13px;color:#fff">'+nf(p.cuota,2)+'</div>'+
+        '<div class="row-num"><span class="res '+(pos?"pos":"neg")+'">'+(pos?ARROW_UP:ARROW_DN)+sgn(u)+nf(Math.abs(u),2)+'<u>UD</u></span></div>'+
+        (msg?'<div class="row-foot"><button type="button" class="row-toggle">Mensaje original<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button></div>':'')+
+      '</div>'+
+      (msg?'<div class="row-msg"><u>PUBLICADO EN TELEGRAM</u>'+
+        '<div class="row-msg-meta">Enviado '+esc(p.fechaHoraLabel||p.fechaLabel)+(patasHtml(p)?'<s style="color:var(--dim2);text-decoration:none"> &nbsp;·&nbsp; </s>'+patasHtml(p):'')+'</div>'+
+        '<pre>'+esc(msg)+'</pre></div>':'')+
+    '</article>';
+  }
+
+  function renderRows(){
+    var list=filtered(), slice=list.slice(0,st.shown);
+    $("rows").innerHTML = slice.map(rowHtml).join("") ||
+      '<div class="card" style="padding:26px;text-align:center;color:var(--dim)">Sin picks en este filtro.</div>';
+    $("rowCount").textContent = "Mostrando "+slice.length+" de "+list.length+" picks";
+    $("more").classList.toggle("hidden", slice.length>=list.length);
+
+    var units=0, stakeTotal=0;
+    list.forEach(function(p){ units+=Number(p.unidades)||0; stakeTotal+=Number(p.stake)||0; });
+    var roi = stakeTotal===0 ? 0 : (units/stakeTotal)*100;
+    $("sumUnits").textContent = sgn(units)+nf(Math.abs(units),2)+" UD";
+    $("sumUnits").style.color = units>=0 ? "var(--acc)" : "var(--neg)";
+    $("sumRoi").textContent = pct(roi);
+    $("sumRoi").style.color = roi>=0 ? "var(--acc)" : "var(--neg)";
+  }
+
+  root.addEventListener("click",function(e){
+    var t=e.target.closest?e.target.closest(".row-toggle"):null;
+    if(t){ var row=t.closest(".row"); row.setAttribute("data-open", row.getAttribute("data-open")==="true"?"false":"true"); }
+    var st2=e.target.closest?e.target.closest("#sumToggle"):null;
+    if(st2){
+      var open=st2.getAttribute("aria-expanded")==="true";
+      st2.setAttribute("aria-expanded", open?"false":"true");
+      $("sumBox").setAttribute("data-open", open?"false":"true");
+      st2.childNodes[0].textContent = open ? "Ver resumen de estos picks " : "Ocultar resumen ";
+    }
+  });
+
+  /* ---------- pintar ---------- */
+  function pintarPanel(d){
+    if(!d){ mostrarError({message:"Respuesta vacía"}); return; }
+    st.data=d;
+    if(!d.hayDatos){ show("vEmpty"); return; }
+    var picks=d.historicoPicks||[], wins=picks.filter(function(p){ return Number(p.unidades)>0; }).length;
+    var net=Number(d.unidadesNetasEur)||0, up=net>=0;
+
+    $("figNum").innerHTML='<span>'+sgn(net)+nf(Math.abs(net),2)+'</span><span class="cur">€</span>';
+    $("figNum").style.color = up ? "var(--acc)" : "var(--neg)";
+    $("figSent").innerHTML='Sobre un volumen de <b>'+eur(d.stakeTotalEur)+'</b> apostados en <b>'+picks.length+' carreras</b> resueltas.';
+    $("figRoi").textContent=pct(d.roiPct);
+    $("figRoi").style.color = (Number(d.roiPct)>=0) ? "var(--acc)" : "var(--neg)";
+
+    $("mUnits").innerHTML=(Number(d.unidadesNetas)>=0?ARROW_UP:ARROW_DN)+' '+sgn(Number(d.unidadesNetas))+nf(Math.abs(Number(d.unidadesNetas)),2);
+    $("mUnits").style.cssText+=";display:flex;align-items:center;gap:7px;color:"+(Number(d.unidadesNetas)>=0?"var(--acc)":"var(--neg)");
+    $("mHit").textContent=nf(d.pctAciertos,1)+" %";
+    $("mHitSub").textContent=wins+" de "+picks.length+" picks ganados";
+    $("mStake").textContent=eur(d.stakeTotalEur,0);
+    $("mPicks").textContent=picks.length;
+
+    $("mPicksSub").textContent=(d.evolucion||[]).length+" jornadas con actividad";
+    $("mCuotaBajada").textContent = (d.pctCuotaBajada==null) ? "—" : nf(d.pctCuotaBajada,1)+" %";
+
+    $("cAll").textContent="("+picks.length+")";
+    $("cWin").textContent="("+wins+")";
+    $("cLoss").textContent="("+(picks.length-wins)+")";
+
+    show("vData");
+    st.shown=PAGE; renderRows(); drawChart();
+  }
+
+  function mostrarError(err){
+    $("errMsg").textContent=(err&&(err.message||err))||"Error desconocido";
+    show("vError");
+  }
+
+  function cargar(){
+    show("vLoad");
+    pedirDatos(pintarPanel, mostrarError);
+  }
+
+  $("btnRetry").addEventListener("click",cargar);
+  $("btnMore").addEventListener("click",function(){ st.shown+=PAGE; renderRows(); });
+  $("segGran").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    st.gran=b.getAttribute("data-g");
+    [].forEach.call(this.querySelectorAll("button"),function(x){ x.setAttribute("aria-pressed", String(x===b)); });
+    drawChart();
+  });
+  $("seg").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    st.filter=b.getAttribute("data-f"); st.shown=PAGE;
+    [].forEach.call(this.querySelectorAll("button"),function(x){ x.setAttribute("aria-pressed", String(x===b)); });
+    renderRows();
+  });
+  $("fDesde").addEventListener("change",function(){ st.desde=this.value||null; st.shown=PAGE; renderRows(); });
+  $("fHasta").addEventListener("change",function(){ st.hasta=this.value||null; st.shown=PAGE; renderRows(); });
+  $("fClear").addEventListener("click",function(){ st.desde=st.hasta=null; $("fDesde").value=""; $("fHasta").value=""; st.shown=PAGE; renderRows(); });
+  var rt; window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(drawChart,120); });
+  bindChart();
+
+  // Datos ya incrustados (caché del servidor caliente, ver Dashboard.gs):
+  // se pinta al instante. Si vienen a null, se piden con pedirDatos.
+  if (inicial) pintarPanel(inicial); else cargar();
+}
+</script>
