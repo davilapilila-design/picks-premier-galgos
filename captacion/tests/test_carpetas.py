@@ -127,6 +127,16 @@ class TestCarpetaDelDia(Base):
         self.assertEqual(self.eventos(500).count("te_escribe"), 1)
         self.assertEqual(db.obtener_usuario(self.con, 500)["boton"], "otro")
 
+    def test_si_primero_saluda_y_luego_responde_cuenta_la_respuesta(self):
+        self.del_embudo(500)
+        self.recibe(500, 1, "hola!")
+        self.assertEqual(db.obtener_usuario(self.con, 500)["boton"], "otro")
+        self.recibe(500, 2, "es la primera vez que apuesto")
+        self.assertEqual(db.obtener_usuario(self.con, 500)["boton"], "primera_vez")
+        self.recibe(500, 3, "bueno, ya he apostado alguna vez")  # vale lo primero que respondió
+        self.assertEqual(db.obtener_usuario(self.con, 500)["boton"], "primera_vez")
+        self.assertEqual(self.usuarios_de("15.10"), {500})  # la carpeta, con cualquier texto
+
     def test_al_dia_siguiente_cambia_de_carpeta(self):
         self.del_embudo(500)
         self.recibe(500, 1)

@@ -34,7 +34,7 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
 | Botones | «🏁 Ya he apostado» y «🆕 Es mi primera vez». Abren el chat de @Dronwhite con el texto ya escrito: «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» / «¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕» (cambiado durante las pruebas: el dueño no quería «Vengo de PREMIER GALGOS»). |
 | Si escriben al bot | Responde cada vez con «Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil…» y los dos botones. Ante una ráfaga de mensajes, una sola respuesta (pausa de 60 s). Atender dudas desde el bot a quien ya escribió al dueño: **más adelante**. |
 | Enlaces de entrada | `+VtCh-VrBHPpiMzg0` (descripción y web, se cuentan juntos) y `+om-eKd0-3OUyOGY0` (landing). Se guarda de cuál viene cada persona; conviene ponerles nombre en Telegram. |
-| Carpeta del día `DD.MM` | Día.mes, p. ej. `18.10` (el dueño lo corrigió el 2026-10-18: al principio se dijo mes.día). También vale `5.11` sin cero. Solo entra quien recibió alguna bienvenida (bot o manual). Si vuelve a escribir otro día sin haber recibido el enlace, pasa a la carpeta del día nuevo. Hora de España. Se adoptan las carpetas de días que el dueño ya tiene, también la de mañana si la crea antes de tiempo. |
+| Carpeta del día `DD.MM` | Día.mes, p. ej. `18.10` (el dueño lo corrigió el 2026-10-18: al principio se dijo mes.día). También vale `5.11` sin cero. Solo entra quien recibió alguna bienvenida (bot o manual). Si vuelve a escribir otro día sin haber recibido el enlace, pasa a la carpeta del día nuevo (reconfirmado por el dueño el 2026-10-18). Hora de España. Se adoptan las carpetas de días que el dueño ya tiene, también la de mañana si la crea antes de tiempo. |
 | Rotación | Se mantienen **5 días**; cada noche se borra la carpeta más antigua (los chats no se borran). La de hoy va **la última**. El dueño tiene 9 carpetas (7 de días + 2 suyas): quedan 5 + `free send` + 2 suyas = 8. Las suyas no se tocan nunca. |
 | `free send` | Un chat pasa aquí cuando el dueño envía un enlace de invitación `t.me/+…` (o `t.me/joinchat/…`) que **no** sea del canal principal (se comprueba a qué canal lleva, así vale para enlaces futuros). Se guarda qué enlace y qué canal de venta se le envió. Se queda con los ~90 chats más recientes (tope 100). Quien ya está en `free send` no vuelve a moverse. |
 | Bienvenidas antiguas | Se buscan en el histórico del dueño las dos versiones manuales («Buenas! Bienvenido a 𝗣𝗥𝗘𝗠𝗜𝗘𝗥 𝗚𝗔𝗟𝗚𝗢𝗦 🐕…» y «Buenos dias y bienvenido a Premier Galgos! 🐾…», y variantes) para no repetírsela a nadie. |
@@ -78,9 +78,10 @@ uno explícito aparte.
    simulación**, conectada a la instancia `prueba` (decisión del dueño,
    2026-10-15: ya tiene ahí sus carpetas de días). Allí solo cuenta como
    cliente la secundaria; sus clientes reales se ignoran. En simulación el
-   candado no deja ni pedir cambios de carpetas. ⏳ *Cuenta del dueño
-   conectada a `prueba` el 2026-10-18, en simulación: falta la prueba con
-   la secundaria (README, fase 3, paso 4).*
+   candado no deja ni pedir cambios de carpetas. ✅ *Probada en simulación
+   con la cuenta del dueño el 2026-10-18: carpeta del día (y cambio desde
+   una carpeta antigua), rotación, enlace del canal principal ignorado y
+   «free send». El modo real es la fase 6.*
 4. **Lectura del histórico de la cuenta real** (solo lectura): bienvenidas
    manuales antiguas y respuestas pasadas, para no repetir bienvenidas y
    comparar manual frente a bot. ⏳ *Programado (2026-10-15): se prueba

@@ -3,6 +3,31 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Captación: fase 3 probada en simulación; el botón se reconoce también en mensajes posteriores
+- **Resto de la prueba** (cuenta principal, simulación), todo según las
+  reglas:
+  - El dueño no tenía carpeta del día porque ese día no entró nadie: crear
+    la «18.10» era lo correcto.
+  - Enlace del canal de prueba (otro enlace distinto del de solicitudes,
+    pero del mismo canal): quedó como «Enlace del canal principal enviado»
+    y no movió nada. Se comprueba a qué canal lleva el enlace, no el enlace
+    en sí.
+  - Enlace de un canal de venta: «saco a … de la carpeta 18.10 (se queda
+    vacía y la borro)» y «creo la carpeta «free send» y meto a …».
+  - La secundaria volvió a escribir: nada (ya tenía enlace). En Telegram no
+    cambió ninguna carpeta. Comprobado también en la hoja de pruebas
+    (Usuarios y Eventos).
+  - El dueño preguntó por qué se cambia de carpeta y reconfirmó «pasa al
+    día nuevo» (si vuelve a escribir otro día sin haber recibido la
+    gratuita).
+- **Mejora**: el botón («Ya he apostado» / «Primera vez») solo se miraba en
+  el primer mensaje; si alguien escribía primero «hola» quedaba como «Otro
+  texto» para siempre. Ahora un mensaje posterior que lo diga lo corrige;
+  si ya había uno reconocido, se queda el primero. La carpeta del día no
+  depende del texto: vale cualquier mensaje. 131 pruebas, pasan en Python
+  3.9, 3.12 y 3.13; la nueva falla sin el cambio.
+- Commits: (este commit)
+
 ## 2026-10-18 — Captación: cuenta principal del dueño conectada a la instancia de prueba (simulación)
 - **Qué**: el dueño actualizó la VM a `35b5530`, sacó el api_id/api_hash
   en my.telegram.org y conectó su cuenta principal con
@@ -35,7 +60,7 @@ Entradas más recientes arriba.
   nueva que falla con el código anterior. 130 pruebas, pasan en Python 3.9,
   3.12 y 3.13. Llega a la VM con la próxima actualización; no hace falta
   actualizar para seguir probando.
-- Commits: (este commit)
+- Commits: `8c9c5dc`
 
 ## 2026-10-18 — Captación: carpetas de días en formato día.mes («18.10»)
 - **Qué**: el dueño avisa de que sus carpetas de días se llaman día.mes

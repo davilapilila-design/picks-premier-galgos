@@ -204,8 +204,11 @@ class Organizador:
             if fila["primer_mensaje_ts"] is None:
                 campos["primer_mensaje_ts"] = int(ts)
                 detalle["primera_vez"] = True
+            boton = detectar_boton(texto)
             if fila["boton"] is None:
-                campos["boton"] = detalle["boton"] = detectar_boton(texto) or "otro"
+                campos["boton"] = detalle["boton"] = boton or "otro"
+            elif fila["boton"] == "otro" and boton:
+                campos["boton"] = boton  # p. ej. primero «hola» y luego «es mi primera vez»
             with self.con:
                 if usuario:
                     db.actualizar_datos_usuario(self.con, ts, usuario)
