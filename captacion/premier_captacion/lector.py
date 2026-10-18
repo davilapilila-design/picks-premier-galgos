@@ -24,6 +24,7 @@ anula): conectar-cuenta.sh y leer-historico.sh paran antes el servicio.
 """
 import argparse
 import asyncio
+import concurrent.futures
 import copy
 import getpass
 import logging
@@ -260,23 +261,25 @@ async def recuperar_perdido(client, con, org, tg_real, horizonte):
 # --- Avisos por el bot ---------------------------------------------------------
 
 def crear_avisador(cfg):
-    """Avisos al dueño por el bot (si hay token y propietario). No bloquea."""
+    """Avisos al dueño por el bot (si hay token y propietario). No bloquea, y
+    llegan en el orden en que se piden: los envía un solo hilo, uno detrás de
+    otro (antes iban a la vez y se desordenaban)."""
     if not cfg.bot_token or cfg.propietario_id is None:
         return lambda texto: log.warning("AVISO (sin bot configurado): %s", texto)
     api = BotAPI(cfg.bot_token)
+    hilo = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="avisos")
 
     def enviar(texto):
         try:
             api.llamar("sendMessage", chat_id=cfg.propietario_id, text=texto[:4000])
         except (ErrorTelegram, ErrorRed) as e:
             log.error("No se pudo enviar un aviso por el bot: %s", e)
+        except Exception:
+            log.exception("Fallo inesperado enviando un aviso por el bot")
 
     def avisar(texto):
         log.info("AVISO: %s", texto)
-        try:
-            asyncio.get_running_loop().run_in_executor(None, enviar, texto)
-        except RuntimeError:
-            enviar(texto)
+        hilo.submit(enviar, texto)  # al salir del programa se envían los que queden
 
     return avisar
 

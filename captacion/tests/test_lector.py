@@ -1,4 +1,6 @@
 import asyncio
+import threading
+import time
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -136,6 +138,33 @@ class TestEmbudoPrueba(unittest.TestCase):
             con = db.abrir(cfg.db_path)
             self.addCleanup(con.close)
             self.assertTrue(db.es_del_embudo(db.obtener_usuario(con, 123456789)))
+
+
+class TestAvisador(unittest.TestCase):
+    def test_los_avisos_llegan_en_orden(self):
+        enviados = []
+        hecho = threading.Event()
+
+        class BotFalso:
+            def __init__(self, token):
+                pass
+
+            def llamar(self, metodo, **params):
+                time.sleep(0.05 if params["text"] == "primero" else 0)
+                enviados.append(params["text"])
+                if len(enviados) == 2:
+                    hecho.set()
+
+        with mock.patch.object(lector, "BotAPI", BotFalso):
+            avisar = lector.crear_avisador(SimpleNamespace(bot_token="1:x", propietario_id=1))
+
+        async def probar():  # como en el lector: desde dentro del bucle de asyncio
+            avisar("primero")
+            avisar("segundo")
+            await asyncio.get_running_loop().run_in_executor(None, hecho.wait, 5)
+
+        asyncio.run(probar())
+        self.assertEqual(enviados, ["primero", "segundo"])
 
 
 class TestTelefono(unittest.TestCase):

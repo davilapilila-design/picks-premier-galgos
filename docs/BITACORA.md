@@ -18,6 +18,23 @@ Entradas más recientes arriba.
     entró nadie. En el segundo intento, escribiendo el código a mano, entró
     bien.
 - README (paso 3) con los dos avisos. Sin cambios de código.
+- Commits: `a27cc4f`
+
+## 2026-10-18 — Captación: primera prueba de carpetas en simulación; avisos en orden
+- **Resultado de la prueba** (cuenta principal, simulación): al arrancar
+  reconoció 6 carpetas de días en formato día.mes y dijo que borraría la
+  más antigua («07.09»; el dueño confirma que es vieja y puede irse). La
+  secundaria pulsó un botón de la bienvenida y le escribió: «saco a … de la
+  carpeta 19.09» (estaba ahí de antes), «creo la carpeta 18.10 y meto a …»
+  y, al quedar 6 de días, «borro la carpeta 19.09». Es lo que dicen las
+  reglas. Pendiente: confirmar si el dueño tenía ya una carpeta de hoy con
+  otro nombre, y probar los enlaces (canal de prueba y canal de venta).
+- **Arreglado**: los avisos llegaban desordenados (en la prueba, «borro la
+  carpeta 19.09» llegó antes que «saco a … de la carpeta 19.09»), porque se
+  enviaban varios a la vez. Ahora los envía un solo hilo, en orden. Prueba
+  nueva que falla con el código anterior. 130 pruebas, pasan en Python 3.9,
+  3.12 y 3.13. Llega a la VM con la próxima actualización; no hace falta
+  actualizar para seguir probando.
 - Commits: (este commit)
 
 ## 2026-10-18 — Captación: carpetas de días en formato día.mes («18.10»)
