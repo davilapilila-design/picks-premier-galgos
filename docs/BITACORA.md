@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Captación: cuenta principal del dueño conectada a la instancia de prueba (simulación)
+- **Qué**: el dueño actualizó la VM a `35b5530`, sacó el api_id/api_hash
+  en my.telegram.org y conectó su cuenta principal con
+  `conectar-cuenta.sh prueba`. Resultado: sesión iniciada y
+  `captacion-lector@prueba` en marcha en **modo SIMULACIÓN**. Falta la
+  prueba con la secundaria (README, fase 3, paso 4).
+- **Problemas encontrados** (no son fallos del código):
+  - Desde el móvil (Termius), al cambiar de app Android cortaba la conexión
+    SSH y se cerraba el programa a medias. Solución: ejecutarlo dentro de
+    `tmux` (`tmux attach` para volver).
+  - El primer intento lo bloqueó Telegram («el código fue compartido por tu
+    cuenta»): el código había aparecido en algún chat de su cuenta. No
+    entró nadie. En el segundo intento, escribiendo el código a mano, entró
+    bien.
+- README (paso 3) con los dos avisos. Sin cambios de código.
+- Commits: (este commit)
+
 ## 2026-10-18 — Captación: carpetas de días en formato día.mes («18.10»)
 - **Qué**: el dueño avisa de que sus carpetas de días se llaman día.mes
   («18.10»), al revés de lo que se dijo al principio (mes.día). Cambiado
@@ -34,7 +51,7 @@ Entradas más recientes arriba.
 - De paso: en `tests/test_telethon_real.py` el `if __name__ == "__main__"`
   estaba a mitad del archivo; pasa al final. Pruebas: 129, pasan en Python
   3.9, 3.12 y 3.13.
-- Commits: (este commit)
+- Commits: `35b5530`
 
 ## 2026-10-15 — Captación: la fase 3 se prueba con la cuenta principal, en simulación
 - **Qué**: el dueño pidió probar las carpetas en su propia cuenta en vez de

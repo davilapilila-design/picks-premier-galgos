@@ -237,6 +237,16 @@ No conecta ninguna cuenta.
 ```bash
 bash /opt/premier-captacion/conectar-cuenta.sh prueba
 ```
+Dos avisos antes de empezar:
+- **El código, escríbelo a mano.** Si lo copias y lo pegas o lo reenvías en
+  cualquier chat de Telegram (aunque sea a ti mismo o a un bot), Telegram lo
+  da por robado y bloquea el inicio de sesión («el código fue compartido»).
+  Si pasa, no ha entrado nadie: vuelve a ejecutar el comando y te llega uno
+  nuevo.
+- **Desde el móvil (Termius)**, al cambiar de app se corta la conexión SSH y
+  se cierra el programa. Ejecútalo dentro de `tmux new -s tg`; si se corta,
+  vuelve a entrar y escribe `tmux attach -t tg` para seguir donde estabas.
+
 Te pide el api_id y el api_hash, confirmación (escribe SI), **tu teléfono**
 (igual que en el paso 1: prefijo del país y sin el 0 inicial; si lo pones
 mal, te lo vuelve a pedir), el código que te llega por Telegram y, si la

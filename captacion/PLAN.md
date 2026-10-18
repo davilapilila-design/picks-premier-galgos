@@ -78,9 +78,9 @@ uno explícito aparte.
    simulación**, conectada a la instancia `prueba` (decisión del dueño,
    2026-10-15: ya tiene ahí sus carpetas de días). Allí solo cuenta como
    cliente la secundaria; sus clientes reales se ignoran. En simulación el
-   candado no deja ni pedir cambios de carpetas. ⏳ *Programado y probado
-   sin conectar a nada (2026-10-15): falta que el dueño saque
-   api_id/api_hash y conecte su cuenta (README, fase 3).*
+   candado no deja ni pedir cambios de carpetas. ⏳ *Cuenta del dueño
+   conectada a `prueba` el 2026-10-18, en simulación: falta la prueba con
+   la secundaria (README, fase 3, paso 4).*
 4. **Lectura del histórico de la cuenta real** (solo lectura): bienvenidas
    manuales antiguas y respuestas pasadas, para no repetir bienvenidas y
    comparar manual frente a bot. ⏳ *Programado (2026-10-15): se prueba
