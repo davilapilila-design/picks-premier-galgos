@@ -8,7 +8,7 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
    al día) pasan a aceptarse solas. Un bot envía la bienvenida por privado
    y acepta la solicitud. El dueño deja de aceptar a mano.
 2. **Organizar los chats del dueño**: quien le escribe por privado entra en
-   la carpeta del día (`MM.DD`); cuando el dueño le envía el enlace de un
+   la carpeta del día (`DD.MM`, p. ej. `18.10`); cuando el dueño le envía el enlace de un
    canal de venta, pasa a la carpeta `free send`.
 3. **Estadísticas**: todo queda registrado (Google Sheet + resúmenes por
    Telegram).
@@ -34,7 +34,7 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
 | Botones | «🏁 Ya he apostado» y «🆕 Es mi primera vez». Abren el chat de @Dronwhite con el texto ya escrito: «¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕» / «¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕» (cambiado durante las pruebas: el dueño no quería «Vengo de PREMIER GALGOS»). |
 | Si escriben al bot | Responde cada vez con «Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil…» y los dos botones. Ante una ráfaga de mensajes, una sola respuesta (pausa de 60 s). Atender dudas desde el bot a quien ya escribió al dueño: **más adelante**. |
 | Enlaces de entrada | `+VtCh-VrBHPpiMzg0` (descripción y web, se cuentan juntos) y `+om-eKd0-3OUyOGY0` (landing). Se guarda de cuál viene cada persona; conviene ponerles nombre en Telegram. |
-| Carpeta del día `MM.DD` | Solo entra quien recibió alguna bienvenida (bot o manual). Si vuelve a escribir otro día sin haber recibido el enlace, pasa a la carpeta del día nuevo. Hora de España. Se adoptan las carpetas `MM.DD` que el dueño ya tiene. |
+| Carpeta del día `DD.MM` | Día.mes, p. ej. `18.10` (el dueño lo corrigió el 2026-10-18: al principio se dijo mes.día). También vale `5.11` sin cero. Solo entra quien recibió alguna bienvenida (bot o manual). Si vuelve a escribir otro día sin haber recibido el enlace, pasa a la carpeta del día nuevo. Hora de España. Se adoptan las carpetas de días que el dueño ya tiene, también la de mañana si la crea antes de tiempo. |
 | Rotación | Se mantienen **5 días**; cada noche se borra la carpeta más antigua (los chats no se borran). La de hoy va **la última**. El dueño tiene 9 carpetas (7 de días + 2 suyas): quedan 5 + `free send` + 2 suyas = 8. Las suyas no se tocan nunca. |
 | `free send` | Un chat pasa aquí cuando el dueño envía un enlace de invitación `t.me/+…` (o `t.me/joinchat/…`) que **no** sea del canal principal (se comprueba a qué canal lleva, así vale para enlaces futuros). Se guarda qué enlace y qué canal de venta se le envió. Se queda con los ~90 chats más recientes (tope 100). Quien ya está en `free send` no vuelve a moverse. |
 | Bienvenidas antiguas | Se buscan en el histórico del dueño las dos versiones manuales («Buenas! Bienvenido a 𝗣𝗥𝗘𝗠𝗜𝗘𝗥 𝗚𝗔𝗟𝗚𝗢𝗦 🐕…» y «Buenos dias y bienvenido a Premier Galgos! 🐾…», y variantes) para no repetírsela a nadie. |
@@ -50,7 +50,7 @@ Solicitud de unión ──► BOT ──► 1) envía la bienvenida (con los 2 b
                          └────► 3) lo apunta en la base de datos local
 
 Cuenta del dueño ──► LECTOR (fase 3+, Telethon: solo lectura + carpetas)
-   · le escribe alguien con bienvenida   → carpeta MM.DD
+   · le escribe alguien con bienvenida   → carpeta DD.MM
    · el dueño le envía un enlace de venta → carpeta free send
    · limpieza nocturna de carpetas
 
@@ -73,7 +73,7 @@ uno explícito aparte.
    `Tipos de mensaje`; volcado automático desde la VM cada 10 min con la
    cuenta de servicio de picks. ✅ *Funcionando en la VM con la hoja de
    pruebas (2026-10-15). La instancia real tendrá su propia hoja.*
-3. **Carpetas**: `MM.DD`, `free send`, filtro del canal principal, rotación
+3. **Carpetas**: `DD.MM`, `free send`, filtro del canal principal, rotación
    de 5 días. Se prueban **con la cuenta principal del dueño, en
    simulación**, conectada a la instancia `prueba` (decisión del dueño,
    2026-10-15: ya tiene ahí sus carpetas de días). Allí solo cuenta como

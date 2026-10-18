@@ -27,10 +27,10 @@ def carpeta(id_, titulo, usuarios=(), otros=0, **extra):
 
 
 def cuenta_tipica():
-    """Como la del dueño: 2 carpetas suyas y 7 de días (10.08 a 10.14)."""
+    """Como la del dueño: 2 carpetas suyas y 7 de días (08.10 a 14.10)."""
     carpetas = [carpeta(2, "Trabajo", {900, 901}, otros=3), carpeta(3, "Familia", {902})]
     for i, dia in enumerate(range(8, 15)):
-        carpetas.append(carpeta(4 + i, f"10.{dia:02d}", {800 + dia}))
+        carpetas.append(carpeta(4 + i, f"{dia:02d}.10", {800 + dia}))
     return carpetas
 
 
@@ -81,11 +81,11 @@ class TestCarpetaDelDia(Base):
     def test_primer_mensaje_crea_la_carpeta_de_hoy_y_rota_las_antiguas(self):
         self.del_embudo(500)
         self.recibe(500, 1, "¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕")
-        # 10.15 se crea al final; se quedan solo los 5 días más recientes.
-        self.assertEqual(self.titulos(), ["Trabajo", "Familia", "10.11", "10.12", "10.13", "10.14", "10.15"])
-        self.assertEqual(self.usuarios_de("10.15"), {500})
+        # 15.10 se crea al final; se quedan solo los 5 días más recientes.
+        self.assertEqual(self.titulos(), ["Trabajo", "Familia", "11.10", "12.10", "13.10", "14.10", "15.10"])
+        self.assertEqual(self.usuarios_de("15.10"), {500})
         fila = db.obtener_usuario(self.con, 500)
-        self.assertEqual((fila["carpeta"], fila["boton"], fila["primer_mensaje_ts"]), ("10.15", "primera_vez", AHORA))
+        self.assertEqual((fila["carpeta"], fila["boton"], fila["primer_mensaje_ts"]), ("15.10", "primera_vez", AHORA))
         self.assertIn("te_escribe", self.eventos(500))
         self.assertEqual(self.avisos, [])  # en modo real no se avisa de cada cosa
 
@@ -97,25 +97,25 @@ class TestCarpetaDelDia(Base):
 
     def test_si_estaba_en_otro_dia_pasa_a_hoy_y_los_demas_chats_se_quedan(self):
         self.del_embudo(500)
-        self.tg = CarpetasEnMemoria([carpeta(2, "10.14", {500, 777})])
+        self.tg = CarpetasEnMemoria([carpeta(2, "14.10", {500, 777})])
         self.org = self.organizador()
         self.recibe(500, 1)
-        self.assertEqual(self.usuarios_de("10.14"), {777})  # el chat puesto a mano sigue
-        self.assertEqual(self.usuarios_de("10.15"), {500})
+        self.assertEqual(self.usuarios_de("14.10"), {777})  # el chat puesto a mano sigue
+        self.assertEqual(self.usuarios_de("15.10"), {500})
 
     def test_si_la_carpeta_se_queda_vacia_se_borra(self):
         self.del_embudo(500)
-        self.tg = CarpetasEnMemoria([carpeta(2, "10.14", {500})])
+        self.tg = CarpetasEnMemoria([carpeta(2, "14.10", {500})])
         self.org = self.organizador()
         self.recibe(500, 1)
-        self.assertEqual(self.titulos(), ["10.15"])
+        self.assertEqual(self.titulos(), ["15.10"])
 
     def test_una_carpeta_con_reglas_no_se_borra_aunque_quede_sin_chats(self):
         self.del_embudo(500)
-        self.tg = CarpetasEnMemoria([carpeta(2, "10.14", {500}, con_reglas=True)])
+        self.tg = CarpetasEnMemoria([carpeta(2, "14.10", {500}, con_reglas=True)])
         self.org = self.organizador()
         self.recibe(500, 1)
-        self.assertEqual(self.usuarios_de("10.14"), set())
+        self.assertEqual(self.usuarios_de("14.10"), set())
 
     def test_varios_mensajes_el_mismo_dia(self):
         self.del_embudo(500)
@@ -132,8 +132,8 @@ class TestCarpetaDelDia(Base):
         self.recibe(500, 1)
         self.ahora = ts(2026, 10, 16, 9, 0)
         self.recibe(500, 2)
-        self.assertNotIn("10.15", self.titulos())  # se quedó vacía
-        self.assertEqual(self.usuarios_de("10.16"), {500})
+        self.assertNotIn("15.10", self.titulos())  # se quedó vacía
+        self.assertEqual(self.usuarios_de("16.10"), {500})
         self.assertEqual(self.eventos(500).count("te_escribe"), 2)
 
     def test_mensaje_antiguo_se_apunta_pero_no_mueve(self):
@@ -149,9 +149,9 @@ class TestCarpetaDelDia(Base):
         self.tg = CarpetasEnMemoria(lista[:10])  # justo 10 carpetas
         self.org = self.organizador()
         self.recibe(500, 1)
-        self.assertIn(("borrar", "10.08"), self.tg.cambios)
-        self.assertLess(self.tg.cambios.index(("borrar", "10.08")),
-                        self.tg.cambios.index(("crear", "10.15", frozenset({500}))))
+        self.assertIn(("borrar", "08.10"), self.tg.cambios)
+        self.assertLess(self.tg.cambios.index(("borrar", "08.10")),
+                        self.tg.cambios.index(("crear", "15.10", frozenset({500}))))
 
     def test_sin_hueco_y_sin_dias_avisa(self):
         self.del_embudo(500)
@@ -159,22 +159,45 @@ class TestCarpetaDelDia(Base):
         self.org = self.organizador()
         self.recibe(500, 1)
         self.assertEqual(self.tg.cambios, [])
-        self.assertIn("No puedo crear la carpeta «10.15»", self.avisos[0])
+        self.assertIn("No puedo crear la carpeta «15.10»", self.avisos[0])
 
     def test_carpeta_llena_avisa(self):
         self.del_embudo(500)
-        self.tg = CarpetasEnMemoria([carpeta(2, "10.15", set(range(100)))])
+        self.tg = CarpetasEnMemoria([carpeta(2, "15.10", set(range(100)))])
         self.org = self.organizador()
         self.recibe(500, 1)
         self.assertIn("ya tiene 100 chats", self.avisos[0])
 
     def test_las_carpetas_compartidas_no_se_tocan(self):
         self.del_embudo(500)
-        self.tg = CarpetasEnMemoria([carpeta(2, "10.14", {500}, gestionable=False)])
+        self.tg = CarpetasEnMemoria([carpeta(2, "14.10", {500}, gestionable=False)])
         self.org = self.organizador()
         self.recibe(500, 1)  # CarpetasEnMemoria falla si se intenta cambiar una compartida
-        self.assertEqual(self.usuarios_de("10.15"), {500})
-        self.assertEqual(self.usuarios_de("10.14"), {500})
+        self.assertEqual(self.usuarios_de("15.10"), {500})
+        self.assertEqual(self.usuarios_de("14.10"), {500})
+
+    def test_carpetas_del_dueno_en_dia_mes(self):
+        # Hoy es el 18.10: tiene de la «12.10» a la «18.10» (la de hoy hecha a
+        # mano) y la de mañana creada antes de tiempo.
+        self.ahora = ts(2026, 10, 18, 10, 0)
+        self.tg = CarpetasEnMemoria([carpeta(2, "Trabajo", {900})]
+                                    + [carpeta(3 + i, f"{d}.10", {800 + d}) for i, d in enumerate(range(12, 20))])
+        self.org = self.organizador()
+        self.del_embudo(500)
+        self.recibe(500, 1)
+        self.assertEqual(self.usuarios_de("18.10"), {500, 818})  # usa la suya
+        # Se quedan los 5 días más recientes, contando la de mañana.
+        self.assertEqual(self.titulos(), ["Trabajo", "15.10", "16.10", "17.10", "18.10", "19.10"])
+
+    def test_vale_el_dia_sin_cero_delante(self):
+        self.ahora = ts(2026, 11, 5, 10, 0)
+        self.tg = CarpetasEnMemoria([carpeta(2, "5.11", {777})])
+        self.org = self.organizador()
+        self.del_embudo(500)
+        self.recibe(500, 1)
+        self.assertEqual(self.titulos(), ["5.11"])  # no crea otra «05.11»
+        self.assertEqual(self.usuarios_de("5.11"), {500, 777})
+        self.assertEqual(db.obtener_usuario(self.con, 500)["carpeta"], "5.11")
 
 
 class TestFreeSend(Base):
@@ -182,7 +205,7 @@ class TestFreeSend(Base):
         self.del_embudo(500)
         self.recibe(500, 1)
         self.envia(500, 2, "Aquí tienes 👉 https://t.me/+VENTA0000000001")
-        self.assertNotIn("10.15", self.titulos())
+        self.assertNotIn("15.10", self.titulos())
         self.assertEqual(self.usuarios_de("free send"), {500})
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual((fila["enlace_venta"], fila["canal_venta"], fila["carpeta"]),
@@ -194,7 +217,7 @@ class TestFreeSend(Base):
         self.del_embudo(500)
         self.recibe(500, 1)
         self.envia(500, 2, "Únete: t.me/+PRINCIPAL000001")
-        self.assertEqual(self.usuarios_de("10.15"), {500})
+        self.assertEqual(self.usuarios_de("15.10"), {500})
         self.assertIsNone(self.usuarios_de("free send"))
         self.assertIn("enlace_principal", self.eventos(500))
         self.assertIsNone(db.obtener_usuario(self.con, 500)["enlace_venta_ts"])
@@ -210,7 +233,7 @@ class TestFreeSend(Base):
         self.envia(500, 1, "t.me/+VENTA0000000001")
         self.ahora = ts(2026, 10, 16, 9, 0)
         self.recibe(500, 2, "gracias!")
-        self.assertNotIn("10.16", self.titulos())
+        self.assertNotIn("16.10", self.titulos())
         self.assertEqual(self.usuarios_de("free send"), {500})
         self.assertEqual(self.eventos(500).count("te_escribe"), 1)
 
@@ -267,8 +290,8 @@ class TestSimulacion(Base):
         self.del_embudo(500)
         self.recibe(500, 1)
         self.assertTrue(all(a.startswith("🧪 Simulación") for a in self.avisos))
-        self.assertTrue(any("creo la carpeta 10.15 y meto a Ana (@ana)" in a for a in self.avisos))
-        self.assertTrue(any("borro la carpeta 10.08" in a for a in self.avisos))
+        self.assertTrue(any("creo la carpeta 15.10 y meto a Ana (@ana)" in a for a in self.avisos))
+        self.assertTrue(any("borro la carpeta 08.10" in a for a in self.avisos))
         fila = db.obtener_usuario(self.con, 500)
         self.assertIsNone(fila["carpeta"])
         self.assertEqual(fila["primer_mensaje_ts"], AHORA)  # los hechos sí se apuntan
@@ -291,28 +314,36 @@ class TestSimulacion(Base):
         self.org = self.organizador(simular=True)
         self.del_embudo(500)
         self.recibe(500, 1)
-        self.assertTrue(any("creo la carpeta 10.15" in a for a in self.avisos))
+        self.assertTrue(any("creo la carpeta 15.10" in a for a in self.avisos))
         # El mismo día no repite nada: ni al volver a escribir ni en cada revisión.
         self.avisos.clear()
         self.recibe(500, 2)
         self.correr(self.org.rotar())
         self.assertEqual(self.avisos, [])
         # Al día siguiente el dueño ya ha creado a mano la carpeta del día.
-        self.correr(real.crear_carpeta("10.16", {777}))
+        self.correr(real.crear_carpeta("16.10", {777}))
         self.ahora = ts(2026, 10, 16, 9, 0)
         self.recibe(500, 3)
-        self.assertTrue(any("meto a Ana (@ana) en la carpeta 10.16" in a for a in self.avisos), self.avisos)
+        self.assertTrue(any("meto a Ana (@ana) en la carpeta 16.10" in a for a in self.avisos), self.avisos)
         self.assertFalse(any("creo la carpeta" in a for a in self.avisos), self.avisos)
-        self.assertEqual(real.cambios, [("crear", "10.16", frozenset({777}))])  # solo lo del dueño
+        self.assertEqual(real.cambios, [("crear", "16.10", frozenset({777}))])  # solo lo del dueño
 
 
 class TestAyudas(unittest.TestCase):
     def test_titulos_de_dias(self):
-        self.assertEqual(titulo_dia(date(2026, 10, 5)), "10.05")
-        self.assertEqual(fecha_de_titulo("10.14", date(2026, 10, 15)), date(2026, 10, 14))
-        self.assertEqual(fecha_de_titulo("12.31", date(2027, 1, 2)), date(2026, 12, 31))
-        for malo in ("02.30", "1.5", "Trabajo", "free send", "13.01"):
-            self.assertIsNone(fecha_de_titulo(malo, date(2026, 10, 15)), malo)
+        # Día.mes, como las carpetas del dueño.
+        self.assertEqual(titulo_dia(date(2026, 10, 5)), "05.10")
+        hoy = date(2026, 10, 18)
+        self.assertEqual(fecha_de_titulo("14.10", hoy), date(2026, 10, 14))
+        self.assertEqual(fecha_de_titulo("12.10", hoy), date(2026, 10, 12))  # no el 10 de diciembre
+        self.assertEqual(fecha_de_titulo("5.10", hoy), date(2026, 10, 5))
+        self.assertEqual(fecha_de_titulo("19.10", hoy), date(2026, 10, 19))  # creada antes de tiempo
+        self.assertEqual(fecha_de_titulo("18.04", hoy), date(2026, 4, 18))
+        self.assertEqual(fecha_de_titulo("31.12", date(2027, 1, 2)), date(2026, 12, 31))
+        self.assertEqual(fecha_de_titulo("02.01", date(2026, 12, 31)), date(2027, 1, 2))
+        self.assertEqual(fecha_de_titulo("29.02", date(2028, 3, 1)), date(2028, 2, 29))
+        for malo in ("30.02", "01.13", "10.18", "18/10", "18.10.2026", "Trabajo", "free send"):
+            self.assertIsNone(fecha_de_titulo(malo, hoy), malo)
 
     def test_boton(self):
         self.assertEqual(detectar_boton("¡Hola! Acabo de entrar en el canal. Ya he apostado en galgos antes 🐕"),

@@ -61,11 +61,11 @@ class TestAyudas(unittest.TestCase):
         self.addCleanup(con.close)
         with con:
             db.actualizar_datos_usuario(con, 10, {"id": 7, "first_name": "Pepe"})
-            db.actualizar_campos(con, 7, 20, boton="primera_vez", carpeta="10.14")
+            db.actualizar_campos(con, 7, 20, boton="primera_vez", carpeta="14.10")
             db.guardar_enlace(con, "AbCdEf123", 1234567890, "Canal", 30)
             db.guardar_enlace(con, "AbCdEf123", 1234567890, "Canal renombrado", 40)
         fila = db.obtener_usuario(con, 7)
-        self.assertEqual((fila["boton"], fila["carpeta"], fila["actualizado_ts"]), ("primera_vez", "10.14", 20))
+        self.assertEqual((fila["boton"], fila["carpeta"], fila["actualizado_ts"]), ("primera_vez", "14.10", 20))
         self.assertFalse(db.es_del_embudo(fila))
         self.assertEqual(db.enlace_guardado(con, "AbCdEf123")["titulo"], "Canal renombrado")
         self.assertIsNone(db.enlace_guardado(con, "otro"))

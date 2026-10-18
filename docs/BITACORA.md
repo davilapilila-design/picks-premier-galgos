@@ -3,6 +3,26 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Captación: carpetas de días en formato día.mes («18.10»)
+- **Qué**: el dueño avisa de que sus carpetas de días se llaman día.mes
+  («18.10»), al revés de lo que se dijo al principio (mes.día). Cambiado
+  antes de conectar su cuenta. La VM ya estaba actualizada a `7dd346d` (una
+  sola pasada del instalador, como se esperaba).
+- **Por qué importaba**: con mes.día, «12.10» se habría leído como el 10 de
+  diciembre del año pasado y la rotación (en real) la habría borrado como
+  la más antigua; «18.10» ni siquiera se habría reconocido.
+- Además: las carpetas de días se comparan por fecha y no por el nombre
+  exacto, así que vale «5.11» igual que «05.11» (se usa la del dueño tal
+  cual; las nuevas se crean con cero delante). Y una carpeta de hasta una
+  semana en el futuro (p. ej. la de mañana creada a mano por la noche) se
+  toma como de este año, no del año pasado: antes la habría borrado al
+  rotar.
+- README: pasos para sacar el api_id/api_hash en my.telegram.org más
+  detallados (el dueño aún no los tiene). Pruebas: 125, pasan en Python
+  3.9, 3.12 y 3.13; las nuevas fallan con el formato y el cálculo de año
+  anteriores.
+- Commits: (este commit)
+
 ## 2026-10-15 — Captación: la fase 3 se prueba con la cuenta principal, en simulación
 - **Qué**: el dueño pidió probar las carpetas en su propia cuenta en vez de
   en la secundaria, porque ya tiene ahí sus carpetas de días. Su cuenta se
@@ -24,7 +44,7 @@ Entradas más recientes arriba.
   antiguas) ni ejecutar el histórico en `prueba` con su cuenta conectada
   (metería a sus clientes reales en la memoria de prueba). Pruebas: 123,
   pasan en Python 3.9, 3.12 y 3.13.
-- Commits: (este commit)
+- Commits: `7dd346d`
 
 ## 2026-10-15 — Captación: hoja de pruebas funcionando en la VM; instalador de una sola pasada
 - La sesión de Claude de la VM (con autorización ampliada solo para crear el

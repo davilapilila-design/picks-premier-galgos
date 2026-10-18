@@ -2,8 +2,8 @@
 Reglas de las carpetas de la cuenta del dueño (fase 3 de captacion/PLAN.md).
 
 - Si alguien que recibió la bienvenida (del bot o manual) le escribe por
-  privado, su chat entra en la carpeta del día («MM.DD», hora de España).
-  Si estaba en la de otro día, pasa a la de hoy.
+  privado, su chat entra en la carpeta del día («DD.MM», p. ej. «18.10»,
+  hora de España). Si estaba en la de otro día, pasa a la de hoy.
 - Si el dueño le envía un enlace de invitación que NO es del canal
   principal (uno de los canales de venta), el chat pasa a «free send» y ahí
   se queda aunque vuelva a escribir.
@@ -14,8 +14,8 @@ Reglas de las carpetas de la cuenta del dueño (fase 3 de captacion/PLAN.md).
 - Solo se tocan chats del embudo. Los chats que el dueño haya metido a mano
   en una carpeta no se quitan nunca (salvo que se borre la carpeta entera
   de un día al rotar, que es lo acordado).
-- Solo se gestionan las carpetas de días («MM.DD») y «free send». Las demás
-  carpetas del dueño no se tocan.
+- Solo se gestionan las carpetas de días («18.10»; también vale «5.11») y
+  «free send». Las demás carpetas del dueño no se tocan.
 
 Este módulo no sabe nada de Telethon: habla con un "adaptador" (ver
 `CarpetasEnMemoria`, que sirve para los tests y para el modo simulación,
@@ -39,7 +39,7 @@ from . import db, enlaces
 
 log = logging.getLogger("captacion.carpetas")
 
-_RE_DIA = re.compile(r"^(\d{2})\.(\d{2})$")
+_RE_DIA = re.compile(r"^(\d{1,2})\.(\d{1,2})$")
 # Cuánto se fía uno de lo que se sabe de un enlace antes de volver a preguntar.
 VIGENCIA_ENLACE_S = 30 * 24 * 3600
 
@@ -73,21 +73,23 @@ def id_canal_puro(canal_id):
 
 
 def titulo_dia(fecha):
-    return f"{fecha:%m.%d}"
+    return f"{fecha:%d.%m}"
 
 
 def fecha_de_titulo(titulo, hoy):
-    """«10.14» -> date; si con el año de hoy cae en el futuro, es del año pasado."""
+    """«14.10» (día.mes) -> date, del año que la deja más reciente sin pasar de
+    una semana después de hoy: «31.12» el 2 de enero es del año pasado, y
+    «19.10» creada el 18 a mano, de mañana (no se borra como si fuera vieja)."""
     m = _RE_DIA.match(titulo.strip())
     if not m:
         return None
-    mes, dia = int(m.group(1)), int(m.group(2))
-    for anio in (hoy.year, hoy.year - 1):
+    dia, mes = int(m.group(1)), int(m.group(2))
+    for anio in (hoy.year + 1, hoy.year, hoy.year - 1):
         try:
             fecha = date(anio, mes, dia)
         except ValueError:
-            return None
-        if fecha <= hoy:
+            continue  # día que no existe (o 29.02 en un año no bisiesto)
+        if fecha <= hoy + timedelta(days=7):
             return fecha
     return None
 
@@ -134,8 +136,13 @@ class Organizador:
     def _hoy(self):
         return self._dia(self.reloj())
 
+    def _fecha(self, carpeta):
+        """Día de una carpeta de días, o None si no lo es. Se compara por fecha,
+        así «5.11» y «05.11» son la misma."""
+        return fecha_de_titulo(carpeta.titulo, self._hoy()) if carpeta.gestionable else None
+
     def _es_dia(self, carpeta):
-        return carpeta.gestionable and fecha_de_titulo(carpeta.titulo, self._hoy()) is not None
+        return self._fecha(carpeta) is not None
 
     def _es_free_send(self, carpeta):
         return carpeta.gestionable and carpeta.titulo.strip().casefold() == self.aj.nombre_free_send.casefold()
@@ -258,7 +265,7 @@ class Organizador:
 
     async def _quitar_de_dias(self, user_id, salvo=None):
         for c in await self.tg.carpetas():
-            if self._es_dia(c) and c.titulo != salvo and user_id in c.usuarios:
+            if self._es_dia(c) and self._fecha(c) != salvo and user_id in c.usuarios:
                 sigue = await self.tg.cambiar(c.id, quitar={user_id})
                 self._informar(f"saco a {self._nombre(user_id)} de la carpeta {c.titulo}"
                                + ("" if sigue else " (se queda vacía y la borro)"))
@@ -269,8 +276,7 @@ class Organizador:
         if len(carpetas) < self.aj.max_carpetas:
             return True
         hoy = self._hoy()
-        dias = sorted(((fecha_de_titulo(c.titulo, hoy), c) for c in carpetas
-                       if self._es_dia(c) and c.titulo not in (para, titulo_dia(hoy))),
+        dias = sorted(((self._fecha(c), c) for c in carpetas if self._fecha(c) not in (None, hoy)),
                       key=lambda par: par[0])
         if not dias:
             self.avisar(f"⚠️ No puedo crear la carpeta «{para}»: ya tienes {len(carpetas)} carpetas "
@@ -291,10 +297,10 @@ class Organizador:
 
     async def _a_carpeta_del_dia(self, user_id, dia):
         await self._al_dia()
-        titulo = titulo_dia(dia)
-        await self._quitar_de_dias(user_id, salvo=titulo)
+        await self._quitar_de_dias(user_id, salvo=dia)
         carpetas = await self.tg.carpetas()
-        destino = next((c for c in carpetas if self._es_dia(c) and c.titulo == titulo), None)
+        destino = next((c for c in carpetas if self._fecha(c) == dia), None)
+        titulo = titulo_dia(dia) if destino is None else destino.titulo  # la del dueño, tal cual
         if destino is None:
             if not await self._hueco(carpetas, titulo):
                 return
@@ -355,8 +361,7 @@ class Organizador:
             await self._rotar_sin_candado()
 
     async def _rotar_sin_candado(self):
-        hoy = self._hoy()
-        dias = sorted(((fecha_de_titulo(c.titulo, hoy), c) for c in await self.tg.carpetas() if self._es_dia(c)),
+        dias = sorted(((self._fecha(c), c) for c in await self.tg.carpetas() if self._es_dia(c)),
                       key=lambda par: par[0], reverse=True)
         for _, carpeta in dias[self.aj.dias:]:
             await self._borrar(carpeta)

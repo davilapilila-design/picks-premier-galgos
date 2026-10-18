@@ -187,7 +187,7 @@ la cuenta de servicio (el instalador dice cuál es).
 
 Un programa en la VM se conecta a una cuenta de Telegram y ordena sus
 carpetas (reglas completas en `premier_captacion/carpetas.py`):
-- Quien recibió la bienvenida y le escribe → carpeta del día («10.15»). Si
+- Quien recibió la bienvenida y le escribe → carpeta del día, día.mes («18.10»). Si
   ya existe, la usa. Si vuelve a escribir otro día sin tener enlace, pasa a
   la carpeta del nuevo día.
 - La cuenta le envía un enlace `t.me/+…` que no es del canal principal →
@@ -214,10 +214,16 @@ del bot de prueba): **tus clientes reales se ignoran**. Se prueba el flujo de
 verdad: la secundaria pulsa un botón de la bienvenida y te escribe.
 
 ### Paso 1. api_id y api_hash (tú, en el navegador)
-Entra en <https://my.telegram.org> con tu cuenta principal → «API development
-tools» → crea una aplicación (nombre cualquiera, p. ej. «Premier captacion»).
-Apunta el **api_id** (un número) y el **api_hash** (32 letras y números,
-secreto: no lo pegues en ningún chat).
+1. Entra en <https://my.telegram.org>, pon tu teléfono (+34…) y el código que
+   te llega a la app de Telegram.
+2. «API development tools» → rellena *App title* `Premier captacion`, *Short
+   name* `premiercaptacion`, *Platform* `Desktop` (lo demás, vacío) →
+   «Create application».
+3. Apunta el **api_id** (un número) y el **api_hash** (32 letras y números,
+   secreto: no lo pegues en ningún chat).
+
+Si al crearla sale «ERROR», prueba con otro navegador, sin VPN ni
+bloqueador de anuncios, o con otro *Short name*.
 
 ### Paso 2. Actualizar la VM
 ```bash
@@ -236,7 +242,7 @@ verificación en dos pasos. Al acabar arranca el lector en simulación y te
 llega por el bot de prueba «📁 Lector de carpetas conectado… Modo:
 SIMULACIÓN». Justo después pueden llegar dos tipos de aviso, los dos solo
 avisos (no toca nada):
-- «🧪 Simulación (no he tocado nada): borro la carpeta 10.xx…»: si tienes más
+- «🧪 Simulación (no he tocado nada): borro la carpeta xx.10…»: si tienes más
   de 5 carpetas de días, las más antiguas que sobrarían.
 - «🧪 Simulación: … meto a … en la carpeta …»: al arrancar repasa las últimas
   24 horas, así que si la secundaria ya te escribió en ese rato, ya te dice
@@ -249,12 +255,12 @@ te repetirá qué carpetas antiguas borraría.
 ### Paso 4. Probar en simulación
 - [ ] Con la secundaria, pulsa un botón de la bienvenida del bot (o escríbete
       a @Dronwhite) y envía → te llega por el bot «🧪 Simulación (no he tocado
-      nada): meto a … en la carpeta 10.15» (o «creo la carpeta…» si no
+      nada): meto a … en la carpeta 18.10» (o «creo la carpeta…» si no
       existe). Si ya te lo dijo al arrancar, no lo repite: ya la tiene ahí.
 - [ ] Desde tu cuenta, envía a la secundaria el enlace del canal de prueba →
       no pasa nada (en la prueba, el «canal principal» es el de prueba).
 - [ ] Desde tu cuenta, envía a la secundaria el enlace `t.me/+…` de uno de tus
-      canales de venta → «🧪 Simulación: saco a … de la carpeta 10.15» y
+      canales de venta → «🧪 Simulación: saco a … de la carpeta 18.10» y
       «creo la carpeta «free send» y meto a …».
 - [ ] Vuelve a escribir desde la secundaria → no se mueve (ya tiene enlace).
 - [ ] Comprueba en tu Telegram que no ha cambiado ninguna carpeta y que los

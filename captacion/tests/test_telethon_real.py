@@ -68,7 +68,7 @@ class TestTelegramReal(unittest.TestCase):
             types.DialogFilter(id=2, title=titulo("Trabajo"), pinned_peers=[peer(900)],
                                include_peers=[peer(901), types.InputPeerChannel(channel_id=5, access_hash=1)],
                                exclude_peers=[peer(950)], contacts=True, emoticon="💼", color=3),
-            types.DialogFilter(id=3, title=titulo("10.14"), pinned_peers=[], include_peers=[peer(500)],
+            types.DialogFilter(id=3, title=titulo("14.10"), pinned_peers=[], include_peers=[peer(500)],
                                exclude_peers=[]),
             types.DialogFilterChatlist(id=4, title=titulo("Compartida"), pinned_peers=[], include_peers=[peer(600)]),
         ]
@@ -81,7 +81,7 @@ class TestTelegramReal(unittest.TestCase):
 
     def test_lee_las_carpetas(self):
         lista = self.correr(self.tg.carpetas())
-        self.assertEqual([c.titulo for c in lista], ["Trabajo", "10.14", "Compartida"])
+        self.assertEqual([c.titulo for c in lista], ["Trabajo", "14.10", "Compartida"])
         trabajo, dia, compartida = lista
         self.assertEqual((trabajo.usuarios, trabajo.total, trabajo.con_reglas), ({900, 901}, 3, True))
         self.assertEqual((dia.usuarios, dia.total, dia.gestionable), ({500}, 1, True))
@@ -89,11 +89,11 @@ class TestTelegramReal(unittest.TestCase):
 
     def test_crear_carpeta(self):
         self.correr(self.tg.carpetas())
-        nuevo = self.correr(self.tg.crear_carpeta("10.15", {501, 500}))
+        nuevo = self.correr(self.tg.crear_carpeta("15.10", {501, 500}))
         self.assertEqual(nuevo, 5)  # 2, 3 y 4 están ocupados
         p = self.peticiones[-1]
         self.assertIsInstance(p, functions.messages.UpdateDialogFilterRequest)
-        self.assertEqual(p.filter.title.text, "10.15")
+        self.assertEqual(p.filter.title.text, "15.10")
         self.assertEqual([x.user_id for x in p.filter.include_peers], [500, 501])
 
     def test_cambiar_conserva_todo_lo_demas(self):
@@ -269,7 +269,7 @@ class TestServicio(unittest.TestCase):
         self.assertEqual(self.modo_candado, "lector")
         cambios = [p for p in peticiones if isinstance(p, functions.messages.UpdateDialogFilterRequest)]
         titulos = [p.filter.title.text if p.filter else f"borrar {p.id}" for p in cambios]
-        self.assertEqual(titulos[0][2], ".")  # «MM.DD» de hoy
+        self.assertEqual(titulos[0][2], ".")  # «DD.MM» de hoy
         self.assertIn("free send", titulos)
         self.assertIn(f"borrar {cambios[0].id}", titulos)  # la del día se queda vacía al pasar a free send
         self.assertEqual(fila["carpeta"], "free send")
