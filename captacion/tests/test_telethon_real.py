@@ -154,9 +154,6 @@ class TestClienteVigilado(unittest.TestCase):
             asyncio.run(probar(carpeta))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class ClienteServicio(ClienteFalso):
     """Cliente falso para lector.servicio(): entrega `eventos` como si
@@ -275,3 +272,46 @@ class TestServicio(unittest.TestCase):
         self.assertEqual(fila["carpeta"], "free send")
         for p in peticiones:  # todo lo pedido está en la lista blanca del lector
             guardia.comprobar(p, "lector")
+
+
+@unittest.skipIf(types is None, "telethon no está instalado")
+class TestIniciarSesion(unittest.TestCase):
+    ENTORNO = {"CAPTACION_API_ID": "123456", "CAPTACION_API_HASH": "0" * 32, "CAPTACION_SESION": "s"}
+
+    def iniciar(self, fallos):
+        from unittest import mock
+
+        from premier_captacion import lector
+
+        llamadas = []
+
+        class Cliente:
+            desconectado = False
+
+            async def start(self, phone, code_callback, password):
+                llamadas.append(phone)
+                if len(llamadas) <= fallos:
+                    raise errors.PhoneNumberInvalidError(request=None)
+
+            async def get_me(self):
+                return SimpleNamespace(first_name="Ana", last_name=None, username=None, id=1)
+
+            async def disconnect(self):
+                self.desconectado = True
+
+        cliente = Cliente()
+        with mock.patch.object(lector, "crear_cliente", return_value=cliente), mock.patch("builtins.print"):
+            codigo = asyncio.run(lector.iniciar_sesion(self.ENTORNO))
+        self.assertTrue(cliente.desconectado)
+        self.assertTrue(all(p is lector.pedir_telefono for p in llamadas))
+        return codigo, len(llamadas)
+
+    def test_telefono_no_valido_lo_vuelve_a_pedir(self):
+        self.assertEqual(self.iniciar(fallos=1), (0, 2))
+
+    def test_a_la_tercera_se_rinde(self):
+        self.assertEqual(self.iniciar(fallos=3), (1, 3))
+
+
+if __name__ == "__main__":
+    unittest.main()

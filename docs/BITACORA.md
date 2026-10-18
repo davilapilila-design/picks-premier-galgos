@@ -21,6 +21,19 @@ Entradas más recientes arriba.
   detallados (el dueño aún no los tiene). Pruebas: 125, pasan en Python
   3.9, 3.12 y 3.13; las nuevas fallan con el formato y el cálculo de año
   anteriores.
+- Commits: `b25be98`
+
+## 2026-10-18 — Captación: teléfono con prefijo de cualquier país al conectar la cuenta
+- **Qué**: el teléfono de la cuenta del dueño no es español, y el programa
+  ponía de ejemplo un número con +34. Ahora pide el teléfono con el prefijo
+  del país y sin el 0 inicial (ejemplos +353 8… y +34 6…). Acepta espacios,
+  guiones y «00» delante, y si falta el prefijo lo vuelve a pedir.
+- Si Telegram dice que el teléfono no es válido (p. ej. por dejar el 0
+  después del prefijo), lo explica y lo vuelve a pedir, hasta 3 veces, en
+  vez de acabar con un error de Python.
+- De paso: en `tests/test_telethon_real.py` el `if __name__ == "__main__"`
+  estaba a mitad del archivo; pasa al final. Pruebas: 129, pasan en Python
+  3.9, 3.12 y 3.13.
 - Commits: (este commit)
 
 ## 2026-10-15 — Captación: la fase 3 se prueba con la cuenta principal, en simulación

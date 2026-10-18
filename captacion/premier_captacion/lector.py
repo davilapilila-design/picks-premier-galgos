@@ -45,6 +45,7 @@ REVISION_CADA_S = 600
 # primera vez, solo el último día (lo anterior es cosa de la fase 4).
 HORIZONTE_INICIAL_S = 24 * 3600
 _RE_API_HASH = re.compile(r"^[0-9a-f]{32}$")
+_RE_TELEFONO = re.compile(r"^\+\d{8,15}$")
 
 
 class ErrorLector(Exception):
@@ -360,14 +361,38 @@ def client_status_offline():
     return UpdateStatusRequest(offline=True)
 
 
+def pedir_telefono(leer=input):
+    """Teléfono en formato internacional, como lo quiere Telegram: + y el
+    prefijo del país, y el número sin el 0 inicial."""
+    while True:
+        valor = re.sub(r"[\s().-]", "", leer("Teléfono de la cuenta, con el prefijo del país y sin el 0 "
+                                             "inicial (p. ej. +353 8… o +34 6…): "))
+        if valor.startswith("00"):
+            valor = "+" + valor[2:]
+        if _RE_TELEFONO.match(valor):
+            return valor
+        print("   Tiene que empezar por + y el prefijo del país (+353 Irlanda, +34 España).")
+
+
 async def iniciar_sesion(entorno):
+    from telethon import errors
+
     api_id, api_hash, sesion = credenciales_api(entorno)
     client = crear_cliente(sesion, api_id, api_hash, "iniciar-sesion")
-    await client.start(
-        phone=lambda: input("Número de teléfono de la cuenta (con prefijo, p. ej. +34600111222): "),
-        code_callback=lambda: input("Código que te acaba de llegar por Telegram (o SMS): "),
-        password=lambda: getpass.getpass("Contraseña de verificación en dos pasos (no se verá): "),
-    )
+    for _ in range(3):
+        try:
+            await client.start(
+                phone=pedir_telefono,
+                code_callback=lambda: input("Código que te acaba de llegar por Telegram (o SMS): "),
+                password=lambda: getpass.getpass("Contraseña de verificación en dos pasos (no se verá): "),
+            )
+            break
+        except errors.PhoneNumberInvalidError:
+            print("   Telegram dice que ese teléfono no es válido: revisa el prefijo y quita el 0 "
+                  "inicial del número (+353 8…, no +353 08…).")
+    else:
+        await client.disconnect()
+        return 1
     yo = await client.get_me()
     nombre = " ".join(x for x in (yo.first_name, yo.last_name) if x)
     print(f"✅ Conectado como {nombre} (@{yo.username or '-'}, id {yo.id}). La sesión queda en la VM.")

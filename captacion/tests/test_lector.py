@@ -2,6 +2,7 @@ import asyncio
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest import mock
 
 from premier_captacion import db, guardia, lector
 from premier_captacion.config import ErrorConfig, cargar_config
@@ -135,6 +136,21 @@ class TestEmbudoPrueba(unittest.TestCase):
             con = db.abrir(cfg.db_path)
             self.addCleanup(con.close)
             self.assertTrue(db.es_del_embudo(db.obtener_usuario(con, 123456789)))
+
+
+class TestTelefono(unittest.TestCase):
+    def test_formato_internacional(self):
+        for escrito, esperado in (("+353 87 000 0000", "+353870000000"),
+                                  ("00353870000000", "+353870000000"),
+                                  ("+34 600-00-00-00", "+34600000000")):
+            with self.subTest(escrito), mock.patch("builtins.print"):
+                self.assertEqual(lector.pedir_telefono(leer=lambda _: escrito), esperado)
+
+    def test_sin_prefijo_lo_vuelve_a_pedir(self):
+        respuestas = iter(["087 000 0000", "+353 87 000 0000"])
+        with mock.patch("builtins.print") as impreso:
+            self.assertEqual(lector.pedir_telefono(leer=lambda _: next(respuestas)), "+353870000000")
+        self.assertIn("prefijo", impreso.call_args.args[0])
 
 
 if __name__ == "__main__":

@@ -214,8 +214,9 @@ del bot de prueba): **tus clientes reales se ignoran**. Se prueba el flujo de
 verdad: la secundaria pulsa un botón de la bienvenida y te escribe.
 
 ### Paso 1. api_id y api_hash (tú, en el navegador)
-1. Entra en <https://my.telegram.org>, pon tu teléfono (+34…) y el código que
-   te llega a la app de Telegram.
+1. Entra en <https://my.telegram.org>, pon tu teléfono con el prefijo del
+   país y sin el 0 inicial (p. ej. +353 8… o +34 6…) y el código que te
+   llega a la app de Telegram.
 2. «API development tools» → rellena *App title* `Premier captacion`, *Short
    name* `premiercaptacion`, *Platform* `Desktop` (lo demás, vacío) →
    «Create application».
@@ -236,12 +237,13 @@ No conecta ninguna cuenta.
 ```bash
 bash /opt/premier-captacion/conectar-cuenta.sh prueba
 ```
-Te pide el api_id y el api_hash, confirmación (escribe SI), **tu teléfono**, el
-código que te llega por Telegram y, si la tienes, la contraseña de
-verificación en dos pasos. Al acabar arranca el lector en simulación y te
-llega por el bot de prueba «📁 Lector de carpetas conectado… Modo:
-SIMULACIÓN». Justo después pueden llegar dos tipos de aviso, los dos solo
-avisos (no toca nada):
+Te pide el api_id y el api_hash, confirmación (escribe SI), **tu teléfono**
+(igual que en el paso 1: prefijo del país y sin el 0 inicial; si lo pones
+mal, te lo vuelve a pedir), el código que te llega por Telegram y, si la
+tienes, la contraseña de verificación en dos pasos. Al acabar arranca el
+lector en simulación y te llega por el bot de prueba «📁 Lector de carpetas
+conectado… Modo: SIMULACIÓN». Justo después pueden llegar dos tipos de
+aviso, los dos solo avisos (no toca nada):
 - «🧪 Simulación (no he tocado nada): borro la carpeta xx.10…»: si tienes más
   de 5 carpetas de días, las más antiguas que sobrarían.
 - «🧪 Simulación: … meto a … en la carpeta …»: al arrancar repasa las últimas
