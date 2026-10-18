@@ -47,6 +47,456 @@ Cambios (sin tocar ningún cálculo, ni la hoja, ni sus fórmulas):
   ejecutar `configurarTriggerCachePanel` y `test_cachePanel` desde el editor.
 - Commits: (este commit)
 
+## 2026-09-25 (cont. 14) — Resumen semanal de los lunes y comando `/stats N` (desplegado, v30)
+Pedido del dueño. Decisiones (preguntadas): se envía al grupo del bot
+(`TELEGRAM_CHAT_ID`); comando `/stats N` (sin número = 7 días; 1-365), para
+cualquiera del grupo; incluye exóticas, como el panel. Formato: DOS mensajes,
+el de estadísticas (apuestas resueltas con ganadas/perdidas, unidades, ROI,
+acierto) y, solo si hay alguna del periodo sin resultado, otro con
+"Pendientes de resultado: N".
+- `src/Estadisticas.gs` (nuevo): periodo por `fecha_pick` en hora de Madrid
+  (claves `yyyy-MM-dd`, a prueba de cambio de hora); semana anterior = lunes a
+  domingo; mismos filtros que el panel (sin ocultas, solo gano/perdio; ROI =
+  unidades / stake); todo en unidades. `enviarResumenSemanal`,
+  `previsualizarResumenSemanal([dias])` (devuelve el texto SIN enviar),
+  `configurarTriggerResumenSemanal` (idempotente; Apps Script solo deja fijar
+  la hora: se ejecuta entre las 7:00 y las 8:00) y `test_estadisticas`.
+- `src/Main.gs` (`doPost`): si el mensaje no es un reply y es `/stats…`, se
+  contesta y NO pasa a la IA; queda `procesado` en `mensajes_crudos`
+  (`buscarPicksAtascados` solo mira `pendiente`/`error`).
+- `src/Dashboard.gs`: la lectura de `apuestas` pasa a `obtenerFilasApuestas_()`,
+  compartida por el panel y las estadísticas (sin cambio de comportamiento).
+Verificado: `clasp push` solo al HEAD (producción sigue en @29), 9 tests sin
+error (`test_estadisticas` + los de siempre). Vista previa con datos reales:
+semana 14-20/09 → 13 (6 g, 7 p), +43,00 UD, ROI +82,7 %, acierto 46,2 %;
+`/stats 7` (19-25/09) → 16 (7 g, 9 p), +31,20 UD, ROI +42,7 %, 43,8 %.
+Recalculado aparte en Python sobre la hoja: idéntico, y el histórico (195
+picks, +246,03 UD, ROI +28,3 %) coincide con `getMetricasPanel`.
+**Desplegado** (con permiso del dueño): versión 30, `update-deployment` del
+despliegue fijo AKfycbynXi…@30 (antes, HEAD comprobado = rama `e3f2480`). Panel
+público revisado con Playwright: sin errores, 195 picks, +246,03 UD. Prueba real:
+el dueño mandó `/stats 7` en el grupo (msg 342): respondió bien, quedó
+`procesado` y no creó apuesta (tardó 1-2 min, probablemente esperando el lock
+de `doPost`). `configurarTriggerResumenSemanal` ejecutado: primer resumen el
+lunes 28/09 entre las 7:00 y las 8:00. **Ojo**: los triggers de tiempo ejecutan
+el código del HEAD, no el de la versión desplegada; no dejar código a medias
+en el HEAD.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 13) — La extracción de datos de Proyecto Galgos (VPN, rotación, scraper) queda FUERA de las sesiones de picks
+Decisión del dueño: no se cambia nada de cómo Proyecto Galgos extrae los datos
+(VPN, `rotate_vpn_daily.sh`, `src/utils/vpn.py`, scraper); lo atacará él en
+otra sesión. Descartada, sin aplicar, la propuesta de comprobar Racing Post
+tras cada rotación. Corrección de concepto: Racing Post veta **la IP** desde
+la que se conecta (NordVPN cambia de IP dentro de un mismo país), no el país;
+donde esta bitácora dice "país vetado", léase "IP vetada".
+Estado que queda hoy: VPN en Japón (cambio manual de esta sesión); la rotación
+de la 01:00 UTC la cambiará como siempre. Si vuelven a quedar picks pendientes
+por falta de resultados, en una sesión de picks: pedir SOLO esas carreras a
+Racing Post con peticiones directas (sin `vpn.py`) y escribir SOLO esas filas en
+`resultados_galgos` (ver cont. 8-10).
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 12) — Playwright en la VM y revisión del panel (local y URL pública): todo bien
+Con permiso del dueño ("que no perjudique al resto"):
+- Playwright en un venv aislado `/root/.venvs/playwright` + Chromium headless en
+  `/root/.cache/ms-playwright` (662 MB). Faltaban librerías del sistema
+  (libnspr4, libnss3, libgbm1…): 41 paquetes **nuevos**, 0 actualizados, 0
+  quitados (simulado antes con `apt-get -s`), con `NEEDRESTART_MODE=l` para no
+  reiniciar servicios. Servicios en marcha antes/después iguales (solo aparece
+  `packagekit`, que arranca apt y se para solo); Caddy, dashboard, Tailscale y
+  NordVPN activos; `dpkg --audit` limpio.
+- **Ojo**: el mirror de apt de la VM (`mirror.hetzner.com`) solo acepta IPs de
+  Hetzner; con la VPN puesta, apt se queda colgado sin descargar nada. Se
+  instaló desde `ports.ubuntu.com` solo para esa orden (sources e índices
+  temporales vía `-o Dir::Etc::sourcelist=… -o Dir::State::Lists=…`), sin
+  tocar la configuración de apt.
+- Uso: `/root/.venvs/playwright/bin/python scripts/revisar_panel_local.py <dir>`
+  (con nvm cargado para `npx clasp`).
+- Revisión local: 193 picks, sin errores JS, logo y botón de resumen OK en
+  móvil y escritorio. Revisión de la **URL pública** (despliegue @29) con
+  Playwright: sin errores JS, +58.507,50 € / +234,03 UD / ROI +27,2 % / 193
+  picks; desplegando "Ver más picks" (9 clics) aparecen todos los picks
+  resueltos hoy (32, 74, 120, 289, Harlow, Towcester, Yarmouth…) con su
+  resultado. Revisado también el msg 203 (Turnthemagicon en Nottingham 31/08):
+  correcto, el galgo corrió allí (T6, 2º).
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 11) — Picks 32 y 74 registrados (fecha única por las cards; el dueño lo confirmó en Racing Post)
+El dueño comprobó a mano en Racing Post las 4 patas y pidió registrarlas.
+- `clasp run-function appendApuestaConPatas` (el mismo código que usa el bot):
+  32 → `apuestas` fila 191 (doble, cuota 2.30, stake 4; T6 Turnthemagicon
+  Central Park 21:10 + T5 Vhagar Monmore 21:54); 74 → fila 192 (doble, 2.26,
+  stake 6; T4 Vhagar Monmore 20:14 + T4 Slingshot Poppy Monmore 21:54).
+  Patas en `apuestas_patas` 204-207. `mensajes_crudos` filas 31 y 73:
+  `revision_manual` → `procesado`, `fecha_forward` 01/08/2026 y 15/08/2026.
+- **Trampa encontrada**: pasar la fecha como "2026-08-01" por clasp la guarda
+  como fecha pero con formato `yyyy-mm-dd`, y `vm_job_resultados_galgos.py`
+  lee el texto mostrado con `%d/%m/%Y`: **se salta la pata sin avisar**
+  ("206 totales, 202 cubiertas, 0 pendientes"). Arreglado poniendo formato
+  `dd/mm/yyyy` a esas celdas (C191:C192 y C204:C207). Ojo si se vuelve a cargar
+  algo a mano por clasp.
+- Job relanzado: 13 filas en `resultados_galgos` (662-674). Verificado en la
+  hoja, galgo + trampa + race_id de cada pata coinciden con el boleto:
+  **32 gano, +5,2 UD** (Turnthemagicon 1º, Vhagar 1º); **74 perdio, -6 UD**
+  (Vhagar 3º, Slingshot Poppy 1º).
+Estado final: 0 apuestas `pendiente`, 0 exóticas `pendiente`, 0 mensajes en
+`revision_manual`.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 10) — Central Park 15/09: 289 perdio. Cero apuestas pendientes
+Igual que Harlow: podio de la carrera 2223828 pedido a Racing Post (petición
+directa) y filas 658-661 en `resultados_galgos` solo de esa carrera. Swift
+United no estaba en el podio; su ficha en Racing Post dio 580, pero su
+histórico ya estaba en la VM (`/opt/galgos/data/master/galgos_json_sidecar.parquet`,
+el mismo que usa `vm_job_dog_forms.py`): T4, **5º**, SP 6/4 → **289 perdio,
+-4 UD**. Verificado releyendo la hoja: **0 apuestas y 0 exóticas en
+`pendiente`** (quedan 32 y 74 en `revision_manual`, sin registrar).
+Truco para la próxima vez: para la posición de un galgo fuera del podio, mirar
+primero ese sidecar antes de pedir la ficha a Racing Post.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 9) — Harlow 16/09 y 18/09 resueltos; nombre de la 301 corregido
+Igual que Towcester (cont. 8), a petición del dueño: `apuestas!Y175` y
+`apuestas_patas!G186` "Joys Of Dannielle" → "Joys Of Danielle" (nombre del
+boleto); filas 643-657 en `resultados_galgos` solo de las 4 carreras (podio de
+Racing Post + la 5ª posición de Joys Of Danielle y Da Danna sacada del
+histórico de cada galgo, como `vm_job_dog_forms.py`). Verificado en la hoja:
+- 292 Gagas Merry 3ª → **perdio, -3 UD**.
+- 301 Joys Of Danielle 5ª → **perdio, -3 UD**.
+- 302 Caislean Champ 1º → **gano, +12 UD** (stake 3 × cuota 5).
+- 303 Da Danna 5ª → **perdio, -4 UD**.
+Queda 1 pendiente: 289 (Central Park 15/09).
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 8) — Towcester 20/09: 307 y 308 perdio (filas escritas solo de esas dos carreras)
+A petición del dueño ("como en Harlow"), sin tocar datos de Proyecto Galgos:
+resultados pedidos a Racing Post con peticiones directas (sin `vpn.py`) y
+escritas en `resultados_galgos` SOLO las filas de las dos carreras (637-642),
+con el formato de `vm_job_resultados_galgos.py` (podio, `fract` → decimal,
+url, race_id, dog_id), comprobando antes que no existían.
+- 307 doble: pata 1 Magical Jason 1º (ya estaba; race 2223915 es Towcester
+  20/09 15:51 UTC, bien aunque el número parezca de otro día), pata 2 Romeo
+  Tomcat T5 **3º** → **perdio, -5 UD**.
+- 308 simple: Droopys Erlybird T1 **2º** → **perdio, -5 UD**.
+Verificado releyendo la hoja (cuotas guardadas como número: 5,5 / 1,4 / 1,9091).
+Pendientes: 289 (Central Park 15/09) y Harlow 292/301/302/303 (escritura
+bloqueada por el clasificador de permisos; ver cont. 7).
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 7) — Harlow 16/09 y 18/09: resultados vistos; nombre del galgo del boleto manda sobre el texto
+Resultados consultados en Racing Post (solo lectura, peticiones directas sin
+`vpn.py`): 292 Gagas Merry T6 3ª; 302 Caislean Champ T4 1º; 301 y 303 fuera
+del podio → posición real sacada del histórico de cada galgo
+(`dog/blocks.sd?...&blocks=details`): 301 Joys Of Danielle T2 **5ª** (race
+2224156), 303 Da Danna T3 **5ª** (race 2224159). La card de carreras pasadas
+no se puede pedir (580). **Incidente**: esa petición de card pasó por
+`request_json`, que ante el 580 cambió la VPN sola a Irlanda (403); devuelta a
+Japón al momento (anotado en `vpn_rotation.log`). Desde entonces, solo
+peticiones directas con curl_cffi.
+
+msg 301: el texto del tipster dice "Joys Of Dannielle"; el boleto (foto, vista
+con `fotoDeMensajeBase64`) dice "Joys Of Danielle", que es el nombre real. El
+prompt no decía qué fuente manda para el galgo y Gemini copió el texto. Cambio
+en `src/AI.gs`: para "seleccion", si el boleto trae el nombre, se copia de la
+imagen (al revés que el canódromo, donde manda el texto). **Desplegado con
+permiso del dueño**: antes, `clasp pull` a una carpeta aparte y `diff` contra
+la rama (única diferencia: este cambio; la rama tenía todo lo de `main` y de la
+PR #1). `clasp push`, tests sin error (`test_normalizarCanodromo`,
+`test_calcularResolucionExotica`, `test_construirTextoResolucionExotica`,
+`testReglasAuditoria`, `checkConfig`), versión 29 y `update-deployment` del
+despliegue fijo AKfycbynXi…@29. Panel público: HTTP 200.
+
+Pendiente: escribir en la hoja el nombre corregido de la 301 y las filas de
+esas 4 carreras en `resultados_galgos` (bloqueado por el clasificador de
+permisos de la sesión; necesita autorización del dueño).
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 6) — Yarmouth 09/09 y 16/09: resultados recuperados, 267/268 perdio y 293 gano
+A petición del dueño, resultados de las carreras de Yarmouth de sus picks.
+`scrape_results_for_track` de Yarmouth 09/09 y 16/09 (la API de Racing Post
+da la reunión entera, no la carrera) + `sync_and_rebuild` (+65 filas). **Ojo:
+el dueño solo quería esas carreras**; lo de descargar la reunión y reconstruir
+el parquet debió consultarse antes. Regla para este chat: solo picks, sin
+ampliar a datos de Proyecto Galgos sin preguntar.
+`picks-resultados` lanzado a mano (13 filas nuevas en `resultados_galgos`,
+624-636). Verificado en la hoja, con race_id y trampa de cada pata:
+- 267 doble: Roanna Mamba T2 2º (perdio), Romeo Empire T1 1º (gano) → **perdio, -4 UD**.
+- 268 simple: Farneys Tilly T4 fuera del podio (ganó Outdoor Cracker T1) → **perdio, -4 UD**.
+- 293 simple: Rosshill Storm T3 1º → **gano, +6 UD** (stake 6 × cuota 2).
+Quedan 7 pendientes: 289, 292, 301, 302, 303, 307, 308.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 5) — msg 120 (Tedushi Ted) estaba fechado el día del reenvío: corregido a 20/08, resuelto `perdio`
+El dueño confirmó que el pick original era del 20/08 (lo reenvió el 26/08).
+Corregido en la hoja (con su permiso): `apuestas!C91` y `apuestas_patas!C96`
+(`fecha_pick` 26/08/2026 6:11:27 → 20/08/2026) y `mensajes_crudos!F93`
+(`fecha_forward` vacío → 20/08/2026). `picks-resultados` lanzado a mano:
+Hove 20/08 21:59 (race_id 2218931), Tedushi Ted T5 **2º** → **perdio, -4 UD**
+(verificado releyendo la hoja; cuota_final 2,875).
+
+Por qué pasó (bitácora del 26/08): 119 (Newcastle) y 120 (Hove) fallaron en
+Gemini por un 429 sin reintento; se restauraron **a mano** usando
+`fecha_recibido` como fecha, porque `mensajes_crudos` aún no guardaba la fecha
+del reenvío. Después el dueño los reenvió (123, 124): 123 lo procesó `doPost`
+con la fecha del reenvío (20/08, bien) y se borró el 119 manual como duplicado;
+124 volvió a fallar y se dio por bueno el 120 manual, con la fecha mal. Esa
+misma tarde se añadió `fecha_forward` y se corrigieron 11 reenvíos (127-148),
+pero el 120 no entró en esa lista. El flujo automático actual
+(`extraerFechaForward_`, con `forward_origin`) ya no tiene este problema; el
+riesgo solo existe en cargas manuales.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 4) — VPN a Japón y recuperados los resultados de las dos carreras del 22/09 (msgs 315, 316, gemela 319)
+Con permiso del dueño, cambios en producción de Proyecto Galgos:
+- **VPN**: la IP de NordVPN Grecia (186.247.178.185) recibía 403 de Racing Post
+  en toda la web (Varnish/Fastly, "Error 54113"); hoy no se había guardado
+  ningún resultado. Cambiada a mano a **Japón #1275** (`nordvpn connect
+  Japan`, anotado en `logs/automation/vpn_rotation.log`): 200 al momento, también
+  para fechas pasadas. Tailscale no se cortó. La rotación de la 01:00 UTC la
+  volverá a cambiar (Japón no está en su lista).
+- **Solo las dos reuniones que pidió el dueño** (no el backfill completo: dice
+  que para el predictor no aporta): `scrape_results_for_track("2026-09-22",
+  "Star Pelaw" / "Central Park")` con el lock global de scraping cogido, y
+  `sync_and_rebuild()` (+63 filas en `results_enriched`). Resultado: 315
+  Glenbowen Mabel 1º; 316 King Cobain 1º; dividendos de Star Pelaw 22/09
+  capturados (18:11 UTC forecast 1-5 = 19,30, que es la gemela 319).
+- La hoja la escriben los jobs de siempre, lanzados a mano a petición del dueño
+  (`systemctl start picks-resultados` / `picks-gemela-trio` y `clasp run-function
+  resolverApuestasExoticas`). Verificado releyendo la hoja: **315 gano** (+7,2 UD),
+  **316 gano** (+12 UD), **319 perdio** (6-1/1-6 vs 1-5, -5 UD). Quedan 11
+  apuestas pendientes: 120, 267, 268, 289, 292, 293, 301, 302, 303, 307, 308.
+
+Pendiente (sin decidir): que el 403 dispare cambio de VPN en `src/utils/vpn.py`
+(hoy solo 429/580/903) y que `change_vpn()` no vaya siempre a Irlanda; resto de
+patas pendientes (el dueño no quiere backfill de los otros días); 32/74; 120.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 3) — Diagnóstico ejecutado en la VM: la causa común es el 403 de Racing Post
+Sesión con acceso a la VM (root, local). Accesos: OK datos de Proyecto Galgos,
+logs, hoja con gspread (solo lectura) y salida a internet (incluido
+script.google.com). Configurados en esta sesión (sin tocar servicios):
+- GitHub: token fine-grained del dueño (solo este repo, Contents RW, sin
+  caducidad) en `/root/.git-credentials` (`credential.helper store`).
+- Node 20 con nvm en `/root/.nvm` (cargado desde `/root/.bashrc`) + clasp 3.4.1
+  global. **`clasp run-function` exige loguearse con el cliente OAuth de
+  escritorio `clasp-cli` del proyecto GCP `picks-premier-galgos`** (con el
+  cliente por defecto de clasp da "Unable to run script function"):
+  `clasp login --no-localhost --use-project-scopes --include-clasp-scopes
+  --creds /root/.config/picks-premier-galgos/clasp_oauth_client.json`.
+  Verificado: `list-deployments` (AKfycbynXi…@28) y `run-function checkConfig`.
+- Playwright: sin instalar todavía.
+
+Hoja hoy: **13 apuestas / 14 patas** pendientes + gemela 319. Las del 24/09
+(329, 331, 332, 333) se resolvieron solas (`auto`); quitadas de
+`scripts/diagnostico_pendientes_vm.py`.
+
+Resultado del diagnóstico (solo lectura):
+- **32 → fecha única 01/08/2026** (T6 Turnthemagicon CP 20:10 UTC, 1º; T5
+  Vhagar Monmore 20:54 UTC, 1º). **74 → fecha única 15/08/2026** (T4 Vhagar
+  Monmore 19:14 UTC, 3º; T4 Slingshot Poppy 20:54 UTC, 1º). Sin registrar aún.
+- Ninguna pata es "hora distinta" ni "abandonada". 12 patas: el galgo está en
+  las cards con la trampa del tipster pero la carrera no tiene resultado en
+  `results_enriched`; 3 (Harlow 18/09 mañana): sin cards; 1 (msg 120).
+- **Causa común**: `job_poll_results` de Proyecto Galgos recibe **HTTP 403** de
+  Racing Post (`_fetch_results_tracks`). Pasadas fallidas por día: 16/09, 18/09
+  y 22/09 las 41 (día entero sin resultados); 09/09 21, 15/09 24, 20/09 30 (a
+  partir de media tarde: solo se guardó la primera mitad de cada reunión, p. ej.
+  Yarmouth 09/09 4 de 12 carreras). Hoy 25/09 también falla desde las 10:30. El
+  job solo mira el día en curso, así que lo perdido no se recupera solo.
+  Existe `main.py scrape-results-range --fecha-desde --fecha-hasta` en Proyecto
+  Galgos, que también captura dividendos.
+- **Gemela/trío**: `picks-gemela-trio` (código en
+  `/opt/galgos/repo/scripts/picks/vm_job_gemela_trio.py`, commiteado en
+  Proyecto_Galgos 1006c70) funciona y sale con 0; no escribía porque desde el
+  09/09 solo ha habido una exótica nueva (319) y no hay dividendo capturado de
+  Star Pelaw 22/09 (mismo 403). Log: `/var/log/picks-gemela-trio.log`.
+- **msg 120** (Hove 26/08 21:59 T5 Tedushi Ted): Hove 26/08 solo tiene reunión
+  de tarde en las cards; Tedushi Ted T5 corrió en Hove el 20/08 a 20:59 UTC
+  (= 21:59 UK). Posible reenvío cargado con la fecha de llegada, pero
+  `fecha_forward` está vacío: NO se corrige sin confirmación del dueño.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont. 2) — Sesión nueva: comprobación de accesos y foto de pendientes; bloqueado por falta de acceso a la VM
+Sesión retomada sin contexto. Accesos comprobados:
+- OK: GitHub (fetch + `push --dry-run`), clasp (`list-deployments` muestra
+  AKfycbynXi…@28; `run-function checkConfig` sin error), lectura completa de la
+  hoja (xlsx por el conector de Drive, parseado sin muestreo), Playwright
+  (instalado con pip; Chromium en `/opt/pw-browsers`), npm/pypi/github.
+- FALTA: **SSH a la VM** (el entorno cloud no tiene cliente ssh, ni Tailscale,
+  ni claves; la red solo deja salir HTTPS por el proxy) y **script.google.com**
+  (403 del proxy: la URL pública del panel no se puede abrir; se revisa con
+  `scripts/revisar_panel_local.py`).
+
+Estado de la hoja hoy (xlsx completo): las **mismas 17 apuestas / 19 patas**
+pendientes que lista `scripts/diagnostico_pendientes_vm.py` (lista sin cambios).
+**El msg 315 NO se ha resuelto solo**: sigue sin ninguna fila de Star Pelaw del
+22/09 en `resultados_galgos` (arreglar el canódromo no bastó: el dato no llega
+de la VM). Último día con filas en `resultados_galgos`: 23/09. Gemela 319
+sigue `pendiente` y `resultados_gemela_trio` solo tiene la fila del 08/09.
+Msgs 32 y 74 siguen en `revision_manual`.
+
+Rama: `claude/lucid-pascal-148x58` puesta al día (fast-forward) con
+`claude/audit-test-sheets-row-40-7e67wh` (PR #1, sin fusionar; `main` no tenía
+nada que ella no tuviera). Tests por `clasp run-function` contra el HEAD del
+Apps Script, todos sin error: `test_normalizarCanodromo`,
+`test_calcularResolucionExotica`, `test_construirTextoResolucionExotica`,
+`testReglasAuditoria`. Sin `clasp push` ni despliegue en esta sesión.
+
+Siguiente paso: ejecutar el diagnóstico en la VM (lo hace el dueño o una
+sesión con acceso) y seguir con las causas de la entrada del 25/09.
+
+Commits: (este commit)
+
+## 2026-09-25 (cont.) — Autorevisión del panel con Playwright; recuperado el logo real (regresión desde la v11)
+El dueño pidió que el panel se revise solo, con Playwright, tras cada cambio.
+`script.google.com` está bloqueado por el proxy de los entornos cloud (403,
+también desde Chromium), así que no se puede abrir la URL pública. Solución:
+`scripts/revisar_panel_local.py` saca los datos REALES con `clasp run-function
+getMetricasPanel --json` (la API de Apps Script sí es accesible), abre el
+`src/Panel.html` del repo en Chromium local con `google.script.run` sustituido
+por esos datos, y comprueba en móvil y escritorio: errores de JavaScript, que
+cargue el logo y que el botón de resumen abra el resumen. Deja capturas.
+Salida con código 1 si algo falla. Uso: `python3 scripts/revisar_panel_local.py
+[dir_capturas]` (requiere `pip install playwright`; Chromium ya está en
+`/opt/pw-browsers`). Primera versión del script daba un falso "botón no
+encontrado" (volvía a buscar el texto después de pulsarlo, cuando ya había
+cambiado a "Ocultar resumen") - corregido antes de dar nada por bueno.
+
+**Regresión encontrada al revisarlo**: el logo real (embebido en base64 en la
+v10, `c1a886e`, a petición del dueño) desapareció en la v11 (`467ebfe`, 01/09):
+el diseño de la v11 partía de un `Panel.html` anterior al logo y volvió al
+monograma "PG". Nadie lo pidió (no consta en esta bitácora). Restaurada la
+etiqueta `<img>` exacta de la v10. Verificado con el script: logo 128×128
+cargado, sin errores. Datos del panel coherentes: 173 picks, +229,63 UD =
++57.407,50 € (× 250), ROI +29,7 %.
+No verificable aquí: el formato de los campos de fecha (sale "mm/dd/yyyy"
+porque este Chromium de servidor no tiene datos regionales en español; en un
+dispositivo en español lo pinta el sistema como dd/mm/aaaa).
+
+Commits: (este commit)
+
+## 2026-09-25 — Diagnóstico de apuestas pendientes; canódromo mal extraído por la IA (msg 315) corregido y blindado
+El dueño pidió revisar por qué seguían sin resolverse las apuestas en
+`pendiente`. Hoja descargada entera en xlsx (vía Drive, todas las pestañas sin
+muestreo) y analizada fila a fila: **17 apuestas en `pendiente` + 1 gemela**.
+En todas salvo una pata, la carrera no tiene ni una fila en `resultados_galgos`:
+no es un fallo de cruce de este repo, el dato no llega. El job de la VM
+(`scripts/vm_job_resultados_galgos.py`) sigue funcionando (escribe filas hasta
+el 24/09), pero busca cada carrera por canódromo+fecha+hora al minuto EXACTOS
+contra el parquet; si algo no cuadra, la carrera se queda sin resolver para
+siempre, sin aviso. Causas encontradas (se atacan una a una, ver entradas
+siguientes): canódromo mal escrito (msg 315), Yarmouth sin ningún resultado
+nunca (4 patas), carreras de canódromos cubiertos sin datos (Harlow 18/09
+reunión entera, Towcester 20/09, etc.), `resultados_gemela_trio` sin ninguna
+fila nueva desde el 09/09 (el job de gemela/trío de la VM no escribe), y 2
+picks del 19/08 en `revision_manual` (msgs 32 y 74, patas sin trampa).
+`buscarPicksAtascados()` no ve nada de esto: solo detecta mensajes sin fila
+en `apuestas`.
+
+**Causa 1, resuelta - msg 315**: el tipster escribió "20:04 Star Pelaw" pero
+Gemini devolvió `hipodromo: "Pelaw"`, y así la VM nunca encuentra la carrera.
+- Corregido en la hoja con `repararHipodromoPelaw20260925()` (Main.gs,
+  idempotente: solo toca la celda si sigue siendo exactamente "Pelaw").
+- Para que no se repita (`src/AI.gs`): regla nueva en el prompt (copiar el
+  nombre COMPLETO del texto; si texto e imagen no coinciden, manda el texto)
+  y `normalizarCanodromo_` sobre lo que devuelve la IA, contra los
+  canódromos que ya han cruzado alguna vez con la VM (los de
+  `resultados_galgos`): coincidencia exacta sin mayúsculas, o el nombre
+  extraído como palabra(s) completa(s) dentro de UN SOLO canódromo conocido.
+  Ambiguo o desconocido → se deja tal cual (no se adivina, regla de
+  `CLAUDE.md`). Test `test_normalizarCanodromo`.
+
+**Hallazgo de proceso**: `clasp run` **ya funciona** en este proyecto (antes
+"NOT_FOUND"; lo arregló la vinculación al proyecto de GCP estándar,
+`5422ba8`) - desde ahora se pueden ejecutar funciones y tests de Apps Script
+desde la sesión, sin pasar por el editor. Así se ejecutaron la reparación y
+los tests (`test_normalizarCanodromo`, `test_calcularResolucionExotica`,
+`test_construirTextoResolucionExotica`, `testReglasAuditoria`, todos OK).
+Ojo: un primer `clasp push` desde esta rama dejó unos minutos el HEAD del
+Apps Script sin los cambios del panel de `main` (`06ae896`, `c0b23f8`) - el
+panel público no se vio afectado (se sirve desde el deployment fijo @26).
+Arreglado integrando `main` antes de volver a subir y redesplegar. Antes de
+cada `clasp push`, comprobar que la rama tiene todo lo de `main`.
+
+**Causa 6, a medias - msgs 32 y 74** (dobles del histórico, en
+`revision_manual` desde el 20/08 porque al texto le faltan trampas). La carga
+del histórico se hizo con regex sobre el texto y nunca miró las fotos; ahora,
+con `fotoDeMensajeBase64(messageId)` (Telegram.gs, nueva, pensada para
+`clasp run-function fotoDeMensajeBase64 --params '["32"]'`), se han visto los
+boletos de Sky Bet, que SÍ traen la trampa de cada galgo:
+- 32: T6 Turnthemagicon (Central Park) + **T5 Vhagar** (Monmore 21:54 en el
+  texto). 74: **T4 Vhagar** (Monmore 20:14) + **T4 Slingshot Poppy**
+  (Monmore 21:54). En 74, "1.44"/"1.57" del texto eran la cuota de cada pata
+  (1,44 × 1,57 = 2,26, la cuota conjunta), no trampas.
+- Las horas del boleto van exactamente 1h por detrás del texto en las 4 patas
+  (misma carrera en otra zona horaria, no una contradicción); se mantiene la
+  hora del texto, que es la convención con la que resuelve todo el sistema.
+- **Falta la fecha real** (no se guardó `fecha_forward` en esa carga; el
+  boleto no la muestra). Los vecinos solo acotan (32: 31/07-02/08; 74:
+  15-16/08) - no se elige una por proximidad (regla de `CLAUDE.md`). Ojo:
+  `resultados_galgos` tiene "Monmore 22/08 20:54 T5 Vhagar", que coincide con
+  el boleto del 32 pero NO es esa carrera (fecha fuera del rango de los
+  vecinos; los galgos repiten trampa y franja horaria semana a semana - mismo
+  riesgo que el falso "perdió" de Moaning May del 26/08).
+- Por qué se perdió la fecha: `scripts/backfill_picks.py:110` sí calculaba
+  la fecha real del reenvío, pero para los `revision_manual` solo escribía la
+  fila de `mensajes_crudos`, que entonces no tenía columna para ella. Desde
+  el 26/08 (`fecha_forward`) ya no pasa con picks nuevos.
+- Cómo fecharlos sin adivinar (idea del dueño): en las cards de la VM
+  (`galgos_master.parquet`), el día del rango en que TODAS las patas cuadran
+  con canódromo + galgo + trampa del boleto. Lo hace
+  `scripts/diagnostico_pendientes_vm.py` (abajo).
+
+**Lo que falta (necesita la VM de Proyecto Galgos)**. Esta sesión (entorno
+cloud) no llega a la VM: su política de red bloquea Tailscale y cualquier
+host fuera de la lista. Queda preparado `scripts/diagnostico_pendientes_vm.py`
+(SOLO LECTURA, probado con datos sintéticos), para ejecutar en la VM:
+1. Fecha los picks 32 y 74 por las cards (solo si la fecha es única).
+2. Para cada una de las 19 patas pendientes (lista en el propio script),
+   busca el galgo en las cards de su día POR NOMBRE y cruza por `race_id`
+   con `results_enriched.parquet`: sin cards de esa reunión / galgo no está
+   / carrera sin resultado / resultado con hora distinta a la del tipster /
+   estado (abandonada).
+Hallado leyendo el código de Proyecto Galgos (repo `Proyecto_Galgos`, commit
+`73040a8`): `automation/job_poll_results.py` solo scrapea resultados del día
+EN CURSO - una reunión que no se recogió ese día (VM caída, bloqueo de
+memoria, rate-limit) no se vuelve a buscar nunca; las carreras cambian de
+hora (tienen su propio `reconcile_master_horas`) y nuestro
+`vm_job_resultados_galgos.py` exige la hora al minuto; y Racing Post marca
+las carreras abandonadas (`status A`), que nunca tendrán resultado. Yarmouth
+NO está excluido del scraper (aparece con ese nombre en sus datos).
+Siguientes pasos según lo que salga del diagnóstico:
+- Picks 32/74: registrarlos con la fecha única y las trampas del boleto
+  (`apuestas` + `apuestas_patas`, mismo esquema que `appendApuestaConPatas`;
+  `mensajes_crudos.estado` → `procesado`).
+- Reuniones sin datos: backfill de esas fechas en Proyecto Galgos.
+- Hora distinta: que `vm_job_resultados_galgos.py` localice la carrera por
+  canódromo+fecha+NOMBRE del galgo en las cards (como ya hace
+  `vm_job_dog_forms.py`) en vez de por hora exacta, o con tolerancia.
+- Abandonadas: anular la apuesta (no dejarla `pendiente` para siempre).
+- Causa 5 (gemela msg 319, Star Pelaw 22/09 19:11): el job de gemela/trío de
+  la VM no escribe en `resultados_gemela_trio` desde el 09/09; su código no
+  está commiteado en `Proyecto_Galgos` (último push 08/09) - revisar servicio,
+  timer y `journalctl` en la VM.
+
+Commits: e4c2033 (fix canódromo + reparación 315), 1424852
+(`fotoDeMensajeBase64`), 6ce08dc (`diagnostico_pendientes_vm.py`); merge de
+`main` en cf34b93. Desplegado en Apps Script como v27. Todo en la rama
+`claude/audit-test-sheets-row-40-7e67wh` (sin mergear a `main` todavía).
+
 ## 2026-09-09 — Fixes de resolución de gemela/trío + disparador a 30 min
 Tres ajustes sobre `resolverApuestasExoticas` (Main.gs), detectados con datos
 reales de producción tras el lanzamiento del 8 sept. Desplegados en su
@@ -71,6 +521,58 @@ sincroniza ese código con el repo (quedó unos días sin commitear).
 - De paso: `.clasp.json` con `fileExtension: "gs"` para que `clasp pull`
   escriba directo en `.gs` (antes creaba duplicados `.js`).
 - Commits: (este commit)
+
+## 2026-09-09 — `resolverApuestasExoticas` adaptada a la captura automática real de Proyecto Galgos (dividendo locale, trío sin mercado)
+El dueño avisó que Proyecto Galgos (VM Hetzner) acaba de desplegar la captura
+automática de `resultados_gemela_trio` (job propio por `gspread`, cada 20 min) -
+la pestaña ya no se rellena a mano. Dio por escrito tres detalles reales del
+dato que iban a romper `resolverApuestasExoticas()`/`calcularResolucionExotica_`
+(`src/Main.gs`, añadidas ayer en `7d2e4ff`) si no se contemplaban:
+
+- **`dividendo` en dos formas**: número real de Sheets en las filas nuevas de
+  la VM, pero texto con coma decimal es_ES ("7,42") en la fila sembrada a mano
+  el 8/09 (Star Pelaw) - `Number()` de JS da `NaN` con la segunda forma.
+  Arreglado con `parsearNumeroLocale_(v)` nueva (devuelve `v` tal cual si ya es
+  `number`, si no `Number(String(v).replace(',', '.'))`), usada en el único
+  punto donde se lee `dividendo`.
+- **`actualizado_en` en dos formatos** (ISO UTC en la VM, local en la fila
+  sembrada a mano) - confirmado que el código no la usa para nada (ni como
+  clave ni para ordenar), así que no hacía falta ningún cambio; documentado
+  explícitamente en el propio código para que quede claro que no es un punto
+  ciego.
+- **El trío no existe en carreras de menos de 6 galgos** (verificado por el
+  dueño contra datos reales de Kinsley 06/09: exactamente las 3 carreras de 6
+  galgos de 12 tenían fila `tricast`) - antes, una apuesta de trío en una
+  carrera así se quedaba en `pendiente` para siempre, indistinguible de "la VM
+  aún no lo ha publicado". `calcularResolucionExotica_` acepta ahora un
+  tercer parámetro `carreraYaProcesada` (true si existe la fila `forecast` de
+  esa misma carrera, señal de que la VM ya la resolvió del todo aunque no
+  haya `tricast`) y devuelve un resultado nuevo `'no_disponible'` en ese caso,
+  distinto de `'pendiente'`.
+- **Tratamiento financiero de `'no_disponible'`, decisión del dueño**: se
+  reembolsa el stake (`retorno_real = stake_total`, `unidades_netas = 0`) -
+  la apuesta no cuenta como ganada ni perdida. Queda excluida del panel
+  público sin tocar `Dashboard.gs`: `calcularMetricas_` ya solo filtra
+  `resultado_final` en `gano`/`perdio`. Aviso de Telegram propio (⚠️,
+  distinto de ✅/❌) explicando que la carrera no tuvo ese mercado.
+- **Cadencia del disparador**: `configurarTriggerResolverExoticas` pasa de
+  cada 2h a cada 30 min - con la VM publicando cada 20 min, 2h de por medio
+  añadía hasta 1h40 de retraso innecesario al aviso de Telegram.
+- Tests ampliados (`test_calcularResolucionExotica`/
+  `test_construirTextoResolucionExotica`, `src/Main.gs`): dividendo como
+  número real y como texto con coma, y el caso de trío sin mercado.
+  Verificados aparte en Node (funciones puras, sin API de Sheets) antes de
+  subir - todos "OK".
+- Sin cambios en el esquema ni en el orden de columnas de `apuestas_exoticas`
+  ni de `resultados_gemela_trio` (avisado expresamente por el dueño: la VM
+  lee/escribe esas pestañas por posición de columna, cualquier cambio ahí
+  rompe el push en silencio).
+
+- De paso (commit de sincronización `2c0e964`, otra sesión): `.clasp.json` con
+  `fileExtension: "gs"` para que `clasp pull` escriba directo en `.gs` (antes
+  creaba duplicados `.js`).
+
+Commits: c114a78 (el mismo código se sincronizó también a `main` en `2c0e964`)
 
 ## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
 Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y

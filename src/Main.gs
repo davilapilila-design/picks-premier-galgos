@@ -43,7 +43,12 @@ function doPost(e) {
 
     appendMensajeCrudo(msg.message_id, fechaRecibido, texto, fotoFileId, ESTADO_PENDIENTE, fechaForward);
 
-    if (msg.reply_to_message) {
+    // `/stats N` (Estadisticas.gs): se contesta aquí y NO se trata como pick
+    // (si no, iría a la IA y acabaría en revision_manual).
+    const comandoStats = msg.reply_to_message ? null : parsearComandoStats_(texto);
+    if (comandoStats) {
+      manejarComandoStats_(msg, comandoStats);
+    } else if (msg.reply_to_message) {
       manejarReply_(msg, texto);
     } else {
       manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward);
@@ -707,4 +712,26 @@ function repararStarPelaw20260905() {
     return;
   }
   Logger.log('repararStarPelaw20260905: no se encontró message_id=' + messageId + ' en mensajes_crudos.');
+}
+
+/**
+ * Reparación puntual (2026-09-25, ver docs/BITACORA.md): el pick 315 (20:04
+ * Star Pelaw, 22/09) se guardó con hipodromo "Pelaw" (Gemini recortó el
+ * nombre; el texto del tipster sí decía "Star Pelaw"), así que el job de
+ * la VM nunca encontraba la carrera. Solo toca la celda si sigue valiendo
+ * exactamente "Pelaw" - ejecutarla dos veces no hace nada.
+ */
+function repararHipodromoPelaw20260925() {
+  const patas = findApuestaPatasByMessageId('315');
+  let corregidas = 0;
+  patas.forEach(function (ref) {
+    const celda = ref.sheet.getRange(ref.row, ref.index['hipodromo'] + 1);
+    if (String(celda.getValue()).trim() === 'Pelaw') {
+      celda.setValue('Star Pelaw');
+      corregidas++;
+    }
+  });
+  const resumen = 'msg 315: ' + corregidas + ' de ' + patas.length + ' pata(s) corregida(s) de "Pelaw" a "Star Pelaw"';
+  Logger.log(resumen);
+  return resumen;
 }
