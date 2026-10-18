@@ -43,9 +43,29 @@ Cambios (sin tocar ningún cálculo, ni la hoja, ni sus fórmulas):
   horaria 400 → 1; `test_calcularMetricas`, `test_calcularHistoricoPicks`,
   `test_calcularPctCuotaBajada` y el nuevo `test_cachePanel` en OK. Panel
   probado en Chromium por los dos caminos (incrustado y caché fría).
-- Pendiente en producción: `clasp push`, nueva versión del despliegue web,
-  ejecutar `configurarTriggerCachePanel` y `test_cachePanel` desde el editor.
-- Commits: (este commit)
+- **Desplegado (v32)** en el mismo despliegue de producción
+  (`AKfycbynXi…`, misma URL para el panel y el webhook del bot).
+  `configurarTriggerCachePanel` ejecutado (disparador instalado y caché
+  rellenada) y `test_*` en OK, todo vía `clasp run`.
+- **OJO, para la próxima IA**: producción NO coincidía con `main`, sino con
+  la rama `claude/lucid-pascal-148x58` (v30: `/stats` y resumen semanal,
+  `Estadisticas.gs`). Un `clasp push` desde `main` habría borrado todo eso.
+  Se fusionó esa rama antes de desplegar (`obtenerFilasApuestas_`, que
+  comparte con `Estadisticas.gs`, usa ya la lectura acotada; `/stats` da las
+  mismas cifras). Antes de cualquier `clasp push`: `clasp pull` a una carpeta
+  aparte y comparar con el repo.
+- `clasp push` (v3.4) dice "already up to date" si ningún archivo LOCAL
+  cambió, aunque en remoto sobre alguno (pasó con un diagnóstico temporal):
+  se quitó con la API de Apps Script (`projects.updateContent`) y la v32 se
+  comprobó con `clasp pull --versionNumber 32` = repo.
+- Medido en producción con los datos reales (254 picks): calcular el panel
+  3,4–4,2 s antes → 2,7–2,8 s ahora (salida idéntica); servir desde caché
+  55–75 ms; `doGet` con los datos incrustados ~250 ms. El HTML real de
+  `doGet` se probó en Chromium (escritorio y móvil): se pinta sin ninguna
+  llamada a `google.script.run`, filtros/"Ver más"/gráfico OK, sin errores.
+  No se pudo abrir la URL pública desde la sesión (red del entorno bloquea
+  script.google.com).
+- Commits: 1ª entrega + merge de `claude/lucid-pascal-148x58` (este commit)
 
 ## 2026-09-25 (cont. 14) — Resumen semanal de los lunes y comando `/stats N` (desplegado, v30)
 Pedido del dueño. Decisiones (preguntadas): se envía al grupo del bot
