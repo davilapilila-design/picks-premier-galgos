@@ -55,21 +55,25 @@ def ficha(con, fila, tz):
         boton = _BOTONES.get(fila["boton"])
         lineas.append(f"💬 Te escribió por primera vez: {fecha(fila['primer_mensaje_ts'])}"
                       + (f", con el botón {boton}" if boton else ""))
-    envios = [(e["ts"], json.loads(e["detalle"] or "{}").get("canal") or "desconocido") for e in con.execute(
-        "SELECT ts, detalle FROM eventos WHERE user_id = ? AND tipo = 'enlace_venta' ORDER BY ts, id",
-        (fila["user_id"],))]
+    envios = []  # (ts, canal, enlace)
+    for e in con.execute("SELECT ts, detalle FROM eventos WHERE user_id = ? AND tipo = 'enlace_venta' "
+                         "ORDER BY ts, id", (fila["user_id"],)):
+        detalle = json.loads(e["detalle"] or "{}")
+        envios.append((e["ts"], detalle.get("canal") or "desconocido", detalle.get("enlace")))
     if fila["enlace_venta_ts"] is None:
         lineas.append("🎁 No le consta ninguna apuesta gratuita.")
         return "\n".join(lineas)
-    primero = next((c for ts, c in envios if ts == fila["enlace_venta_ts"]), None)
-    lineas.append(f"🎁 Gratuita: {fecha(fila['enlace_venta_ts'])}, canal de venta "
-                  f"«{primero or fila['canal_venta'] or 'desconocido'}»")
-    despues = [(ts, c) for ts, c in envios if ts > fila["enlace_venta_ts"]]
+    canal, enlace = next(((c, e) for ts, c, e in envios if ts == fila["enlace_venta_ts"]),
+                         (fila["canal_venta"] or "desconocido", fila["enlace_venta"]))
+    lineas.append(f"🎁 Gratuita: {fecha(fila['enlace_venta_ts'])}, canal de venta «{canal}»")
+    if enlace:
+        lineas.append(f"   Enlace: {enlace}")
+    despues = [(ts, c, e) for ts, c, e in envios if ts > fila["enlace_venta_ts"]]
     if despues:
         n = len(despues)
         lineas.append("🔗 Después se le envió 1 enlace de venta más:" if n == 1
                       else f"🔗 Después se le enviaron {n} enlaces de venta más:")
-        lineas += [f"   · {fecha(ts)}: «{c}»" for ts, c in despues]
+        lineas += [f"   · {fecha(ts)}: «{c}»" + (f" – {e}" if e else "") for ts, c, e in despues]
     return "\n".join(lineas)
 
 

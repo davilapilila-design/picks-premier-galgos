@@ -9,16 +9,18 @@ Entradas más recientes arriba.
   consultarlo. Nueva orden del bot, solo para él: `/gratuita @usuario` o
   parte del nombre (sin importar mayúsculas ni tildes; también el id).
   Responde con la ficha: bienvenida (cuándo y cuál), primer mensaje y
-  botón, y **cuándo se le dio la gratuita y a qué canal de venta**, más
-  los enlaces de venta posteriores. Con varias coincidencias, botones para
+  botón, y **cuándo se le dio la gratuita, a qué canal de venta y con qué
+  enlace** (el enlace, pedido por el dueño al probarlo), más los enlaces de
+  venta posteriores. Con varias coincidencias, botones para
   elegir (hasta 8; las de gratuita primero y con 🎁).
 - **Por qué vale aunque borren los mensajes**: el lector (y la fase 4 con
   los chats antiguos) lo apunta en la base de datos al ver el enlace; la
   consulta solo lee de ahí (`consulta.py`). Para la gente nueva hace falta
   el lector en marcha en la instancia real.
 - Pruebas: 178, pasan en Python 3.9, 3.12 y 3.13. Explicado también en el
-  PDF para los socios del dueño (fuera del repo).
-- Commits: (este commit)
+  PDF para los socios del dueño (fuera del repo). Probado por el dueño en
+  el bot de prueba.
+- Commits: `095b3d9`, (este commit)
 
 ## 2026-10-19 — Captación: textos de las dudas frecuentes con la redacción del dueño
 - **Qué**: el dueño pasó los 12 textos de las dudas frecuentes (las dos

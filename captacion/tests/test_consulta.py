@@ -42,7 +42,8 @@ class TestConsulta(unittest.TestCase):
         self.assertIn("José Pérez (@josep)", texto)
         self.assertIn("🎁 Gratuita: 09/10/2025 a las 11:53, canal de venta «VIP Galgos»", texto)
         self.assertIn("Después se le envió 1 enlace de venta más", texto)
-        self.assertIn("10/10/2025 a las 10:53: «Packs»", texto)
+        self.assertIn("10/10/2025 a las 10:53: «Packs» – t.me/+falso", texto)
+        self.assertIn("Enlace: t.me/+falso", texto)
 
     def test_ficha_sin_gratuita(self):
         texto = consulta.ficha(self.con, db.obtener_usuario(self.con, 3), TZ)

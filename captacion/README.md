@@ -369,8 +369,8 @@ menú como lo ve un cliente.
 **Consultar la gratuita de alguien** (solo tú): `/gratuita @usuario`, o
 parte del nombre (`/gratuita Juan`; sin importar mayúsculas ni tildes). El
 bot te dice cuándo recibió la bienvenida, cuándo te escribió y con qué botón,
-y **cuándo le diste la gratuita y a qué canal de venta** (y los enlaces de
-venta que le mandaste después). Si hay varias personas con ese nombre, te
+y **cuándo le diste la gratuita, a qué canal de venta y con qué enlace** (y
+los enlaces de venta que le mandaste después). Si hay varias personas con ese nombre, te
 da botones para elegir (las que tienen gratuita, con 🎁). Queda guardado en
 la base de datos del bot en cuanto el lector ve el enlace: **aunque luego se
 borren los mensajes, se sigue sabiendo**. Solo hace falta que el lector
