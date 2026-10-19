@@ -40,7 +40,7 @@ import sys
 import time
 from datetime import datetime
 
-from . import db, mensajes, resumen, textos
+from . import consulta, db, mensajes, resumen, textos
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
 
@@ -59,6 +59,7 @@ AYUDA_PROPIETARIO = (
     "/reanudar – volver a aceptarlas\n"
     "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
     "/dudas – ver las dudas frecuentes como las ve un cliente\n"
+    "/gratuita @usuario (o parte del nombre) – si se le dio la gratuita, cuándo y a qué canal\n"
     "/miid – tu id de Telegram"
 )
 
@@ -361,7 +362,7 @@ class BotCaptacion:
             if comando is None and textos.edicion(self.con, self.reloj()) is not None:
                 self._texto_nuevo(msg)  # está cambiando un texto con /textos
             else:
-                self._comando_propietario(comando)
+                self._comando_propietario(comando, texto)
             return
 
         ahora = self.reloj()
@@ -387,7 +388,7 @@ class BotCaptacion:
             db.marcar_redireccion(self.con, uid, ahora)
             db.registrar_evento(self.con, ahora, "redireccion_enviada", uid)
 
-    def _comando_propietario(self, comando):
+    def _comando_propietario(self, comando, texto_orden=""):
         ahora = self.reloj()
         tz = self.cfg.tz
         hoy = datetime.fromtimestamp(ahora, tz).date()
@@ -408,6 +409,11 @@ class BotCaptacion:
             self._responder(self.cfg.propietario_id,
                             "👀 Así ve el menú quien escribe al bot (y aún no tiene la gratuita):")
             texto, teclado = self._pantalla_dudas(None, con_gratuita=False)
+            self._responder(self.cfg.propietario_id, texto, teclado)
+            return
+        elif comando == "/gratuita":
+            dato = texto_orden.split(maxsplit=1)[1] if len(texto_orden.split(maxsplit=1)) > 1 else ""
+            texto, teclado = consulta.respuesta(self.con, dato, tz)
             self._responder(self.cfg.propietario_id, texto, teclado)
             return
         elif comando == "/pausar":
@@ -447,6 +453,11 @@ class BotCaptacion:
             self._boton_dudas(cq, uid, datos)
         elif datos.startswith("txt") and uid == self.cfg.propietario_id:
             self._boton_textos(datos)
+        elif datos.startswith(consulta.CALLBACK) and uid == self.cfg.propietario_id:
+            uid_buscado = datos[len(consulta.CALLBACK):]
+            fila = db.obtener_usuario(self.con, int(uid_buscado)) if uid_buscado.isdigit() else None
+            if fila is not None:
+                self._responder(uid, consulta.ficha(self.con, fila, self.cfg.tz))
 
     def _pantalla_dudas(self, tema, con_gratuita):
         """(texto, teclado) del menú de dudas (tema None) o de un tema."""

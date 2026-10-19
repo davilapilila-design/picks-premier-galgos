@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-19 — Captación: consultar en el bot a quién se le dio la gratuita (/gratuita)
+- **Qué**: el dueño quiere que conste que, aunque se borren los mensajes,
+  se sigue sabiendo a quién se le dio la apuesta gratuita, y poder
+  consultarlo. Nueva orden del bot, solo para él: `/gratuita @usuario` o
+  parte del nombre (sin importar mayúsculas ni tildes; también el id).
+  Responde con la ficha: bienvenida (cuándo y cuál), primer mensaje y
+  botón, y **cuándo se le dio la gratuita y a qué canal de venta**, más
+  los enlaces de venta posteriores. Con varias coincidencias, botones para
+  elegir (hasta 8; las de gratuita primero y con 🎁).
+- **Por qué vale aunque borren los mensajes**: el lector (y la fase 4 con
+  los chats antiguos) lo apunta en la base de datos al ver el enlace; la
+  consulta solo lee de ahí (`consulta.py`). Para la gente nueva hace falta
+  el lector en marcha en la instancia real.
+- Pruebas: 178, pasan en Python 3.9, 3.12 y 3.13. Explicado también en el
+  PDF para los socios del dueño (fuera del repo).
+- Commits: (este commit)
+
 ## 2026-10-19 — Captación: textos de las dudas frecuentes con la redacción del dueño
 - **Qué**: el dueño pasó los 12 textos de las dudas frecuentes (las dos
   respuestas a quien escribe al bot, el menú, los 7 temas y los dos finales)
@@ -20,7 +37,7 @@ Entradas más recientes arriba.
 - Comprobado con un script que los 12 quedan idénticos al archivo del
   dueño, negritas incluidas. Pruebas: 169, pasan en Python 3.9, 3.12 y
   3.13.
-- Commits: (este commit)
+- Commits: `c588ccf`
 
 ## 2026-10-19 — Captación: dudas frecuentes en el bot y cambiar textos desde el bot (/textos)
 - **Qué**: el dueño quiere, antes de crear el bot real, que el bot resuelva
