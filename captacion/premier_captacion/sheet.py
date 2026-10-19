@@ -86,6 +86,9 @@ ETIQUETAS_EVENTO = {
     "carpeta_borrada": "Carpeta borrada",
     "bienvenida_manual": "Bienvenida manual",
     "bienvenida_prueba": "Marcado del embudo (prueba)",
+    "pausa": "Bot en pausa (/pausar)",
+    "reanudacion": "Bot reanudado (/reanudar)",
+    "solicitud_en_pausa": "Solicitud sin atender (bot en pausa)",
 }
 
 MOTIVOS = {

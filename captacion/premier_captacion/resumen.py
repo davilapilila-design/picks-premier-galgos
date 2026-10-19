@@ -57,6 +57,7 @@ def calcular(eventos):
         "escribieron_bot": set(),
         "te_escribieron": set(),
         "enlaces_venta": 0,
+        "en_pausa": 0,
         "con_lector": False,
     }
     for ev in eventos:
@@ -78,6 +79,8 @@ def calcular(eventos):
             est["sin_aceptar"][d.get("motivo") or "?"] += 1
         elif tipo == "mensaje_al_bot":
             est["escribieron_bot"].add(ev["user_id"])
+        elif tipo == "solicitud_en_pausa":
+            est["en_pausa"] += 1
         # Fase 3 (lector de la cuenta del dueño). Lo que viene del histórico
         # (fase 4) tiene fechas pasadas y no cae en el día del resumen.
         elif tipo == "te_escribe":
@@ -126,6 +129,8 @@ def _cuerpo(est, anterior=None):
         lineas += _desglose(est["sin_bienvenida"], MOTIVOS)
     lineas.append(f"🔁 Volvieron (ya tenían bienvenida): {est['ya_recibida']}")
     lineas.append(f"✅ Aceptadas: {est['aceptadas']}")
+    if est["en_pausa"]:
+        lineas.append(f"⏸️ Sin atender por la pausa (para aceptar a mano): {est['en_pausa']}")
     if est["sin_aceptar"]:
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
@@ -134,6 +139,15 @@ def _cuerpo(est, anterior=None):
         lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{cmp('te_escribieron')}")
         lineas.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}{cmp('enlaces_venta')}")
     return lineas
+
+
+def _recordatorio_pausa(con, tz):
+    """Si el bot sigue en pausa (/pausar), se recuerda al final del resumen."""
+    pausa = db.pausa_desde(con)
+    if pausa is None:
+        return []
+    return ["", f"⏸️ El bot sigue EN PAUSA desde las {datetime.fromtimestamp(pausa, tz):%H:%M del %d.%m}: "
+                "no acepta a nadie. Escríbele /reanudar para volver."]
 
 
 def _marcar_lector(con, *estadisticas):
@@ -158,7 +172,7 @@ def texto_diario(con, tz, fecha, ahora_ts=None):
         cabecera = f"📊 Resumen del {nombre_dia}"
     est = calcular(db.eventos_entre(con, desde, hasta))
     _marcar_lector(con, est)
-    return "\n".join([cabecera, ""] + _cuerpo(est))
+    return "\n".join([cabecera, ""] + _cuerpo(est) + _recordatorio_pausa(con, tz))
 
 
 def texto_semanal(con, tz, lunes, ahora_ts=None):
@@ -190,7 +204,8 @@ def texto_semanal(con, tz, lunes, ahora_ts=None):
     dias = " · ".join(f"{DIAS[i][:3]} {por_dia[i]}" for i in range(7))
 
     _marcar_lector(con, est, anterior)
-    return "\n".join([cabecera, ""] + _cuerpo(est, anterior) + ["", f"📈 Solicitudes por día: {dias}"])
+    return "\n".join([cabecera, ""] + _cuerpo(est, anterior) + ["", f"📈 Solicitudes por día: {dias}"]
+                     + _recordatorio_pausa(con, tz))
 
 
 def ayer(tz, ahora_ts=None):

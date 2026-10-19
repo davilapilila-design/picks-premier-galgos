@@ -54,6 +54,19 @@ class TestDiario(Base):
         self.assertIn("✅ Aceptadas: 2", lineas)
         self.assertIn("🤖 Escribieron al bot: 1 persona", lineas)
 
+    def test_pausa(self):
+        self.evento(ts(2026, 10, 14, 13, 0), "solicitud_en_pausa", 5)
+        self.evento(ts(2026, 10, 14, 13, 5), "solicitud_en_pausa", 6)
+        texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
+        self.assertIn("⏸️ Sin atender por la pausa (para aceptar a mano): 2", texto)
+        self.assertNotIn("sigue EN PAUSA", texto)  # ya se reanudó
+        with self.con:
+            db.guardar_estado(self.con, "pausa_desde", ts(2026, 10, 14, 12, 30))
+        for texto in (resumen.texto_diario(self.con, MADRID, date(2026, 10, 14)),
+                      resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12))):
+            self.assertTrue(texto.endswith("⏸️ El bot sigue EN PAUSA desde las 12:30 del 14.10: "
+                                           "no acepta a nadie. Escríbele /reanudar para volver."), texto)
+
     def test_lo_que_va_de_dia(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14), ahora_ts=ts(2026, 10, 14, 11, 0))
         self.assertTrue(texto.startswith("📊 Hoy, miércoles 14.10 (hasta las 11:00)"))

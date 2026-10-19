@@ -3,6 +3,29 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-19 — Captación: freno de emergencia en el bot (/pausar y /reanudar)
+- **Qué**: el dueño pide poder parar rápido, desde el propio bot, que acepte
+  a la gente «por si falla algo». Nuevas órdenes, solo para el dueño:
+  - `/pausar`: deja de enviar bienvenidas y de aceptar al momento. Las
+    solicitudes que lleguen se apuntan («Solicitud sin atender (bot en
+    pausa)») y se quedan pendientes en el canal para que las acepte a mano;
+    avisa de la primera y no de las siguientes. Esas personas no quedan
+    como «con bienvenida»: si luego entran por el bot, la recibirán.
+  - `/reanudar`: vuelve a aceptar y dice cuántas solicitudes quedaron
+    pendientes durante la pausa (el bot no puede listarlas ni recuperarlas:
+    las acepta el dueño a mano).
+  - La pausa se guarda en la base de datos (`pausa_desde`): sigue tras un
+    reinicio, y lo recuerdan el arranque, `/estado` y los resúmenes diario
+    y semanal.
+- Plan B, si el bot no contestara: quitarle la administración del canal.
+- Además, el dueño pregunta si se puede usar el bot de prueba como bot real
+  cambiándole nombre y foto: se puede, pero el @ de un bot no se puede
+  cambiar (los clientes verían «…pruebas_bot») y nos quedaríamos sin bot de
+  prueba. Pendiente de su decisión.
+- Pruebas: 141, pasan en Python 3.9, 3.12 y 3.13; las de la pausa fallan si
+  se quita el freno.
+- Commits: (este commit)
+
 ## 2026-10-18 — Captación: fase 4 hecha en la cuenta real (solo lectura)
 - **Qué**: el dueño, con su visto bueno, actualizó la VM a `950e694`,
   conectó su cuenta a la instancia real (`conectar-cuenta.sh real`,
@@ -22,7 +45,7 @@ Entradas más recientes arriba.
   conexión de Telegram y Telethon se reconectó solo.
 - **Cambio**: el tope de espera del histórico pasa de 15 a 30 min (la de
   886 s se quedó cerca del tope de 900 s), por si se vuelve a ejecutar.
-- Commits: (este commit)
+- Commits: `f9e852c`
 
 ## 2026-10-18 — Captación: fase 4 preparada para la cuenta real (canal principal y api_id reutilizado)
 - **Qué**: el dueño da el visto bueno a la fase 4 en su cuenta real (solo

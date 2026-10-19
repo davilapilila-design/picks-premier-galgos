@@ -41,6 +41,7 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
 | Tipos de mensaje | Los dos manuales y el del bot (`bot_b_v1`) se guardan por separado. Cada cambio de texto del bot = tipo nuevo, para comparar. |
 | Datos | SQLite local en la VM (con lo que el bot decide) + Google Sheet **privado y aparte** del de picks (copia para consultar y estadísticas). No se guarda el contenido de las conversaciones, solo qué pasó y cuándo. |
 | Resúmenes | Bot → dueño: diario a las **00:05** (día anterior) y semanal los **lunes a las 9:00** (lunes a domingo, comparado con la semana anterior). También a demanda: `/resumen`, `/semana`, `/estado`. |
+| Freno de emergencia | Pedido por el dueño (2026-10-19). `/pausar` al bot (solo el dueño): deja de enviar bienvenidas y de aceptar al momento; las solicitudes se quedan pendientes para aceptarlas a mano. Sigue en pausa tras un reinicio y lo recuerdan `/estado` y los resúmenes. `/reanudar` para volver. Plan B: quitarle la administración del canal. |
 | Dónde corre | La VM de Proyecto Galgos, como servicios systemd propios con un usuario de sistema sin privilegios (`captacion`). |
 
 ## Arquitectura

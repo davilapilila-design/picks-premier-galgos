@@ -13,6 +13,10 @@ Qué hace:
    dos botones (cada vez, salvo ráfagas: ver Config.pausa_redireccion_s).
 5. Avisa al dueño por Telegram de cualquier problema, y atiende sus
    comandos (/resumen, /semana, /estado).
+6. Freno de emergencia: con /pausar el dueño lo para al momento (no envía
+   bienvenidas ni acepta; las solicitudes se quedan pendientes para que las
+   acepte él a mano) y con /reanudar vuelve. Se guarda en la base de datos:
+   sigue en pausa aunque el bot se reinicie.
 
 Nunca acepta solicitudes de un chat que no sea el canal configurado.
 
@@ -45,6 +49,8 @@ AYUDA_PROPIETARIO = (
     "/resumen – lo que va de hoy\n"
     "/semana – lo que va de semana\n"
     "/estado – comprobar que el bot funciona\n"
+    "/pausar – dejar de aceptar solicitudes al momento (por si algo falla)\n"
+    "/reanudar – volver a aceptarlas\n"
     "/miid – tu id de Telegram"
 )
 
@@ -121,6 +127,10 @@ class BotCaptacion:
         log.info("Bot @%s (id %s) arrancando, versión %s", yo.get("username"), self.bot_id, version_instalada())
         # Con un webhook activo getUpdates no funciona; este bot no usa webhook.
         self.api.llamar("deleteWebhook")
+        pausa = db.pausa_desde(self.con)
+        if pausa is not None:
+            self.avisar(f"⏸️ Arranco EN PAUSA (desde las {self._hora(pausa)}): no acepto a nadie "
+                        "hasta que escribas /reanudar.", clave="pausa_arranque")
         if self.cfg.propietario_id is None:
             log.warning("CAPTACION_PROPIETARIO_ID vacío: los avisos solo irán al log. "
                         "Escribe /miid al bot desde tu cuenta para saber tu id.")
@@ -232,6 +242,18 @@ class BotCaptacion:
                 db.registrar_evento(self.con, ahora, "solicitud", uid, enlace=enlace, retraso_s=retraso)
                 db.guardar_estado(self.con, "solicitud_registrada", self._update_id)
             fila = db.obtener_usuario(self.con, uid)
+
+        pausa = db.pausa_desde(self.con)
+        if pausa is not None:
+            # El dueño lo ha parado con /pausar: ni bienvenida ni aceptación.
+            # La solicitud se queda pendiente para que la acepte él a mano.
+            log.info("Solicitud de %s: bot en pausa, se queda pendiente", uid)
+            with self.con:
+                db.registrar_evento(self.con, ahora, "solicitud_en_pausa", uid)
+            self.avisar("⏸️ Ha llegado una solicitud y estoy en pausa: la dejo pendiente en el canal "
+                        "para que la aceptes tú. De las siguientes no te aviso (salen en el "
+                        "resumen). Para volver a aceptar: /reanudar", clave=f"pausa:{pausa}")
+            return
 
         if fila["bienvenida_ts"] is not None:
             # Ya la recibió alguna vez (p. ej. salió del canal y vuelve).
@@ -349,11 +371,19 @@ class BotCaptacion:
             texto = resumen.texto_diario(self.con, tz, hoy, ahora_ts=ahora)
         elif comando == "/semana":
             texto = resumen.texto_semanal(self.con, tz, resumen.lunes_de(hoy), ahora_ts=ahora)
+        elif comando == "/pausar":
+            texto = self._pausar(ahora)
+        elif comando == "/reanudar":
+            texto = self._reanudar(ahora)
         elif comando == "/estado":
             con_bienvenida = self.con.execute(
                 "SELECT COUNT(*) FROM usuarios WHERE bienvenida_ts IS NOT NULL").fetchone()[0]
             canal = self.cfg.canal_id if self.cfg.canal_id is not None else "sin configurar (no acepto a nadie)"
-            texto = (f"✅ Funcionando.\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
+            pausa = db.pausa_desde(self.con)
+            cabecera = ("✅ Funcionando." if pausa is None else
+                        f"⏸️ Funcionando, pero EN PAUSA desde las {self._hora(pausa)}: no acepto a "
+                        "nadie. Para volver: /reanudar")
+            texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
                      f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
                      f"Versión: {version_instalada()}")
         elif comando == "/start":
@@ -361,6 +391,40 @@ class BotCaptacion:
         else:
             texto = AYUDA_PROPIETARIO
         self._responder(self.cfg.propietario_id, texto)
+
+    # --- Freno de emergencia (/pausar y /reanudar) ---------------------------
+
+    def _hora(self, ts):
+        return f"{datetime.fromtimestamp(ts, self.cfg.tz):%H:%M del %d.%m}"
+
+    def _pausar(self, ahora):
+        pausa = db.pausa_desde(self.con)
+        if pausa is not None:
+            return f"⏸️ Ya estaba en pausa desde las {self._hora(pausa)}. Para volver a aceptar: /reanudar"
+        with self.con:
+            db.guardar_estado(self.con, "pausa_desde", int(ahora))
+            db.registrar_evento(self.con, ahora, "pausa", None)
+        log.warning("Bot EN PAUSA por orden del dueño")
+        return ("⏸️ En pausa: ya no acepto solicitudes ni envío bienvenidas. Las que lleguen se "
+                "quedan pendientes en el canal para que las aceptes tú a mano.\n"
+                "Para volver a aceptar: /reanudar")
+
+    def _reanudar(self, ahora):
+        pausa = db.pausa_desde(self.con)
+        if pausa is None:
+            return "▶️ No estaba en pausa: sigo aceptando solicitudes."
+        pendientes = self.con.execute(
+            "SELECT COUNT(DISTINCT user_id) FROM eventos WHERE tipo = 'solicitud_en_pausa' AND ts >= ?",
+            (pausa,)).fetchone()[0]
+        with self.con:
+            db.guardar_estado(self.con, "pausa_desde", "")
+            db.registrar_evento(self.con, ahora, "reanudacion", None)
+        log.warning("Bot REANUDADO por orden del dueño")
+        texto = "▶️ Vuelvo a aceptar solicitudes con la bienvenida."
+        if pendientes:
+            llegaron = "llegó 1 solicitud" if pendientes == 1 else f"llegaron {pendientes} solicitudes"
+            texto += f"\nDurante la pausa {llegaron}: siguen pendientes en el canal, acéptalas tú a mano."
+        return texto
 
     # --- Cambios en los permisos del bot --------------------------------------
 

@@ -40,6 +40,9 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   técnico: darle siempre comandos completos para copiar y pegar.
 - La bienvenida se envía **siempre antes** de aceptar la solicitud (después
   Telegram ya no deja escribir a esa persona).
+- El bot tiene **freno de emergencia** (`/pausar` / `/reanudar`, solo el
+  dueño; estado `pausa_desde` en la base de datos): cualquier cambio en la
+  gestión de solicitudes tiene que respetarlo.
 - Los textos con "negrita" son letras Unicode: generarlos con
   `mensajes.negrita()` y comprobarlos contra el original
   (`tests/test_mensajes.py`). Cambiar un texto de bienvenida = tipo de

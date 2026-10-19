@@ -249,6 +249,12 @@ def leer_estado(con, clave, defecto=None):
     return fila["valor"] if fila else defecto
 
 
+def pausa_desde(con):
+    """Desde cuándo está el bot en pausa (el dueño escribió /pausar), o None."""
+    valor = leer_estado(con, "pausa_desde")
+    return int(float(valor)) if valor else None
+
+
 def guardar_estado(con, clave, valor):
     con.execute(
         "INSERT INTO estado (clave, valor) VALUES (?, ?) "

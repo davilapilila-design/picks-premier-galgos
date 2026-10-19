@@ -112,6 +112,10 @@ pegarlo (o enviárselo por privado desde tu cuenta principal).
 - [ ] **Volver a entrar**: la secundaria sale del canal y vuelve a pedir
       unirse: la acepta **sin** enviarle nada.
 - [ ] **Comandos** (desde tu cuenta principal): `/resumen`, `/semana`, `/estado`.
+- [ ] **Freno de emergencia**: `/pausar` → con la secundaria pide unirte: no
+      le llega bienvenida y la solicitud se queda pendiente (te avisa una
+      vez). `/estado` dice «EN PAUSA». `/reanudar` → vuelve a aceptar (la
+      pendiente la aceptas tú a mano).
 - [ ] **Resumen programado ya**: `systemctl start captacion-resumen-diario@prueba`
       (envía el de ayer, que estará vacío: sirve para ver que llega).
 - [ ] **Permisos**: quita al bot de administrador → te avisa con 🚨. Vuelve
@@ -360,8 +364,15 @@ también la del bot.
    `systemctl disable --now captacion-bot@prueba captacion-resumen-diario@prueba.timer captacion-resumen-semanal@prueba.timer captacion-sheet@prueba.timer`
    (y `captacion-lector@prueba` si está activo).
 
-Para volver atrás en cualquier momento: quita al bot de administrador del
-canal (vuelves a aceptar a mano) y `systemctl disable --now captacion-bot@real`.
+**Si algo falla, lo más rápido**: escríbele `/pausar` al bot (solo tú
+puedes). Deja de enviar bienvenidas y de aceptar al momento; las solicitudes
+se quedan pendientes para que las aceptes a mano. Sigue en pausa aunque el
+bot se reinicie, y te lo recuerda en `/estado` y en los resúmenes. Para
+volver: `/reanudar`. Si el bot no contestara ni a eso, quítalo de
+administrador del canal (también para al momento).
+
+Para volver atrás del todo: quita al bot de administrador del canal (vuelves
+a aceptar a mano) y `systemctl disable --now captacion-bot@real`.
 
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
