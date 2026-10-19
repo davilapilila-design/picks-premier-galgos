@@ -37,7 +37,7 @@ import socket
 import sys
 from datetime import datetime
 
-from . import db, mensajes
+from . import db, mensajes, textos
 from .config import ErrorConfig, cargar_config
 
 log = logging.getLogger("captacion.sheet")
@@ -89,6 +89,8 @@ ETIQUETAS_EVENTO = {
     "pausa": "Bot en pausa (/pausar)",
     "reanudacion": "Bot reanudado (/reanudar)",
     "solicitud_en_pausa": "Solicitud sin atender (bot en pausa)",
+    "faq": "Miró las dudas frecuentes",
+    "texto_cambiado": "Texto cambiado desde el bot (/textos)",
 }
 
 MOTIVOS = {
@@ -187,6 +189,10 @@ def texto_detalle(detalle):
         elif clave == "historico":
             if valor:
                 partes.append("del histórico")
+        elif clave == "tema":
+            partes.append(f"tema: {mensajes.FAQ[valor]['boton'] if valor in mensajes.FAQ else 'menú'}")
+        elif clave == "clave":
+            partes.append(f"texto: {mensajes.TEXTOS_EDITABLES.get(valor, (valor,))[0]}")
         else:
             partes.append(f"{clave}: {valor}")
     return "; ".join(partes)
@@ -279,11 +285,16 @@ def filas_resumen(con, tz):
     return filas
 
 
-def filas_tipos():
-    return [
+def filas_tipos(con, tz):
+    """Los tipos de mensaje de partida y las versiones de la bienvenida que
+    el dueño haya creado desde el bot (/textos)."""
+    filas = [
         [codigo, descripcion, mensajes.ORIGEN_TIPO.get(codigo, ""), mensajes.TEXTOS_TIPO.get(codigo, "")]
         for codigo, descripcion in mensajes.TIPOS_MENSAJE.items()
     ]
+    for tipo, texto, _ in textos.versiones_bienvenida(con):
+        filas.append([tipo, textos.descripcion_tipo(con, tipo, tz), "bot", texto])
+    return filas
 
 
 # --- Sincronización -----------------------------------------------------------
@@ -315,7 +326,7 @@ def sincronizar(con, tz, libro):
     p.formatear([(f"A2:{_letra_columna(len(FILAS_CABECERA_RESUMEN[0]))}2", FORMATO_FILA_EVENTO), ("A3:A", FORMATO_DIA_SEMANA)])
 
     p = libro.pestana(TAB_TIPOS, [CABECERA_TIPOS])
-    p.reemplazar(filas_tipos(), desde_fila=2)
+    p.reemplazar(filas_tipos(con, tz), desde_fila=2)
 
     return {"usuarios": len(usuarios), "eventos_nuevos": len(nuevos), "dias": len(dias)}
 

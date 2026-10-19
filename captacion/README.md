@@ -329,6 +329,45 @@ toca carpetas ni envía nada (el candado no lo deja en este modo).
 
 ---
 
+## Dudas frecuentes y cambiar textos (en el bot)
+
+**Dudas frecuentes.** Cuando alguien escribe al bot, la respuesta lleva el
+botón «📚 Dudas frecuentes»: un menú con Casas de apuestas (y dentro, Otras
+casas y canódromos), Unidades, Bank y stakes, Apuesta a ganador, Gemelas y
+tríos y Packs. Cada respuesta acaba invitando a escribirte:
+- **Sin la apuesta de regalo** (aún no le has enviado enlace de venta): con
+  los dos botones de la bienvenida.
+- **Con ella**: con «✉️ Escríbeme», que deja escrito «Hola, tengo una duda
+  sobre …».
+
+Para saber quién tiene la gratuita, el lector de tu cuenta tiene que estar en
+marcha en esa instancia (basta en simulación). En el bot real, de las 994
+del histórico ya lo sabe.
+
+**Cambiar textos** (solo tú): escríbele `/textos` al bot y elige cuál
+(bienvenida, las dos respuestas, el menú, cada duda y los dos finales). Te
+manda el texto actual; lo copias, lo cambias y se lo mandas. Las negritas,
+con la negrita de Telegram (seleccionar → Negrita): el bot las pasa a las
+letras gruesas. Te enseña cómo quedará y eliges ✅ Guardar o ❌ Cancelar.
+También puedes volver al texto anterior o al original. Cada bienvenida
+distinta es una versión nueva (bot_b_v2, v3…), para compararlas en la hoja.
+Los botones de la bienvenida no se cambian desde aquí. Cada bot guarda sus
+propios textos: los del de prueba no pasan al real. `/dudas` te enseña el
+menú como lo ve un cliente.
+
+**Prueba en el bot de prueba:**
+- [ ] Desde la secundaria, escribe al bot → respuesta con «📚 Dudas
+      frecuentes» → recorre los temas y «⬅️ Otras dudas». La secundaria ya
+      tiene enlace de venta (prueba de la fase 3), así que verás «✉️
+      Escríbeme». Con `/dudas` desde tu cuenta ves la versión sin la
+      gratuita.
+- [ ] `/textos` → elige una duda → mándale un texto con alguna palabra en
+      negrita → «👀 Así lo verán» → ✅ Guardar → compruébalo desde la
+      secundaria.
+- [ ] `/textos` → la misma → «↩️ Volver al anterior» → ✅ Guardar.
+
+---
+
 ## Paso a producción — SOLO con el visto bueno explícito del dueño
 
 Orden recomendado: fase 4 en la cuenta real (solo lectura) antes de la fase

@@ -11,7 +11,13 @@ Cada texto de bienvenida tiene un id de "tipo de mensaje" que se guarda
 en la base de datos con cada envío, para poder comparar en las
 estadísticas qué versión funciona mejor. Si se cambia el texto, se crea
 un tipo NUEVO (no se reutiliza el id), para no mezclar estadísticas.
+
+Los textos que aquí se definen son los de partida: el dueño puede cambiarlos
+desde el bot (/textos, ver textos.py), y entonces manda lo guardado en la
+base de datos. Los botones de la bienvenida no se cambian desde el bot: de
+la frase que dejan escrita depende saber qué eligió cada persona.
 """
+import unicodedata
 from urllib.parse import quote
 
 # Bloques Unicode "Mathematical Sans-Serif Bold".
@@ -23,11 +29,12 @@ _DIGITO_0 = 0x1D7EC
 def negrita(texto):
     """Pasa A-Z, a-z y 0-9 a letras "negrita" Unicode; el resto queda igual.
 
-    Las vocales con tilde y la ñ no tienen versión negrita en Unicode, así
-    que se quedan como están (en los textos actuales no aparece ninguna).
+    Las vocales con tilde y la ñ no tienen versión negrita en Unicode: se
+    escriben como la letra en negrita seguida de la tilde suelta (Unicode
+    «combinable»), que Telegram dibuja encima («𝗧𝗿𝗶́𝗼»).
     """
     salida = []
-    for c in texto:
+    for c in unicodedata.normalize("NFD", texto):
         if "A" <= c <= "Z":
             salida.append(chr(_MAYUS_A + ord(c) - ord("A")))
         elif "a" <= c <= "z":
@@ -68,9 +75,20 @@ TEXTO_BIENVENIDA = (
 # Se envía cada vez que escriben (con una pausa mínima entre respuestas,
 # ver Config.pausa_redireccion_s, para no contestar a cada mensaje de una
 # ráfaga).
+# Hay dos: a quien aún no tiene la apuesta de regalo se le vuelve a hacer la
+# pregunta de la bienvenida (con sus dos botones); a quien ya la tiene (el
+# dueño le envió un enlace de venta), solo «escríbeme».
+_LINEA_DUDAS = "Y si tienes dudas sobre casas, stakes o tipos de apuesta, mira las más frecuentes 📚"
 TEXTO_REDIRECCION = (
     "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo. "
-    "¿Ya has apostado en galgos o es tu primera vez? 👇"
+    "¿Ya has apostado en galgos o es tu primera vez? 👇\n"
+    "\n"
+    f"{_LINEA_DUDAS}"
+)
+TEXTO_REDIRECCION_CON_GRATUITA = (
+    "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo 👇\n"
+    "\n"
+    f"{_LINEA_DUDAS}"
 )
 
 # Botones: (texto del botón, texto que queda ya escrito en el chat del
@@ -140,3 +158,189 @@ def teclado_respuesta(usuario):
             for boton, texto in BOTONES
         ]
     }
+
+
+def teclado_redireccion(usuario, con_gratuita):
+    """Respuesta a quien escribe al bot: los dos botones de la bienvenida (o
+    «escríbeme», si ya tiene la gratuita) y el de las dudas frecuentes."""
+    filas = [[boton_escribeme(usuario)]] if con_gratuita else _filas_botones(usuario)
+    return {"inline_keyboard": filas + [[{"text": "📚 Dudas frecuentes", "callback_data": CALLBACK_DUDAS}]]}
+
+
+def _filas_botones(usuario):
+    return [[{"text": boton, "url": enlace_perfil(usuario, texto)}] for boton, texto in BOTONES]
+
+
+def boton_escribeme(usuario, duda=None):
+    texto = f"Hola, tengo una duda sobre {duda}" if duda else "Hola, tengo una duda"
+    return {"text": "✉️ Escríbeme", "url": enlace_perfil(usuario, texto)}
+
+
+# --- Dudas frecuentes (acordadas con el dueño el 2026-10-19) -----------------
+# Se abren desde la respuesta del bot a quien le escribe («📚 Dudas
+# frecuentes»). Cada tema: botón del menú, título, texto de partida (lo puede
+# cambiar el dueño con /textos), de qué tema es la duda si escribe, y botones
+# a otros temas. «otras_casas» es un submenú de «casas»: no sale en el menú.
+CALLBACK_DUDAS = "faq"          # desde la respuesta del bot: el menú, en un mensaje nuevo
+CALLBACK_MENU = "faq:menu"      # «⬅️ Otras dudas»: vuelve al menú en el mismo mensaje
+
+FAQ_TITULO = f"📚 {negrita('Dudas frecuentes')}\n\nElige un tema 👇"
+
+PIE_SIN_GRATUITA = (
+    f"👉 Si aún no tienes tu apuesta de regalo, pulsa abajo y escríbeme: "
+    f"{negrita('te regalo una apuesta de pago')} para que veas cómo trabajo."
+)
+PIE_CON_GRATUITA = "¿Te queda alguna duda? Escríbeme 👇"
+
+FAQ = {
+    "casas": {
+        "boton": "🏦 Casas de apuestas",
+        "titulo": f"🏦 {negrita('Casas de apuestas')}",
+        "duda": "las casas de apuestas",
+        "enlaces": [("otras_casas", "🗺️ Otras casas y canódromos")],
+        "texto": (
+            f"Las que mejor van con nuestros picks: {negrita('Betway')}, {negrita('Betfair')} "
+            f"y {negrita('Bet365')}.\n"
+            "\n"
+            f"También valen {negrita('William Hill')} y {negrita('Sportium')}: a veces tienen "
+            "límites más altos, pero ponen las cuotas de otra manera:\n"
+            "· William Hill: 30 min antes en carreras normales y horas antes en competiciones.\n"
+            "· Sportium: horas antes en competiciones; en las normales depende, pero siempre con "
+            "mucho margen. En Harlow y Star Pelaw no tiene cuotas tempranas.\n"
+            "\n"
+            "Te recomendamos tener cuenta en varias, o en todas: así aprovechas siempre la mejor "
+            "cuota y, si en alguna tienes problemas para apostar, sigues con otra."
+        ),
+    },
+    "otras_casas": {
+        "boton": "🗺️ Otras casas y canódromos",
+        "titulo": f"🗺️ {negrita('Otras casas y canódromos')}",
+        "duda": "las casas de apuestas",
+        "enlaces": [("casas", "⬅️ Casas de apuestas")],
+        "en_menu": False,
+        "texto": (
+            "Hay más casas con galgos, pero no tienen cuotas tempranas, o no siempre:\n"
+            f"· {negrita('Versus')} y {negrita('Retabet')}: sin cuotas tempranas, y solo algunos "
+            "canódromos (Harlow, Star Pelaw, Doncaster…). No tienen Central Park, Nottingham, "
+            "Hove ni muchos más.\n"
+            f"· {negrita('Codere')}: tiene todos los canódromos, pero muchas veces sin cuotas "
+            "tempranas. En Central Park, Nottingham, Hove y otros las está publicando una hora "
+            "antes, aunque varía mucho.\n"
+            f"· {negrita('DAZN Bet')}, {negrita('888')} y {negrita('Pastón')}: todos los "
+            "canódromos, pero solo cuotas en directo, unos 5 min antes de la carrera."
+        ),
+    },
+    "unidades": {
+        "boton": "⚖️ Unidades",
+        "titulo": f"⚖️ {negrita('Unidades')}",
+        "duda": "las unidades",
+        "texto": (
+            f"Los stakes de los picks van en {negrita('unidades')}: «stake 2» son 2 unidades.\n"
+            "\n"
+            f"Para hacerlo fácil, usa un {negrita('valor fijo')} por unidad, de "
+            f"{negrita('al menos 10 €')}, y súbelo cuando crezca tu bank.\n"
+            "\n"
+            "Ejemplo: con unidades de 10 €, un stake 2 son 20 €."
+        ),
+    },
+    "bank": {
+        "boton": "💰 Bank y stakes",
+        "titulo": f"💰 {negrita('Bank y stakes')}",
+        "duda": "el bank y los stakes",
+        "texto": (
+            f"El {negrita('bank')} es el dinero que apartas solo para apostar. Cada pick lleva su "
+            "stake en unidades; de media, unas 4-5.\n"
+            "\n"
+            "Apuesta solo dinero que no te haga falta en este momento. Si lo necesitas, o "
+            "perderlo sería un problema grande para ti, no lo apuestes.\n"
+            "\n"
+            "+18 · Juega con responsabilidad."
+        ),
+    },
+    "ganador": {
+        "boton": "🏁 Apuesta a ganador",
+        "titulo": f"🏁 {negrita('Apuesta a ganador')}",
+        "duda": "las apuestas a ganador",
+        "texto": (
+            f"Nuestras apuestas son siempre {negrita('a ganador')}: {negrita('NUNCA')} pinches en "
+            "«colocado», salvo que te digamos lo contrario.\n"
+            "\n"
+            f"Apuestas a que el galgo llega {negrita('primero')}. Si gana, cobras stake × cuota; "
+            "si no, lo pierdes.\n"
+            "\n"
+            "Ejemplo: 2 unidades a cuota 3,50 → cobras 7 (5 de beneficio).\n"
+            "\n"
+            "Cógela en cuanto te llegue el pick: la cuota puede bajar antes de la carrera."
+        ),
+    },
+    "gemelas": {
+        "boton": "🎯 Gemelas y tríos",
+        "titulo": f"🎯 {negrita('Gemelas y tríos')}",
+        "duda": "las gemelas y los tríos",
+        "enlaces": [("otras_casas", "🗺️ Otras casas y canódromos")],
+        "texto": (
+            f"{negrita('Gemela')}: aciertas el 1º y el 2º de una carrera. {negrita('Trío')}: el "
+            "1º, el 2º y el 3º. En las casas aparecen con esos mismos nombres.\n"
+            "\n"
+            "Si son en cualquier orden (reversible), en la gemela son 2 combinaciones (p. ej. "
+            "3-4 y 4-3) y en el trío, 6; cada una lleva su stake.\n"
+            "\n"
+            f"No tienen cuota fija: se pagan al {negrita('dividendo oficial')} que publica el "
+            "canódromo después de la carrera. Por eso puedes aprovechar para hacerlas en las "
+            "casas sin cuotas tempranas (👇 Otras casas y canódromos). Ojo: "
+            f"{negrita('DAZN Bet')} y {negrita('Pastón')} no tienen gemelas ni tríos.\n"
+            "\n"
+            "Ejemplo real en Star Pelaw: gemela 3-4 y 4-3, stake 2 cada una = 4 unidades. "
+            "Llegó 4-3 con dividendo 7,42 → 14,84 unidades (10,84 de beneficio)."
+        ),
+    },
+    "packs": {
+        "boton": "📦 Packs: nuestra garantía",
+        "titulo": f"📦 {negrita('Packs: nuestra garantía')}",
+        "duda": "los packs",
+        "texto": (
+            f"Casi todo lo que vendemos son {negrita('packs')} de dos o más galgos.\n"
+            "\n"
+            "Si un pack sale en pérdidas, según las unidades perdidas "
+            f"{negrita('te damos el siguiente gratis o con descuento')}.\n"
+            "\n"
+            f"Y si fallan todos los galgos del pack, el siguiente es {negrita('siempre gratis')}."
+        ),
+    },
+}
+FAQ_MENU = [t for t, datos in FAQ.items() if datos.get("en_menu", True)]
+
+
+def teclado_menu_faq():
+    return {"inline_keyboard": [[{"text": FAQ[t]["boton"], "callback_data": f"faq:{t}"}] for t in FAQ_MENU]}
+
+
+def mensaje_tema(tema, texto, pie):
+    """Mensaje completo de un tema: título, el texto (el de partida o el que
+    haya puesto el dueño) y el final («escríbeme»)."""
+    return f"{FAQ[tema]['titulo']}\n\n{texto}\n\n{pie}"
+
+
+def teclado_tema(tema, usuario, con_gratuita):
+    filas = [[{"text": texto, "callback_data": f"faq:{destino}"}] for destino, texto in FAQ[tema].get("enlaces", ())]
+    if con_gratuita:
+        filas.append([boton_escribeme(usuario, FAQ[tema]["duda"])])
+    else:
+        filas += _filas_botones(usuario)
+    filas.append([{"text": "⬅️ Otras dudas", "callback_data": CALLBACK_MENU}])
+    return {"inline_keyboard": filas}
+
+
+# --- Textos que el dueño puede cambiar desde el bot (/textos) ----------------
+# clave -> (nombre en el menú de /textos, texto de partida). El orden es el
+# del menú. Ver textos.py.
+TEXTOS_EDITABLES = {
+    "bienvenida": ("👋 Bienvenida", TEXTO_BIENVENIDA),
+    "redireccion": ("💬 Si escriben al bot (sin la gratuita)", TEXTO_REDIRECCION),
+    "redireccion_gratuita": ("💬 Si escriben al bot (con la gratuita)", TEXTO_REDIRECCION_CON_GRATUITA),
+    "faq_menu": ("📚 Menú de dudas", FAQ_TITULO),
+    **{f"faq:{t}": (f"Duda · {FAQ[t]['boton']}", FAQ[t]["texto"])
+       for t in ["casas", "otras_casas"] + [t for t in FAQ_MENU if t != "casas"]},
+    "faq_pie": ("👉 Final de las dudas (sin la gratuita)", PIE_SIN_GRATUITA),
+    "faq_pie_gratuita": ("👉 Final de las dudas (con la gratuita)", PIE_CON_GRATUITA),
+}

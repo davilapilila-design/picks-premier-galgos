@@ -6,7 +6,7 @@ from datetime import datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from premier_captacion import db, mensajes, sheet
+from premier_captacion import db, mensajes, sheet, textos
 
 from .apoyo import conexion, usuario
 
@@ -194,6 +194,19 @@ class TestSincronizar(unittest.TestCase):
         tipos = self.falso.hoja("Tipos de mensaje").tabla()
         self.assertEqual(tipos[1][:3], ["bot_b_v1", mensajes.TIPOS_MENSAJE["bot_b_v1"], "bot"])
         self.assertEqual(tipos[1][3], mensajes.TEXTO_BIENVENIDA)
+
+    def test_versiones_de_la_bienvenida_creadas_desde_el_bot(self):
+        textos.guardar(self.con, "bienvenida", "Hola, versión 2", 1_800_000_000)
+        self.sincronizar()
+        tipos = self.falso.hoja("Tipos de mensaje").tabla()
+        self.assertEqual(tipos[-1], ["bot_b_v2", "Bienvenida del bot, versión 2 (cambiada desde el bot el 15/01/2027)",
+                                     "bot", "Hola, versión 2"])
+        eventos = self.falso.hoja("Eventos").tabla()
+        self.assertEqual(eventos[-1][5:8], ["Texto cambiado desde el bot (/textos)", "bot_b_v2", "texto: 👋 Bienvenida"])
+
+    def test_detalle_de_las_dudas(self):
+        self.assertEqual(sheet.texto_detalle({"tema": "packs"}), "tema: 📦 Packs: nuestra garantía")
+        self.assertEqual(sheet.texto_detalle({"tema": "menu"}), "tema: menú")
 
     def test_solo_el_resumen_va_como_formulas(self):
         self.sincronizar()

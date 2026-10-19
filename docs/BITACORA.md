@@ -3,6 +3,44 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-19 — Captación: dudas frecuentes en el bot y cambiar textos desde el bot (/textos)
+- **Qué**: el dueño quiere, antes de crear el bot real, que el bot resuelva
+  las dudas de siempre, y poder cambiar él los textos sin pasar por mí.
+  Plan y textos acordados con él tema por tema (casas, otras casas y
+  canódromos, unidades, bank y stakes, apuesta a ganador, gemelas y tríos,
+  garantía de los packs). Investigado para él qué canódromos son de cada
+  red: PGR (Arena Racing Company + Entain, desde 2024: Central Park,
+  Nottingham, Hove…) y SIS (en Reino Unido solo Doncaster, Harlow, Star
+  Pelaw y Valley, además de los irlandeses). No hay web oficial con la
+  lista, así que en el bot no va enlace.
+- **Dudas frecuentes** (`mensajes.FAQ`): la respuesta a quien escribe al
+  bot lleva «📚 Dudas frecuentes». El menú sale en un mensaje nuevo y los
+  temas se ven en ese mismo mensaje (se edita), con «⬅️ Otras dudas».
+  Cada respuesta acaba invitando a escribir al dueño: a quien aún no tiene
+  la apuesta de regalo (sin enlace de venta) con los dos botones de la
+  bienvenida, y a quien ya la tiene con «✉️ Escríbeme» y «Hola, tengo una
+  duda sobre …» ya escrito. A este último tampoco se le repite la pregunta
+  de la bienvenida en la respuesta del bot (pedido del dueño). Se apunta
+  qué temas mira cada uno (evento «faq»; en el resumen diario, cuántas
+  personas). `/dudas` enseña al dueño el menú como lo ve un cliente.
+- **Cambiar textos** (`/textos`, solo el dueño; `textos.py` y tabla nueva
+  `textos`, migración 3): elige el texto, el bot le manda el actual para
+  copiarlo, él manda el nuevo (la negrita de Telegram se pasa a negrita
+  Unicode) y ve una vista previa con sus botones antes de ✅ Guardar.
+  Puede volver al anterior o al original; caduca a la media hora. Cada
+  bienvenida distinta es un tipo nuevo (bot_b_v2, v3…; si repite un texto,
+  recupera su tipo), y la pestaña «Tipos de mensaje» y los resúmenes las
+  muestran con su fecha. Los botones de la bienvenida no se cambian desde
+  aquí. Cada instancia guarda sus textos: lo del bot de prueba no pasa al
+  real.
+- `negrita()` ahora también pone en negrita las letras con tilde (letra en
+  negrita + tilde suelta), para «𝗧𝗿𝗶́𝗼» o «𝗣𝗮𝘀𝘁𝗼́𝗻». Los textos de antes no
+  cambian.
+- Pruebas: 169, pasan en Python 3.9, 3.12 y 3.13 (las nuevas, comprobado
+  que fallan si se rompe lo que prueban). Conversación simulada entera
+  (respuesta, menú, tema, /textos, vista previa, guardar) revisada a mano.
+- Commits: (este commit)
+
 ## 2026-10-19 — Captación: freno de emergencia en el bot (/pausar y /reanudar)
 - **Qué**: el dueño pide poder parar rápido, desde el propio bot, que acepte
   a la gente «por si falla algo». Nuevas órdenes, solo para el dueño:
@@ -28,7 +66,7 @@ Entradas más recientes arriba.
   para probar). `instalar.sh` ya no dice «pulsa Iniciar» para saber el id:
   con el canal ya guardado en la fase 4, «Iniciar» no lo da; ahora dice
   `/miid`.
-- Commits: `d315944`, (este commit)
+- Commits: `d315944`, `01015f4`
 
 ## 2026-10-18 — Captación: fase 4 hecha en la cuenta real (solo lectura)
 - **Qué**: el dueño, con su visto bueno, actualizó la VM a `950e694`,

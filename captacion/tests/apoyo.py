@@ -84,3 +84,24 @@ def update_mensaje(update_id, uid=500, texto="hola"):
             "text": texto,
         },
     }
+
+
+def update_boton(update_id, datos, uid=500, message_id=77):
+    """Alguien pulsa un botón con respuesta (callback) en un mensaje del bot."""
+    return {
+        "update_id": update_id,
+        "callback_query": {
+            "id": f"cb{update_id}",
+            "from": usuario(uid),
+            "data": datos,
+            "message": {"message_id": message_id, "chat": {"id": uid, "type": "private"}},
+        },
+    }
+
+
+def update_texto_con_formato(update_id, uid, texto, negritas=()):
+    """Un mensaje con negritas puestas con el formato de Telegram: `negritas`
+    son (posición, largo) en unidades UTF-16, como las da Telegram."""
+    upd = update_mensaje(update_id, uid=uid, texto=texto)
+    upd["message"]["entities"] = [{"type": "bold", "offset": o, "length": n} for o, n in negritas]
+    return upd

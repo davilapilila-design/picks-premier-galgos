@@ -1,11 +1,13 @@
+import json
 import unittest
+from urllib.parse import quote
 
-from premier_captacion import db, mensajes
+from premier_captacion import db, mensajes, textos
 from premier_captacion.bot import BotCaptacion
 from premier_captacion.telegram_api import ErrorRed, ErrorTelegram
 
-from .apoyo import (CANAL, PERFIL, PROPIETARIO, APIFalsa, config, conexion,
-                    update_mensaje, update_solicitud)
+from .apoyo import (CANAL, PERFIL, PROPIETARIO, APIFalsa, config, conexion, update_boton,
+                    update_mensaje, update_solicitud, update_texto_con_formato)
 
 
 class Reloj:
@@ -152,7 +154,7 @@ class TestMensajesAlBot(Base):
         envios = self.api.envios_a(500)
         self.assertEqual(len(envios), 1)
         self.assertEqual(envios[0]["text"], mensajes.TEXTO_REDIRECCION)
-        self.assertEqual(envios[0]["reply_markup"], mensajes.teclado_respuesta(PERFIL))
+        self.assertEqual(envios[0]["reply_markup"], mensajes.teclado_redireccion(PERFIL, False))
 
     def test_rafaga_una_sola_respuesta_pero_vuelve_a_responder_despues(self):
         for i in range(3):
@@ -252,6 +254,187 @@ class TestPausa(Base):
 
     def test_la_ayuda_lo_explica(self):
         self.assertIn("/pausar", self.orden(1, "hola"))
+
+
+class TestDudas(Base):
+    """Dudas frecuentes, desde la respuesta del bot a quien le escribe."""
+
+    def con_gratuita(self, uid=500):
+        with self.con:
+            db.actualizar_datos_usuario(self.con, 1, {"id": uid, "first_name": "Ana"})
+            db.actualizar_campos(self.con, uid, 1, enlace_venta_ts=5)
+
+    def ediciones(self):
+        return [p for m, p in self.api.llamadas if m == "editMessageText"]
+
+    def temas_vistos(self):
+        return [json.loads(f["detalle"])["tema"]
+                for f in self.con.execute("SELECT detalle FROM eventos WHERE tipo = 'faq' ORDER BY id")]
+
+    def test_la_respuesta_no_repite_la_pregunta_a_quien_ya_tiene_la_gratuita(self):
+        self.con_gratuita(500)
+        self.bot.procesar(update_mensaje(1, uid=500))
+        envio = self.api.envios_a(500)[0]
+        self.assertEqual(envio["text"], mensajes.TEXTO_REDIRECCION_CON_GRATUITA)
+        botones = [b["text"] for fila in envio["reply_markup"]["inline_keyboard"] for b in fila]
+        self.assertEqual(botones, ["✉️ Escríbeme", "📚 Dudas frecuentes"])
+
+    def test_menu_en_un_mensaje_nuevo_y_temas_en_el_mismo(self):
+        self.bot.procesar(update_boton(1, "faq"))
+        self.assertEqual(self.api.metodos(), ["answerCallbackQuery", "sendMessage"])
+        menu = self.api.envios_a(500)[0]
+        self.assertEqual((menu["text"], menu["reply_markup"]), (mensajes.FAQ_TITULO, mensajes.teclado_menu_faq()))
+        self.bot.procesar(update_boton(2, "faq:casas"))
+        tema = self.ediciones()[-1]
+        self.assertEqual((tema["chat_id"], tema["message_id"]), (500, 77))
+        self.assertTrue(tema["text"].startswith(mensajes.FAQ["casas"]["titulo"]))
+        self.assertIn(mensajes.negrita("Betway"), tema["text"])
+        self.assertTrue(tema["text"].endswith(mensajes.PIE_SIN_GRATUITA))
+        datos = [b.get("callback_data") for fila in tema["reply_markup"]["inline_keyboard"] for b in fila]
+        # El submenú, los dos botones de la bienvenida (enlaces) y volver.
+        self.assertEqual(datos, ["faq:otras_casas", None, None, "faq:menu"])
+        self.bot.procesar(update_boton(3, "faq:otras_casas"))
+        self.assertIn(mensajes.negrita("Codere"), self.ediciones()[-1]["text"])
+        self.bot.procesar(update_boton(4, "faq:menu"))
+        self.assertEqual(self.ediciones()[-1]["text"], mensajes.FAQ_TITULO)
+        self.assertEqual(self.temas_vistos(), ["menu", "casas", "otras_casas", "menu"])
+
+    def test_con_la_gratuita_el_final_es_escribeme_sobre_ese_tema(self):
+        self.con_gratuita(500)
+        self.bot.procesar(update_boton(1, "faq:packs"))
+        tema = self.ediciones()[0]
+        self.assertTrue(tema["text"].endswith(mensajes.PIE_CON_GRATUITA))
+        filas = tema["reply_markup"]["inline_keyboard"]
+        self.assertIn(quote("Hola, tengo una duda sobre los packs", safe=""), filas[0][0]["url"])
+        self.assertEqual(filas[-1][0]["callback_data"], "faq:menu")
+
+    def test_mismo_tema_dos_veces_o_mensaje_que_ya_no_se_puede_cambiar(self):
+        self.api.fallos["editMessageText"] = [
+            ErrorTelegram("editMessageText", 400, "Bad Request: message is not modified"),
+            ErrorTelegram("editMessageText", 400, "Bad Request: message can't be edited"),
+        ]
+        self.bot.procesar(update_boton(1, "faq:unidades"))
+        self.assertEqual(self.api.envios_a(500), [])  # ya lo estaba viendo
+        self.bot.procesar(update_boton(2, "faq:unidades"))
+        self.assertEqual(len(self.api.envios_a(500)), 1)  # se le envía de nuevo
+        self.assertTrue(self.api.envios_a(500)[0]["text"].startswith(mensajes.FAQ["unidades"]["titulo"]))
+
+    def test_siempre_contesta_al_boton_aunque_falle_o_no_lo_conozca(self):
+        self.api.fallos["answerCallbackQuery"] = [ErrorTelegram("answerCallbackQuery", 400, "query is too old")]
+        self.bot.procesar(update_boton(1, "faq:no_existe"))
+        self.bot.procesar(update_boton(2, "otra_cosa"))
+        self.assertEqual(self.api.metodos(), ["answerCallbackQuery", "answerCallbackQuery"])
+        self.assertEqual(tipos_eventos(self.con), [])
+
+    def test_el_dueno_las_ve_con_dudas_y_no_cuenta(self):
+        self.bot.procesar(update_mensaje(1, uid=PROPIETARIO, texto="/dudas"))
+        self.assertEqual(self.api.envios_a(PROPIETARIO)[1]["text"], mensajes.FAQ_TITULO)
+        self.bot.procesar(update_boton(2, "faq:bank", uid=PROPIETARIO))
+        self.assertEqual(tipos_eventos(self.con), [])
+
+
+class TestTextos(Base):
+    """El dueño cambia los textos desde el bot con /textos."""
+
+    def orden(self, update_id, texto):
+        self.bot.procesar(update_mensaje(update_id, uid=PROPIETARIO, texto=texto))
+        return self.api.envios_a(PROPIETARIO)[-1]
+
+    def boton(self, update_id, datos, uid=PROPIETARIO):
+        self.bot.procesar(update_boton(update_id, datos, uid=uid))
+        envios = self.api.envios_a(PROPIETARIO)
+        return envios[-1] if envios else None
+
+    def cambiar(self, update_id, clave, texto):
+        self.boton(update_id, f"txt:{clave}")
+        self.orden(update_id + 1, texto)
+        return self.boton(update_id + 2, "txt_ok")
+
+    def test_cambiar_un_tema_con_negritas_de_telegram(self):
+        menu = self.orden(1, "/textos")
+        datos = [fila[0]["callback_data"] for fila in menu["reply_markup"]["inline_keyboard"]]
+        self.assertEqual(datos, [f"txt:{clave}" for clave in mensajes.TEXTOS_EDITABLES])
+        self.boton(2, "txt:faq:packs")
+        envios = self.api.envios_a(PROPIETARIO)
+        self.assertEqual(envios[-2]["text"], mensajes.FAQ["packs"]["texto"])  # el actual, para copiarlo
+        self.assertIn("/cancelar", envios[-1]["text"])
+        self.bot.procesar(update_texto_con_formato(3, PROPIETARIO, "Packs con garantía total", negritas=[(10, 8)]))
+        nuevo = "Packs con " + mensajes.negrita("garantía") + " total"
+        envios = self.api.envios_a(PROPIETARIO)
+        self.assertEqual(envios[-3]["text"], "👀 Así lo verán:")
+        self.assertIn(nuevo, envios[-2]["text"])
+        confirmar = envios[-1]["reply_markup"]["inline_keyboard"][0]
+        self.assertEqual([b["callback_data"] for b in confirmar], ["txt_ok", "txt_no"])
+        # Hasta que no lo guarda, los clientes ven el de antes.
+        self.bot.procesar(update_boton(4, "faq:packs", uid=500))
+        ediciones = [p for m, p in self.api.llamadas if m == "editMessageText"]
+        self.assertNotIn(nuevo, ediciones[-1]["text"])
+        self.assertTrue(self.boton(5, "txt_ok")["text"].startswith("✅ Guardado"))
+        self.bot.procesar(update_boton(6, "faq:packs", uid=500))
+        ediciones = [p for m, p in self.api.llamadas if m == "editMessageText"]
+        self.assertIn(nuevo, ediciones[-1]["text"])
+
+    def test_cambiar_la_bienvenida_es_una_version_nueva(self):
+        self.boton(1, "txt:bienvenida")
+        self.orden(2, "¡Hola! Bienvenido 🐕")
+        self.assertIn("versión nueva", self.api.envios_a(PROPIETARIO)[-1]["text"])
+        self.assertIn("bot_b_v2", self.boton(3, "txt_ok")["text"])
+        self.api.llamadas.clear()
+        self.bot.procesar(update_solicitud(4, uid=500))
+        envio = self.api.envios_a(500)[0]
+        self.assertEqual(envio["text"], "¡Hola! Bienvenido 🐕")
+        self.assertEqual(envio["reply_markup"], mensajes.teclado_respuesta(PERFIL))  # los botones no cambian
+        self.assertEqual(db.obtener_usuario(self.con, 500)["bienvenida_tipo"], "bot_b_v2")
+        # Vuelve al original, y con él al tipo de partida.
+        self.boton(5, "txt:bienvenida")
+        self.boton(6, "txt_orig:bienvenida")
+        self.boton(7, "txt_ok")
+        self.bot.procesar(update_solicitud(8, uid=501))
+        self.assertEqual(self.api.envios_a(501)[0]["text"], mensajes.TEXTO_BIENVENIDA)
+        self.assertEqual(db.obtener_usuario(self.con, 501)["bienvenida_tipo"], mensajes.TIPO_BIENVENIDA_BOT)
+
+    def test_cancelar_y_textos_que_no_valen(self):
+        self.boton(1, "txt:faq_menu")
+        self.assertEqual(self.orden(2, "/cancelar")["text"], "❌ Cancelado: se queda como estaba.")
+        self.assertEqual(self.orden(3, "/cancelar")["text"], "No estabas cambiando ningún texto.")
+        self.assertIn("/textos", self.orden(4, "hola")["text"])  # sin cambio en curso: la ayuda
+        self.boton(5, "txt:faq_menu")
+        self.assertIn("igual que el actual", self.orden(6, mensajes.FAQ_TITULO)["text"])
+        self.assertIn("vacío", self.orden(7, "   ")["text"])
+        self.assertIn("demasiado largo", self.orden(8, "x" * 3001)["text"])
+        foto = update_mensaje(9, uid=PROPIETARIO)
+        del foto["message"]["text"]
+        self.bot.procesar(foto)
+        self.assertIn("como texto", self.api.envios_a(PROPIETARIO)[-1]["text"])
+        # En medio de un cambio, las órdenes siguen funcionando.
+        self.assertTrue(self.orden(10, "/estado")["text"].startswith("✅ Funcionando"))
+        self.assertEqual(self.boton(11, "txt_no")["text"], "❌ Cancelado: se queda como estaba.")
+        self.assertEqual(textos.actual(self.con, "faq_menu"), mensajes.FAQ_TITULO)
+
+    def test_si_pasa_media_hora_hay_que_empezar_otra_vez(self):
+        self.boton(1, "txt:faq:bank")
+        self.orden(2, "Texto nuevo del bank")
+        self.reloj.ahora += 31 * 60
+        self.assertIn("ya no está pendiente", self.boton(3, "txt_ok")["text"])
+        self.assertEqual(textos.actual(self.con, "faq:bank"), mensajes.FAQ["bank"]["texto"])
+
+    def test_volver_al_anterior(self):
+        self.cambiar(10, "faq:unidades", "Versión A")
+        self.cambiar(20, "faq:unidades", "Versión B")
+        self.boton(30, "txt:faq:unidades")
+        filas = self.api.envios_a(PROPIETARIO)[-1]["reply_markup"]["inline_keyboard"]
+        self.assertEqual([f[0]["callback_data"] for f in filas],
+                         ["txt_ant:faq:unidades", "txt_orig:faq:unidades", "txt_no"])
+        self.boton(31, "txt_ant:faq:unidades")
+        self.boton(32, "txt_ok")
+        self.assertEqual(textos.actual(self.con, "faq:unidades"), "Versión A")
+
+    def test_un_cliente_no_puede_cambiar_textos(self):
+        self.bot.procesar(update_boton(1, "txt:bienvenida", uid=500))
+        self.bot.procesar(update_mensaje(2, uid=500, texto="/textos"))
+        self.assertEqual(self.api.envios_a(PROPIETARIO), [])
+        self.assertIsNone(textos.edicion(self.con, self.reloj()))
+        self.assertEqual(self.api.envios_a(500)[0]["text"], mensajes.TEXTO_REDIRECCION)
 
 
 class TestPermisos(Base):

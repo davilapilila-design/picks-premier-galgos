@@ -71,6 +71,17 @@ MIGRACIONES = [
         comprobado_ts INTEGER NOT NULL
     );
     """,
+    # 3 (textos que el dueño cambia desde el bot con /textos; ver textos.py)
+    """
+    CREATE TABLE textos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        clave TEXT NOT NULL,
+        texto TEXT NOT NULL,
+        tipo_mensaje TEXT,
+        creado_ts INTEGER NOT NULL
+    );
+    CREATE INDEX textos_clave ON textos (clave, id);
+    """,
 ]
 
 

@@ -5,7 +5,7 @@ from datetime import date, datetime
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from premier_captacion import db, resumen
+from premier_captacion import db, mensajes, resumen
 
 from .apoyo import conexion
 
@@ -66,6 +66,20 @@ class TestDiario(Base):
                       resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12))):
             self.assertTrue(texto.endswith("⏸️ El bot sigue EN PAUSA desde las 12:30 del 14.10: "
                                            "no acepta a nadie. Escríbele /reanudar para volver."), texto)
+
+    def test_dudas_y_versiones_de_la_bienvenida(self):
+        from premier_captacion import textos
+
+        self.evento(ts(2026, 10, 14, 13, 0), "faq", 5, tema="menu")
+        self.evento(ts(2026, 10, 14, 13, 1), "faq", 5, tema="casas")
+        self.evento(ts(2026, 10, 14, 14, 0), "faq", 6, tema="packs")
+        textos.guardar(self.con, "bienvenida", "Hola v2", ts(2026, 10, 14, 15, 0))
+        self.evento(ts(2026, 10, 14, 16, 0), "bienvenida_enviada", 7, tipo_mensaje="bot_b_v2")
+        texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
+        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas", texto)
+        # Con dos versiones de bienvenida en el día, sale el desglose con sus nombres.
+        self.assertIn("   · Bienvenida del bot, versión 2 (cambiada desde el bot el 14/10/2026): 1", texto)
+        self.assertIn(f"   · {mensajes.TIPOS_MENSAJE['bot_b_v1']}: 1", texto)
 
     def test_lo_que_va_de_dia(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14), ahora_ts=ts(2026, 10, 14, 11, 0))

@@ -47,6 +47,13 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   `mensajes.negrita()` y comprobarlos contra el original
   (`tests/test_mensajes.py`). Cambiar un texto de bienvenida = tipo de
   mensaje nuevo en `TIPOS_MENSAJE`, nunca reutilizar un id.
+- El dueño cambia textos desde el bot (`/textos`): los de `mensajes.py`
+  son solo los de partida, y vale lo último guardado en la tabla `textos`
+  (ver `textos.py`). Al leer un texto en el bot, usar siempre
+  `textos.actual()`, nunca la constante. Las bienvenidas que crea él
+  reciben su tipo solas (bot_b_v2…). Los botones de la bienvenida y sus
+  frases no se exponen a `/textos`: de ellas depende saber qué eligió cada
+  persona.
 - El bot (fase 1) usa solo la librería estándar; el Sheet (gspread 6.1.4) y
   el lector (Telethon 1.45.0) usan el venv `/opt/premier-captacion/venv`.
   Compatible con Python 3.9+. Tests: `cd captacion && python3 -m unittest

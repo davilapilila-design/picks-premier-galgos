@@ -42,6 +42,8 @@ vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
 | Datos | SQLite local en la VM (con lo que el bot decide) + Google Sheet **privado y aparte** del de picks (copia para consultar y estadísticas). No se guarda el contenido de las conversaciones, solo qué pasó y cuándo. |
 | Resúmenes | Bot → dueño: diario a las **00:05** (día anterior) y semanal los **lunes a las 9:00** (lunes a domingo, comparado con la semana anterior). También a demanda: `/resumen`, `/semana`, `/estado`. |
 | Freno de emergencia | Pedido por el dueño (2026-10-19). `/pausar` al bot (solo el dueño): deja de enviar bienvenidas y de aceptar al momento; las solicitudes se quedan pendientes para aceptarlas a mano. Sigue en pausa tras un reinicio y lo recuerdan `/estado` y los resúmenes. `/reanudar` para volver. Plan B: quitarle la administración del canal. |
+| Dudas frecuentes | Decidido con el dueño (2026-10-19): botón «📚 Dudas frecuentes» en la respuesta del bot a quien le escribe. Temas: Casas de apuestas (con submenú Otras casas y canódromos), Unidades, Bank y stakes, Apuesta a ganador, Gemelas y tríos, Packs (garantía). Respuestas cortas que acaban invitando a escribirle; a quien no tiene aún la apuesta de regalo (sin enlace de venta) se le vuelve a hacer la pregunta de la bienvenida con sus dos botones, y a quien ya la tiene, «escríbeme» con el tema ya escrito. |
+| Cambiar textos | Pedido por el dueño (2026-10-19): `/textos` en el bot (solo él) para cambiar la bienvenida, las respuestas y las dudas, con vista previa y confirmación, y volver al anterior o al original. Se guardan en la base de datos de cada instancia. Cada bienvenida distinta es un tipo nuevo (bot_b_v2…) para las estadísticas. Los botones de la bienvenida no se cambian desde el bot. |
 | Dónde corre | La VM de Proyecto Galgos, como servicios systemd propios con un usuario de sistema sin privilegios (`captacion`). |
 
 ## Arquitectura
@@ -109,4 +111,5 @@ uno explícito aparte.
   ignoran (se abre el chat vacío). Se comprueba en las pruebas.
 
 ## Pendiente para más adelante
-- Que el bot atienda dudas a quien ya ha escrito al dueño.
+- Que el bot conteste por su cuenta a preguntas escritas (hoy solo hay el
+  menú de dudas frecuentes).

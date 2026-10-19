@@ -25,7 +25,7 @@ import time
 from collections import Counter
 from datetime import date, datetime, time as hora, timedelta
 
-from . import db, mensajes
+from . import db, mensajes, textos
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
 
@@ -58,6 +58,7 @@ def calcular(eventos):
         "te_escribieron": set(),
         "enlaces_venta": 0,
         "en_pausa": 0,
+        "dudas": set(),
         "con_lector": False,
     }
     for ev in eventos:
@@ -81,6 +82,8 @@ def calcular(eventos):
             est["escribieron_bot"].add(ev["user_id"])
         elif tipo == "solicitud_en_pausa":
             est["en_pausa"] += 1
+        elif tipo == "faq":
+            est["dudas"].add(ev["user_id"])
         # Fase 3 (lector de la cuenta del dueño). Lo que viene del histórico
         # (fase 4) tiene fechas pasadas y no cae en el día del resumen.
         elif tipo == "te_escribe":
@@ -114,7 +117,7 @@ def _num(est, clave):
     return len(valor) if isinstance(valor, set) else valor
 
 
-def _cuerpo(est, anterior=None):
+def _cuerpo(est, anterior=None, nombres_tipo=None):
     def cmp(clave):
         return _comparar(_num(est, clave), _num(anterior, clave)) if anterior else ""
 
@@ -123,7 +126,7 @@ def _cuerpo(est, anterior=None):
     lineas += _desglose(est["por_enlace"])
     lineas.append(f"👋 Bienvenidas enviadas: {est['bienvenidas']}{cmp('bienvenidas')}")
     if anterior or len(est["por_tipo"]) > 1:
-        lineas += _desglose(est["por_tipo"], mensajes.TIPOS_MENSAJE)
+        lineas += _desglose(est["por_tipo"], nombres_tipo or mensajes.TIPOS_MENSAJE)
     if est["sin_bienvenida"]:
         lineas.append(f"⚠️ Sin bienvenida por algún problema: {sum(est['sin_bienvenida'].values())}")
         lineas += _desglose(est["sin_bienvenida"], MOTIVOS)
@@ -135,10 +138,19 @@ def _cuerpo(est, anterior=None):
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
     lineas.append(f"🤖 Escribieron al bot: {_personas(len(est['escribieron_bot']))}")
+    if est["dudas"]:
+        lineas.append(f"📚 Miraron las dudas frecuentes: {_personas(len(est['dudas']))}")
     if est["con_lector"]:
         lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{cmp('te_escribieron')}")
         lineas.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}{cmp('enlaces_venta')}")
     return lineas
+
+
+def _nombres_tipo(con, tz, *estadisticas):
+    """Nombre de cada tipo de bienvenida, también de las versiones creadas
+    desde el bot (/textos), para el desglose."""
+    tipos = {t for est in estadisticas if est is not None for t in est["por_tipo"]}
+    return {t: textos.descripcion_tipo(con, t, tz) for t in tipos}
 
 
 def _recordatorio_pausa(con, tz):
@@ -172,7 +184,8 @@ def texto_diario(con, tz, fecha, ahora_ts=None):
         cabecera = f"📊 Resumen del {nombre_dia}"
     est = calcular(db.eventos_entre(con, desde, hasta))
     _marcar_lector(con, est)
-    return "\n".join([cabecera, ""] + _cuerpo(est) + _recordatorio_pausa(con, tz))
+    return "\n".join([cabecera, ""] + _cuerpo(est, nombres_tipo=_nombres_tipo(con, tz, est))
+                     + _recordatorio_pausa(con, tz))
 
 
 def texto_semanal(con, tz, lunes, ahora_ts=None):
@@ -204,7 +217,8 @@ def texto_semanal(con, tz, lunes, ahora_ts=None):
     dias = " · ".join(f"{DIAS[i][:3]} {por_dia[i]}" for i in range(7))
 
     _marcar_lector(con, est, anterior)
-    return "\n".join([cabecera, ""] + _cuerpo(est, anterior) + ["", f"📈 Solicitudes por día: {dias}"]
+    cuerpo = _cuerpo(est, anterior, nombres_tipo=_nombres_tipo(con, tz, est, anterior))
+    return "\n".join([cabecera, ""] + cuerpo + ["", f"📈 Solicitudes por día: {dias}"]
                      + _recordatorio_pausa(con, tz))
 
 

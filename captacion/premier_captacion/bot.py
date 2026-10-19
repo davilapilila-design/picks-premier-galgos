@@ -17,6 +17,12 @@ Qué hace:
    bienvenidas ni acepta; las solicitudes se quedan pendientes para que las
    acepte él a mano) y con /reanudar vuelve. Se guarda en la base de datos:
    sigue en pausa aunque el bot se reinicie.
+7. Dudas frecuentes: la respuesta a quien escribe al bot lleva un botón
+   «📚 Dudas frecuentes» con un menú de temas; cada respuesta acaba
+   invitando a escribir al dueño (y, a quien aún no tiene la apuesta de
+   regalo, con los dos botones de la bienvenida).
+8. El dueño cambia los textos (bienvenida, respuestas y dudas) desde el
+   propio bot con /textos: manda el nuevo, ve cómo quedará y lo guarda.
 
 Nunca acepta solicitudes de un chat que no sea el canal configurado.
 
@@ -34,13 +40,13 @@ import sys
 import time
 from datetime import datetime
 
-from . import db, mensajes, resumen
+from . import db, mensajes, resumen, textos
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
 
 log = logging.getLogger("captacion.bot")
 
-TIPOS_UPDATE = ["message", "chat_join_request", "my_chat_member"]
+TIPOS_UPDATE = ["message", "chat_join_request", "my_chat_member", "callback_query"]
 TIMEOUT_POLL = 50
 ESPERA_MAX = 60
 
@@ -51,6 +57,8 @@ AYUDA_PROPIETARIO = (
     "/estado – comprobar que el bot funciona\n"
     "/pausar – dejar de aceptar solicitudes al momento (por si algo falla)\n"
     "/reanudar – volver a aceptarlas\n"
+    "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
+    "/dudas – ver las dudas frecuentes como las ve un cliente\n"
     "/miid – tu id de Telegram"
 )
 
@@ -113,11 +121,16 @@ class BotCaptacion:
         except (ErrorTelegram, ErrorRed) as e:
             log.error("No se pudo enviar el aviso al propietario: %s", e)
 
-    def _responder(self, chat_id, texto):
+    def _responder(self, chat_id, texto, teclado=None):
         try:
-            self.api.llamar("sendMessage", chat_id=chat_id, text=texto)
+            if teclado is None:
+                self.api.llamar("sendMessage", chat_id=chat_id, text=texto)
+            else:
+                self.api.llamar("sendMessage", chat_id=chat_id, text=texto, reply_markup=teclado)
+            return True
         except ErrorTelegram as e:
             log.error("No se pudo responder a %s: %s", chat_id, e)
+            return False
 
     # --- Arranque -------------------------------------------------------------
 
@@ -210,6 +223,8 @@ class BotCaptacion:
             self._mensaje(update["message"])
         elif "my_chat_member" in update:
             self._cambio_de_permisos(update["my_chat_member"])
+        elif "callback_query" in update:
+            self._boton(update["callback_query"])
 
     # --- Solicitudes de unión ------------------------------------------------
 
@@ -272,11 +287,14 @@ class BotCaptacion:
 
     def _enviar_bienvenida(self, sol, usuario):
         uid = usuario["id"]
+        # El texto y su tipo: los que haya puesto el dueño con /textos, o los
+        # de partida.
+        tipo = textos.tipo_bienvenida(self.con)
         try:
             self.api.llamar(
                 "sendMessage",
                 chat_id=sol.get("user_chat_id", uid),
-                text=mensajes.TEXTO_BIENVENIDA,
+                text=textos.actual(self.con, "bienvenida"),
                 reply_markup=mensajes.teclado_respuesta(self.cfg.perfil),
             )
         except ErrorTelegram as e:
@@ -288,9 +306,8 @@ class BotCaptacion:
             return
         ahora = self.reloj()
         with self.con:
-            db.marcar_bienvenida(self.con, uid, ahora, mensajes.TIPO_BIENVENIDA_BOT)
-            db.registrar_evento(self.con, ahora, "bienvenida_enviada", uid,
-                                tipo_mensaje=mensajes.TIPO_BIENVENIDA_BOT)
+            db.marcar_bienvenida(self.con, uid, ahora, tipo)
+            db.registrar_evento(self.con, ahora, "bienvenida_enviada", uid, tipo_mensaje=tipo)
         log.info("Bienvenida enviada a %s", uid)
 
     def _aceptar(self, chat_id, usuario):
@@ -341,7 +358,10 @@ class BotCaptacion:
                                  "Ponlo en CAPTACION_PROPIETARIO_ID y reinicia el bot.")
             return
         if uid == self.cfg.propietario_id:
-            self._comando_propietario(comando)
+            if comando is None and textos.edicion(self.con, self.reloj()) is not None:
+                self._texto_nuevo(msg)  # está cambiando un texto con /textos
+            else:
+                self._comando_propietario(comando)
             return
 
         ahora = self.reloj()
@@ -352,9 +372,13 @@ class BotCaptacion:
         ultima = fila["ultima_redireccion_ts"]
         if ultima is not None and ahora - ultima < self.cfg.pausa_redireccion_s:
             return
+        # A quien ya tiene la apuesta de regalo (el dueño le envió un enlace
+        # de venta) no se le vuelve a hacer la pregunta de la bienvenida.
+        con_gratuita = fila["enlace_venta_ts"] is not None
+        clave = "redireccion_gratuita" if con_gratuita else "redireccion"
         try:
-            self.api.llamar("sendMessage", chat_id=uid, text=mensajes.TEXTO_REDIRECCION,
-                            reply_markup=mensajes.teclado_respuesta(self.cfg.perfil))
+            self.api.llamar("sendMessage", chat_id=uid, text=textos.actual(self.con, clave),
+                            reply_markup=mensajes.teclado_redireccion(self.cfg.perfil, con_gratuita))
         except ErrorTelegram as e:
             with self.con:
                 db.registrar_evento(self.con, ahora, "redireccion_fallida", uid, motivo=e.descripcion)
@@ -371,6 +395,21 @@ class BotCaptacion:
             texto = resumen.texto_diario(self.con, tz, hoy, ahora_ts=ahora)
         elif comando == "/semana":
             texto = resumen.texto_semanal(self.con, tz, resumen.lunes_de(hoy), ahora_ts=ahora)
+        elif comando == "/textos":
+            self._menu_textos()
+            return
+        elif comando == "/cancelar":
+            if textos.edicion(self.con, ahora) is None:
+                texto = "No estabas cambiando ningún texto."
+            else:
+                textos.terminar(self.con)
+                texto = "❌ Cancelado: se queda como estaba."
+        elif comando == "/dudas":
+            self._responder(self.cfg.propietario_id,
+                            "👀 Así ve el menú quien escribe al bot (y aún no tiene la gratuita):")
+            texto, teclado = self._pantalla_dudas(None, con_gratuita=False)
+            self._responder(self.cfg.propietario_id, texto, teclado)
+            return
         elif comando == "/pausar":
             texto = self._pausar(ahora)
         elif comando == "/reanudar":
@@ -391,6 +430,173 @@ class BotCaptacion:
         else:
             texto = AYUDA_PROPIETARIO
         self._responder(self.cfg.propietario_id, texto)
+
+    # --- Botones con respuesta (dudas frecuentes y /textos) --------------------
+
+    def _boton(self, cq):
+        # Hay que contestar siempre, o el botón se queda «cargando».
+        try:
+            self.api.llamar("answerCallbackQuery", callback_query_id=cq["id"])
+        except ErrorTelegram as e:
+            log.info("Telegram no aceptó la respuesta al botón: %s", e)
+        datos = cq.get("data") or ""
+        uid = (cq.get("from") or {}).get("id")
+        if uid is None:
+            return
+        if datos == mensajes.CALLBACK_DUDAS or datos.startswith("faq:"):
+            self._boton_dudas(cq, uid, datos)
+        elif datos.startswith("txt") and uid == self.cfg.propietario_id:
+            self._boton_textos(datos)
+
+    def _pantalla_dudas(self, tema, con_gratuita):
+        """(texto, teclado) del menú de dudas (tema None) o de un tema."""
+        if tema is None:
+            return textos.actual(self.con, "faq_menu"), mensajes.teclado_menu_faq()
+        pie = textos.actual(self.con, "faq_pie_gratuita" if con_gratuita else "faq_pie")
+        texto = mensajes.mensaje_tema(tema, textos.actual(self.con, f"faq:{tema}"), pie)
+        return texto, mensajes.teclado_tema(tema, self.cfg.perfil, con_gratuita)
+
+    def _boton_dudas(self, cq, uid, datos):
+        if datos in (mensajes.CALLBACK_DUDAS, mensajes.CALLBACK_MENU):
+            tema = None
+        else:
+            tema = datos.split(":", 1)[1]
+            if tema not in mensajes.FAQ:
+                return
+        fila = db.obtener_usuario(self.con, uid)
+        con_gratuita = fila is not None and fila["enlace_venta_ts"] is not None
+        texto, teclado = self._pantalla_dudas(tema, con_gratuita)
+        if datos == mensajes.CALLBACK_DUDAS:
+            # Desde la respuesta del bot: el menú va en un mensaje nuevo (la
+            # respuesta, con sus botones, se queda donde está).
+            hecho = self._responder(uid, texto, teclado)
+        else:
+            hecho = self._editar(cq.get("message"), uid, texto, teclado)
+        if hecho and uid != self.cfg.propietario_id:
+            ahora = self.reloj()
+            with self.con:
+                db.actualizar_datos_usuario(self.con, ahora, cq["from"])
+                db.registrar_evento(self.con, ahora, "faq", uid, tema=tema or "menu")
+
+    def _editar(self, mensaje, chat_id, texto, teclado):
+        """Cambia el mensaje de las dudas al navegar. Si no se puede (p. ej.
+        es muy antiguo), lo envía de nuevo."""
+        if not mensaje or "message_id" not in mensaje:
+            return self._responder(chat_id, texto, teclado)
+        try:
+            self.api.llamar("editMessageText", chat_id=mensaje["chat"]["id"], message_id=mensaje["message_id"],
+                            text=texto, reply_markup=teclado)
+            return True
+        except ErrorTelegram as e:
+            if "not modified" in e.descripcion.lower():
+                return True  # ha pulsado el tema que ya estaba viendo
+            log.info("No se pudo cambiar el mensaje (%s): lo envío de nuevo", e.descripcion)
+            return self._responder(chat_id, texto, teclado)
+
+    # --- Cambiar textos (/textos, solo el dueño) -------------------------------
+
+    def _menu_textos(self):
+        textos.terminar(self.con)
+        filas = [[{"text": nombre, "callback_data": f"txt:{clave}"}]
+                 for clave, (nombre, _) in mensajes.TEXTOS_EDITABLES.items()]
+        self._responder(self.cfg.propietario_id, "✏️ ¿Qué texto quieres cambiar?", {"inline_keyboard": filas})
+
+    def _boton_textos(self, datos):
+        ahora = self.reloj()
+        accion, _, clave = datos.partition(":")
+        if accion in ("txt", "txt_ant", "txt_orig") and clave not in mensajes.TEXTOS_EDITABLES:
+            return
+        if accion == "txt":
+            self._empezar_edicion(clave, ahora)
+        elif accion in ("txt_ant", "txt_orig"):
+            texto = textos.anterior(self.con, clave) if accion == "txt_ant" else textos.original(clave)
+            if texto is None or texto == textos.actual(self.con, clave):
+                self._responder(self.cfg.propietario_id, "Ya está así: no hay nada que cambiar.")
+                return
+            textos.empezar_edicion(self.con, clave, ahora)
+            self._vista_previa(textos.edicion(self.con, ahora), texto, ahora)
+        elif accion == "txt_ok":
+            self._guardar_texto(ahora)
+        elif accion == "txt_no":
+            textos.terminar(self.con)
+            self._responder(self.cfg.propietario_id, "❌ Cancelado: se queda como estaba.")
+
+    def _empezar_edicion(self, clave, ahora):
+        textos.empezar_edicion(self.con, clave, ahora)
+        dueno = self.cfg.propietario_id
+        actual = textos.actual(self.con, clave)
+        self._responder(dueno, actual)  # tal cual, para que lo copie y lo retoque
+        botones = []
+        if textos.anterior(self.con, clave) is not None:
+            botones.append([{"text": "↩️ Volver al anterior", "callback_data": f"txt_ant:{clave}"}])
+        if actual != textos.original(clave):
+            botones.append([{"text": "♻️ Volver al original", "callback_data": f"txt_orig:{clave}"}])
+        botones.append([{"text": "❌ Cancelar", "callback_data": "txt_no"}])
+        self._responder(dueno, f"✏️ Arriba tienes el texto actual de «{textos.nombre(clave)}». Cópialo, "
+                               "cámbialo y mándamelo.\nPara poner negritas, usa la negrita de Telegram "
+                               "(selecciona el texto → Negrita).\nPara dejarlo como está: /cancelar",
+                        {"inline_keyboard": botones})
+
+    def _texto_nuevo(self, msg):
+        ahora = self.reloj()
+        edicion = textos.edicion(self.con, ahora)
+        dueno = self.cfg.propietario_id
+        if msg.get("text") is None:
+            self._responder(dueno, "Mándamelo como texto, sin fotos ni archivos. O /cancelar.")
+            return
+        nuevo = textos.con_negritas(msg["text"], msg.get("entities"))
+        fallo = textos.problema(nuevo)
+        if fallo:
+            self._responder(dueno, f"⚠️ Ese texto {fallo}. Mándamelo otra vez o /cancelar.")
+        elif nuevo == textos.actual(self.con, edicion["clave"]):
+            self._responder(dueno, "Es igual que el actual: no hay nada que cambiar. Mándame otro o /cancelar.")
+        else:
+            self._vista_previa(edicion, nuevo, ahora)
+
+    def _vista_previa(self, edicion, nuevo, ahora):
+        textos.preparar(self.con, edicion, nuevo, ahora)
+        clave = edicion["clave"]
+        dueno = self.cfg.propietario_id
+        self._responder(dueno, "👀 Así lo verán:")
+        texto, teclado = self._como_lo_veran(clave, nuevo)
+        self._responder(dueno, texto, teclado)
+        aviso = ("\nSerá una versión nueva de la bienvenida: en la hoja podrás comparar cuál hace que "
+                 "te escriban más." if clave == "bienvenida" else "")
+        self._responder(dueno, f"¿Guardo el texto nuevo de «{textos.nombre(clave)}»?{aviso}",
+                        {"inline_keyboard": [[{"text": "✅ Guardar", "callback_data": "txt_ok"},
+                                              {"text": "❌ Cancelar", "callback_data": "txt_no"}]]})
+
+    def _como_lo_veran(self, clave, texto):
+        perfil = self.cfg.perfil
+        if clave == "bienvenida":
+            return texto, mensajes.teclado_respuesta(perfil)
+        if clave in ("redireccion", "redireccion_gratuita"):
+            return texto, mensajes.teclado_redireccion(perfil, clave == "redireccion_gratuita")
+        if clave == "faq_menu":
+            return texto, mensajes.teclado_menu_faq()
+        if clave in ("faq_pie", "faq_pie_gratuita"):
+            # El final se ve debajo de un tema cualquiera (el primero del menú).
+            tema = mensajes.FAQ_MENU[0]
+            return (mensajes.mensaje_tema(tema, textos.actual(self.con, f"faq:{tema}"), texto),
+                    mensajes.teclado_tema(tema, perfil, clave == "faq_pie_gratuita"))
+        tema = clave.split(":", 1)[1]
+        return (mensajes.mensaje_tema(tema, texto, textos.actual(self.con, "faq_pie")),
+                mensajes.teclado_tema(tema, perfil, False))
+
+    def _guardar_texto(self, ahora):
+        dueno = self.cfg.propietario_id
+        edicion = textos.edicion(self.con, ahora)
+        if edicion is None or edicion["nuevo"] is None:
+            self._responder(dueno, "⌛ Ese cambio ya no está pendiente (se canceló o pasó media hora). "
+                                   "Vuelve a empezar con /textos.")
+            return
+        tipo = textos.guardar(self.con, edicion["clave"], edicion["nuevo"], ahora)
+        textos.terminar(self.con)
+        log.info("Texto «%s» cambiado por el dueño", edicion["clave"])
+        texto = f"✅ Guardado. Desde ahora se usa el texto nuevo de «{textos.nombre(edicion['clave'])}»."
+        if tipo:
+            texto += f"\nEsta bienvenida es la versión {tipo} (así sale en la hoja)."
+        self._responder(dueno, texto)
 
     # --- Freno de emergencia (/pausar y /reanudar) ---------------------------
 
