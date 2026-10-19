@@ -3,6 +3,27 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-18 — Captación: fase 4 hecha en la cuenta real (solo lectura)
+- **Qué**: el dueño, con su visto bueno, actualizó la VM a `950e694`,
+  conectó su cuenta a la instancia real (`conectar-cuenta.sh real`,
+  reutilizando el api_id/api_hash de prueba) y ejecutó
+  `leer-historico.sh real`. El canal principal se identificó con uno de sus
+  enlaces de entrada («PREMIER GALGOS») y quedó guardado en la
+  configuración real. No se instaló ni arrancó el bot real ni el lector.
+- **Resultado**: 994 personas con bienvenida manual (197 «Buenas!
+  Bienvenido a PREMIER GALGOS» y 797 «Buenos días y bienvenido a Premier
+  Galgos»). Contestaron 319 (32 %) y recibieron enlace de venta 255 (26 %
+  del total; el 80 % de los que contestaron). A ninguna se le enviará la
+  bienvenida del bot. Los datos están en la base de datos real de la VM;
+  irán al Sheet real cuando exista (fase 5).
+- **Cómo fue**: unos 31 minutos (22:04-22:35 UTC). Telegram pidió esperar
+  muchas veces (casi siempre unos 10 s; tres veces 2-3 min y una 886 s);
+  con el tope anterior de 2 min se habría cortado. Hubo varios cortes de
+  conexión de Telegram y Telethon se reconectó solo.
+- **Cambio**: el tope de espera del histórico pasa de 15 a 30 min (la de
+  886 s se quedó cerca del tope de 900 s), por si se vuelve a ejecutar.
+- Commits: (este commit)
+
 ## 2026-10-18 — Captación: fase 4 preparada para la cuenta real (canal principal y api_id reutilizado)
 - **Qué**: el dueño da el visto bueno a la fase 4 en su cuenta real (solo
   lectura). Antes de dársela a ejecutar, tres cambios:
@@ -26,7 +47,7 @@ Entradas más recientes arriba.
   un entorno desechable con Telegram y systemd simulados: reutilizar o no
   el api_id, confirmar o cancelar el canal, segunda pasada sin preguntas,
   sin terminal.
-- Commits: (este commit)
+- Commits: `950e694`
 
 ## 2026-10-18 — Captación: fase 3 probada en simulación; el botón se reconoce también en mensajes posteriores
 - **Resto de la prueba** (cuenta principal, simulación), todo según las

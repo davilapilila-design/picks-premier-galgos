@@ -320,7 +320,7 @@ toca carpetas ni envía nada (el candado no lo deja en este modo).
      pide un enlace de invitación de tu canal principal (p. ej. el de la
      descripción) para saber cuál es; comprueba a qué canal lleva, sin
      unirse, te dice su nombre y, si escribes SI, lo guarda. Luego lee el
-     histórico: puede tardar un rato (si Telegram pide esperar, espera solo)
+     histórico: puede tardar media hora o más (si Telegram pide esperar, espera solo)
      y va diciendo por dónde va. Al final escribe el resumen.
 
 ---

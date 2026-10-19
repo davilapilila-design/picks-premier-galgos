@@ -32,7 +32,7 @@ MAX_MENSAJES_POR_CHAT = 500
 PAUSA_ENTRE_CHATS_S = 0.3
 # Si Telegram pide esperar (muchas consultas seguidas), se espera solo hasta
 # este tope en vez de dejarlo a medias: es una lectura larga que se hace una vez.
-ESPERA_MAXIMA_S = 15 * 60
+ESPERA_MAXIMA_S = 30 * 60  # en la cuenta real llegó a pedir 886 s (2026-10-18)
 AVISO_PROGRESO_CADA = 100
 
 
