@@ -78,15 +78,16 @@ TEXTO_BIENVENIDA = (
 # Hay dos: a quien aún no tiene la apuesta de regalo se le vuelve a hacer la
 # pregunta de la bienvenida (con sus dos botones); a quien ya la tiene (el
 # dueño le envió un enlace de venta), solo «escríbeme».
-_LINEA_DUDAS = "Y si tienes dudas sobre casas, stakes o tipos de apuesta, mira las más frecuentes 📚"
+_LINEA_DUDAS = "Y si tienes dudas sobre casas, stakes o tipos de apuesta, aquí tienes las más frecuentes 📚"
 TEXTO_REDIRECCION = (
-    "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo. "
-    "¿Ya has apostado en galgos o es tu primera vez? 👇\n"
+    "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo personalmente.\n"
+    "\n"
+    "¿Ya has apostado en galgos o es tu primera vez? Pulsa tu respuesta 👇\n"
     "\n"
     f"{_LINEA_DUDAS}"
 )
 TEXTO_REDIRECCION_CON_GRATUITA = (
-    "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo 👇\n"
+    "Por aquí no puedo contestarte 🙈 Escríbeme a mi perfil y te atiendo yo personalmente 👇\n"
     "\n"
     f"{_LINEA_DUDAS}"
 )
@@ -181,16 +182,18 @@ def boton_escribeme(usuario, duda=None):
 # frecuentes»). Cada tema: botón del menú, título, texto de partida (lo puede
 # cambiar el dueño con /textos), de qué tema es la duda si escribe, y botones
 # a otros temas. «otras_casas» es un submenú de «casas»: no sale en el menú.
+# La redacción de los textos (y de las dos respuestas de arriba) la revisó el
+# dueño el mismo día con su estilo: no retocarla sin él.
 CALLBACK_DUDAS = "faq"          # desde la respuesta del bot: el menú, en un mensaje nuevo
 CALLBACK_MENU = "faq:menu"      # «⬅️ Otras dudas»: vuelve al menú en el mismo mensaje
 
-FAQ_TITULO = f"📚 {negrita('Dudas frecuentes')}\n\nElige un tema 👇"
+FAQ_TITULO = f"📚 {negrita('Dudas frecuentes')}\n\nElige tu tema y te lo explico en un momento 👇"
 
 PIE_SIN_GRATUITA = (
-    f"👉 Si aún no tienes tu apuesta de regalo, pulsa abajo y escríbeme: "
-    f"{negrita('te regalo una apuesta de pago')} para que veas cómo trabajo."
+    "👉 ¿Aún no tienes tu apuesta de regalo? Pulsa abajo y escríbeme: "
+    f"{negrita('te regalo una apuesta de pago')} para que veas cómo trabajo 💙"
 )
-PIE_CON_GRATUITA = "¿Te queda alguna duda? Escríbeme 👇"
+PIE_CON_GRATUITA = "¿Te queda alguna duda? Escríbeme y lo vemos 👇"
 
 FAQ = {
     "casas": {
@@ -202,14 +205,15 @@ FAQ = {
             f"Las que mejor van con nuestros picks: {negrita('Betway')}, {negrita('Betfair')} "
             f"y {negrita('Bet365')}.\n"
             "\n"
-            f"También valen {negrita('William Hill')} y {negrita('Sportium')}: a veces tienen "
+            f"También valen {negrita('William Hill')} y {negrita('Sportium')}. A veces tienen "
             "límites más altos, pero ponen las cuotas de otra manera:\n"
-            "· William Hill: 30 min antes en carreras normales y horas antes en competiciones.\n"
-            "· Sportium: horas antes en competiciones; en las normales depende, pero siempre con "
-            "mucho margen. En Harlow y Star Pelaw no tiene cuotas tempranas.\n"
+            f"· {negrita('William Hill')}: 30 min antes en carreras normales y horas antes en "
+            "competiciones.\n"
+            f"· {negrita('Sportium')}: horas antes en competiciones; en las normales depende, pero "
+            "siempre con mucho margen. En Harlow y Star Pelaw no tiene cuotas tempranas.\n"
             "\n"
-            "Te recomendamos tener cuenta en varias, o en todas: así aprovechas siempre la mejor "
-            "cuota y, si en alguna tienes problemas para apostar, sigues con otra."
+            f"{negrita('Mi consejo:')} ten cuenta en varias, o en todas. Así coges siempre la mejor "
+            "cuota y, si en alguna tienes problemas para apostar, sigues con otra ✅"
         ),
     },
     "otras_casas": {
@@ -220,7 +224,8 @@ FAQ = {
         "en_menu": False,
         "texto": (
             "Hay más casas con galgos, pero no tienen cuotas tempranas, o no siempre:\n"
-            f"· {negrita('Versus')} y {negrita('Retabet')}: sin cuotas tempranas, y solo algunos "
+            "\n"
+            f"· {negrita('Versus')} y {negrita('Retabet')}: sin cuotas tempranas y solo algunos "
             "canódromos (Harlow, Star Pelaw, Doncaster…). No tienen Central Park, Nottingham, "
             "Hove ni muchos más.\n"
             f"· {negrita('Codere')}: tiene todos los canódromos, pero muchas veces sin cuotas "
@@ -237,10 +242,10 @@ FAQ = {
         "texto": (
             f"Los stakes de los picks van en {negrita('unidades')}: «stake 2» son 2 unidades.\n"
             "\n"
-            f"Para hacerlo fácil, usa un {negrita('valor fijo')} por unidad, de "
-            f"{negrita('al menos 10 €')}, y súbelo cuando crezca tu bank.\n"
+            f"Lo más fácil: un {negrita('valor fijo')} por unidad, de "
+            f"{negrita('al menos 10 €')}, y lo subes cuando crezca tu bank.\n"
             "\n"
-            "Ejemplo: con unidades de 10 €, un stake 2 son 20 €."
+            f"Ejemplo: con unidades de 10 €, un stake 2 son {negrita('20 €')}."
         ),
     },
     "bank": {
@@ -249,9 +254,9 @@ FAQ = {
         "duda": "el bank y los stakes",
         "texto": (
             f"El {negrita('bank')} es el dinero que apartas solo para apostar. Cada pick lleva su "
-            "stake en unidades; de media, unas 4-5.\n"
+            f"stake en unidades; de media, unas {negrita('4-5')}.\n"
             "\n"
-            "Apuesta solo dinero que no te haga falta en este momento. Si lo necesitas, o "
+            "Apuesta solo dinero que no te haga falta ahora mismo. Si lo necesitas, o "
             "perderlo sería un problema grande para ti, no lo apuestes.\n"
             "\n"
             "+18 · Juega con responsabilidad."
@@ -262,15 +267,16 @@ FAQ = {
         "titulo": f"🏁 {negrita('Apuesta a ganador')}",
         "duda": "las apuestas a ganador",
         "texto": (
-            f"Nuestras apuestas son siempre {negrita('a ganador')}: {negrita('NUNCA')} pinches en "
+            f"Nuestras apuestas son siempre {negrita('a ganador')}. {negrita('NUNCA')} pinches en "
             "«colocado», salvo que te digamos lo contrario.\n"
             "\n"
             f"Apuestas a que el galgo llega {negrita('primero')}. Si gana, cobras stake × cuota; "
             "si no, lo pierdes.\n"
             "\n"
-            "Ejemplo: 2 unidades a cuota 3,50 → cobras 7 (5 de beneficio).\n"
+            f"Ejemplo: 2 unidades a cuota {negrita('3,50')} → cobras {negrita('7')} (5 de beneficio) ✅\n"
             "\n"
-            "Cógela en cuanto te llegue el pick: la cuota puede bajar antes de la carrera."
+            f"{negrita('Atento:')} cógela en cuanto te llegue el pick, la cuota puede bajar antes de "
+            "la carrera."
         ),
     },
     "gemelas": {
@@ -280,18 +286,19 @@ FAQ = {
         "enlaces": [("otras_casas", "🗺️ Otras casas y canódromos")],
         "texto": (
             f"{negrita('Gemela')}: aciertas el 1º y el 2º de una carrera. {negrita('Trío')}: el "
-            "1º, el 2º y el 3º. En las casas aparecen con esos mismos nombres.\n"
+            "1º, el 2º y el 3º. En las casas salen con esos mismos nombres.\n"
             "\n"
-            "Si son en cualquier orden (reversible), en la gemela son 2 combinaciones (p. ej. "
-            "3-4 y 4-3) y en el trío, 6; cada una lleva su stake.\n"
+            "Si son en cualquier orden (reversible), la gemela son 2 combinaciones (p. ej. "
+            "3-4 y 4-3) y el trío, 6. Cada una lleva su stake.\n"
             "\n"
             f"No tienen cuota fija: se pagan al {negrita('dividendo oficial')} que publica el "
-            "canódromo después de la carrera. Por eso puedes aprovechar para hacerlas en las "
-            "casas sin cuotas tempranas (👇 Otras casas y canódromos). Ojo: "
+            "canódromo después de la carrera. Por eso puedes hacerlas en las casas sin cuotas "
+            "tempranas (👇 Otras casas y canódromos). Ojo: "
             f"{negrita('DAZN Bet')} y {negrita('Pastón')} no tienen gemelas ni tríos.\n"
             "\n"
             "Ejemplo real en Star Pelaw: gemela 3-4 y 4-3, stake 2 cada una = 4 unidades. "
-            "Llegó 4-3 con dividendo 7,42 → 14,84 unidades (10,84 de beneficio)."
+            f"Llegó 4-3 con dividendo {negrita('7,42')} → {negrita('14,84 unidades')} "
+            "(10,84 de beneficio) 📈"
         ),
     },
     "packs": {
@@ -304,7 +311,7 @@ FAQ = {
             "Si un pack sale en pérdidas, según las unidades perdidas "
             f"{negrita('te damos el siguiente gratis o con descuento')}.\n"
             "\n"
-            f"Y si fallan todos los galgos del pack, el siguiente es {negrita('siempre gratis')}."
+            f"Y si fallan todos los galgos del pack, el siguiente es {negrita('siempre gratis')} 💙"
         ),
     },
 }

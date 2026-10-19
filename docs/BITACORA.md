@@ -3,6 +3,25 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-19 — Captación: textos de las dudas frecuentes con la redacción del dueño
+- **Qué**: el dueño pasó los 12 textos de las dudas frecuentes (las dos
+  respuestas a quien escribe al bot, el menú, los 7 temas y los dos finales)
+  por otra sesión que tiene su estilo de redacción, y me los devolvió.
+  Quedan como textos de partida en `mensajes.py`. Mismos datos, cifras,
+  casas, canódromos y botones; cambian la redacción, algunas negritas
+  (las casas en las listas, las cifras de los ejemplos, «Mi consejo:»,
+  «Atento:») y algún emoji al final (✅, 📈, 💙). La bienvenida no cambia
+  (sigue siendo `bot_b_v1`).
+- **Por qué en el código y no con /textos**: lo que se guarda con /textos
+  se queda en la instancia donde se guarda; así el bot real, que aún no
+  existe, empieza ya con estos textos. Donde se haya guardado algún texto
+  con /textos, sigue mandando ese (se vuelve a estos con «♻️ Volver al
+  original»).
+- Comprobado con un script que los 12 quedan idénticos al archivo del
+  dueño, negritas incluidas. Pruebas: 169, pasan en Python 3.9, 3.12 y
+  3.13.
+- Commits: (este commit)
+
 ## 2026-10-19 — Captación: dudas frecuentes en el bot y cambiar textos desde el bot (/textos)
 - **Qué**: el dueño quiere, antes de crear el bot real, que el bot resuelva
   las dudas de siempre, y poder cambiar él los textos sin pasar por mí.
@@ -39,7 +58,7 @@ Entradas más recientes arriba.
 - Pruebas: 169, pasan en Python 3.9, 3.12 y 3.13 (las nuevas, comprobado
   que fallan si se rompe lo que prueban). Conversación simulada entera
   (respuesta, menú, tema, /textos, vista previa, guardar) revisada a mano.
-- Commits: (este commit)
+- Commits: `f8e25dd`
 
 ## 2026-10-19 — Captación: freno de emergencia en el bot (/pausar y /reanudar)
 - **Qué**: el dueño pide poder parar rápido, desde el propio bot, que acepte
