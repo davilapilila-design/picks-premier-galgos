@@ -250,7 +250,7 @@ echo "✅ Bot «$INSTANCIA» instalado y funcionando (versión $VERSION)."
 bash "$DESTINO/configurar.sh" "$INSTANCIA" ver
 if [ -z "$(valor_de CAPTACION_PROPIETARIO_ID)" ]; then
     echo
-    echo "Siguiente: abre el bot con tu cuenta principal y pulsa «Iniciar». Te dirá tu id;"
+    echo "Siguiente: abre el bot con tu cuenta principal y escríbele /miid. Te dirá tu id;"
     echo "después: bash $DESTINO/configurar.sh $INSTANCIA propietario <tu id>"
 fi
 if [ "$SHEET_OK" = 1 ] && [ -z "$(valor_de CAPTACION_SHEET_ID)" ]; then

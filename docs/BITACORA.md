@@ -24,7 +24,11 @@ Entradas más recientes arriba.
   prueba. Pendiente de su decisión.
 - Pruebas: 141, pasan en Python 3.9, 3.12 y 3.13; las de la pausa fallan si
   se quita el freno.
-- Commits: (este commit)
+- El dueño elige **bot nuevo** para PREMIER GALGOS (el de prueba se queda
+  para probar). `instalar.sh` ya no dice «pulsa Iniciar» para saber el id:
+  con el canal ya guardado en la fase 4, «Iniciar» no lo da; ahora dice
+  `/miid`.
+- Commits: `d315944`, (este commit)
 
 ## 2026-10-18 — Captación: fase 4 hecha en la cuenta real (solo lectura)
 - **Qué**: el dueño, con su visto bueno, actualizó la VM a `950e694`,
