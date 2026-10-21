@@ -63,6 +63,9 @@ class Ajustes:
     max_carpetas: int = 10
     max_chats: int = 100
     simular: bool = True
+    # Apuntar en directo las bienvenidas que el dueño envía a mano (solo en la
+    # instancia real: en la de prueba sus clientes reales se ignoran).
+    bienvenidas_manuales: bool = False
 
 
 def id_canal_puro(canal_id):

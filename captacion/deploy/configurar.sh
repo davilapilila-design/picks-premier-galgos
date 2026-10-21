@@ -11,6 +11,7 @@
 #   bash /opt/premier-captacion/configurar.sh real api-de prueba       (copia el api_id y el api_hash de la otra instancia)
 #   bash /opt/premier-captacion/configurar.sh prueba lector simulacion (el lector de carpetas solo avisa)
 #   bash /opt/premier-captacion/configurar.sh prueba lector real       (el lector de carpetas actúa)
+#   bash /opt/premier-captacion/configurar.sh real bienvenidas-manuales si  (el lector apunta las bienvenidas que das a mano; solo real)
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
 #
 # Por seguridad el token y el api_hash NUNCA se escriben en la línea de
@@ -154,6 +155,20 @@ case "$DATO" in
             *) fallo "Uso: bash $0 $INSTANCIA lector <simulacion|real>" ;;
         esac
         echo "✓ lector de carpetas en modo $VALOR"
+        if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
+            systemctl restart "captacion-lector@$INSTANCIA"
+            echo "✓ lector reiniciado"
+        fi
+        exit 0
+        ;;
+    bienvenidas-manuales)
+        case "$VALOR" in
+            si) [ "$INSTANCIA" = real ] || fallo "Solo en la instancia real: en la de prueba tus clientes reales se ignoran."
+                poner "$ENV" CAPTACION_BIENVENIDAS_MANUALES 1 ;;
+            no) poner "$ENV" CAPTACION_BIENVENIDAS_MANUALES 0 ;;
+            *) fallo "Uso: bash $0 $INSTANCIA bienvenidas-manuales <si|no>" ;;
+        esac
+        echo "✓ bienvenidas a mano: $VALOR"
         if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
             systemctl restart "captacion-lector@$INSTANCIA"
             echo "✓ lector reiniciado"

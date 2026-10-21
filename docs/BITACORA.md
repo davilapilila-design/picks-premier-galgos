@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-21 — Captación: el lector apunta en directo las bienvenidas que el dueño da a mano
+- **Qué**: el dueño buscó con la consulta a un cliente al que dio la
+  gratuita hoy y no salía: la instancia real solo tenía el histórico del
+  18/10 y su lector no estaba encendido. Quiere dejar la lectura en marcha
+  mientras sigue aceptando a mano. El lector solo seguía a quien ya tenía
+  bienvenida apuntada; ahora, con `CAPTACION_BIENVENIDAS_MANUALES=1`, al
+  ver que el dueño envía su bienvenida manual (misma detección que el
+  histórico) apunta a esa persona y la sigue (respuesta, enlace de venta).
+  Al arrancar también repasa los chats con movimiento aunque no estén aún
+  en el embudo. Solo en la instancia real: `configurar.sh` no lo deja
+  poner en la de prueba (allí sus clientes reales se ignoran).
+- **Plan aprobado por el dueño**: actualizar, activarlo en real, repetir el
+  histórico en real (cubre desde el 18/10) y encender `captacion-lector@real`
+  en simulación. Sin bot real no hay avisos.
+- Pruebas: 179, pasan en Python 3.9, 3.12 y 3.13.
+- Commits: (este commit)
+
 ## 2026-10-19 — Captación: consultar en el bot a quién se le dio la gratuita (/gratuita)
 - **Qué**: el dueño quiere que conste que, aunque se borren los mensajes,
   se sigue sabiendo a quién se le dio la apuesta gratuita, y poder
@@ -20,7 +37,7 @@ Entradas más recientes arriba.
 - Pruebas: 178, pasan en Python 3.9, 3.12 y 3.13. Explicado también en el
   PDF para los socios del dueño (fuera del repo). Probado por el dueño en
   el bot de prueba.
-- Commits: `095b3d9`, (este commit)
+- Commits: `095b3d9`, `89f521b`
 
 ## 2026-10-19 — Captación: textos de las dudas frecuentes con la redacción del dueño
 - **Qué**: el dueño pasó los 12 textos de las dudas frecuentes (las dos

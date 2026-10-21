@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest import mock
 
-from premier_captacion import db, guardia, lector
+from premier_captacion import carpetas, db, guardia, lector, mensajes
 from premier_captacion.config import ErrorConfig, cargar_config
 
 
@@ -69,6 +69,8 @@ class TestAjustes(unittest.TestCase):
         self.assertEqual((aj.canal_principal, aj.dias, aj.max_free_send, aj.nombre_free_send),
                          (1234567890, 5, 90, "free send"))
         self.assertFalse(lector.ajustes_desde({"CAPTACION_LECTOR_SIMULAR": "0"}, cfg).simular)
+        self.assertFalse(aj.bienvenidas_manuales)
+        self.assertTrue(lector.ajustes_desde({"CAPTACION_BIENVENIDAS_MANUALES": "1"}, cfg).bienvenidas_manuales)
         with self.assertRaises(ErrorConfig):
             lector.ajustes_desde({"CAPTACION_DIAS_CARPETAS": "0"}, cfg)
 
@@ -86,8 +88,10 @@ class TestAjustes(unittest.TestCase):
 
 
 class OrganizadorFalso:
-    def __init__(self):
+    def __init__(self, bienvenidas_manuales=False):
         self.llamadas = []
+        self.con = db.abrir(":memory:")
+        self.aj = carpetas.Ajustes(bienvenidas_manuales=bienvenidas_manuales)
 
     async def al_recibir(self, user_id, msg_id, ts, texto, usuario=None):
         self.llamadas.append(("recibe", user_id, msg_id, texto, usuario["first_name"]))
@@ -105,10 +109,27 @@ class TgFalso:
 
 
 class TestProcesar(unittest.TestCase):
-    def procesar(self, mensaje, otro):
-        org, tg = OrganizadorFalso(), TgFalso()
+    def procesar(self, mensaje, otro, org=None):
+        org, tg = org or OrganizadorFalso(), TgFalso()
         asyncio.run(lector.procesar(mensaje, otro, "entrada", org, tg))
         return org.llamadas, tg.recordados
+
+    def test_bienvenida_manual_en_directo_solo_si_esta_activado(self):
+        ana = SimpleNamespace(id=500, first_name="Ana", last_name=None, username="ana", bot=False, is_self=False)
+        bienvenida = self.msg(True, mensajes.TEXTO_MANUAL_BUENAS)
+        sin = OrganizadorFalso()
+        self.procesar(bienvenida, ana, sin)
+        self.assertIsNone(db.obtener_usuario(sin.con, 500))  # instancia de prueba: se ignora
+        con = OrganizadorFalso(bienvenidas_manuales=True)
+        llamadas, _ = self.procesar(bienvenida, ana, con)
+        fila = db.obtener_usuario(con.con, 500)
+        self.assertEqual((fila["bienvenida_tipo"], fila["username"]), (mensajes.TIPO_MANUAL_BUENAS, "ana"))
+        self.assertEqual(fila["bienvenida_ts"], int(bienvenida.date.timestamp()))
+        evento = con.con.execute("SELECT tipo, detalle FROM eventos").fetchone()
+        self.assertEqual((evento["tipo"], evento["detalle"]), ("bienvenida_manual", '{"tipo_mensaje": "manual_buenas"}'))
+        self.assertEqual(llamadas[0][0], "envia")  # y sigue su camino (enlaces, etc.)
+        self.procesar(self.msg(True, "hola de nuevo"), ana, con)  # otro mensaje no cambia nada
+        self.assertEqual(db.obtener_usuario(con.con, 500)["bienvenida_tipo"], mensajes.TIPO_MANUAL_BUENAS)
 
     def msg(self, out, texto, url=None):
         return SimpleNamespace(id=7, out=out, message=texto, date=datetime(2026, 10, 15, tzinfo=timezone.utc),

@@ -73,7 +73,7 @@ async def buscar_bienvenidas(client):
     return encontradas
 
 
-def apuntar_bienvenida(con, user_id, ts, tipo, usuario):
+def apuntar_bienvenida(con, user_id, ts, tipo, usuario, historico=True):
     with con:
         db.actualizar_datos_usuario(con, time.time(), usuario)
         fila = db.obtener_usuario(con, user_id)
@@ -81,7 +81,8 @@ def apuntar_bienvenida(con, user_id, ts, tipo, usuario):
         if fila["bienvenida_ts"] is None or ts < fila["bienvenida_ts"]:
             db.actualizar_campos(con, user_id, time.time(), bienvenida_tipo=tipo, bienvenida_ts=int(ts))
         if not db.existe_evento(con, user_id, "bienvenida_manual", ts):
-            db.registrar_evento(con, ts, "bienvenida_manual", user_id, tipo_mensaje=tipo, historico=True)
+            db.registrar_evento(con, ts, "bienvenida_manual", user_id, tipo_mensaje=tipo,
+                               **({"historico": True} if historico else {}))
 
 
 async def repasar_chat(client, con, org, user_id, desde_msg_id):

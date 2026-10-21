@@ -425,6 +425,26 @@ administrador del canal (también para al momento).
 Para volver atrás del todo: quita al bot de administrador del canal (vuelves
 a aceptar a mano) y `systemctl disable --now captacion-bot@real`.
 
+### Antes de la fase 5: lectura en la cuenta real mientras aceptas a mano
+Decidido por el dueño (2026-10-21) para que, mientras no esté el bot real,
+quede apuntado a quién se da la gratuita. El lector de la instancia real
+reconoce en el momento la bienvenida que mandas a mano y, desde ahí, sigue a
+esa persona (si te escribe, si le mandas enlace de venta). En simulación: no
+mueve carpetas. Sin bot real no hay avisos; funciona en silencio.
+1. Actualizar la VM (`instalar.sh prueba`, como siempre).
+2. `bash /opt/premier-captacion/configurar.sh real bienvenidas-manuales si`
+3. `bash /opt/premier-captacion/leer-historico.sh real` (recupera lo que
+   pasó desde la última lectura; no duplica nada).
+4. `systemctl enable --now captacion-lector@real`
+
+Para consultar a alguien sin bot real, en la VM (solo lee):
+```bash
+cd /opt/premier-captacion && sudo -u captacion python3 -c "
+import sqlite3; from zoneinfo import ZoneInfo; from premier_captacion import consulta
+con = sqlite3.connect('file:/var/lib/premier-captacion/real.db?mode=ro', uri=True); con.row_factory = sqlite3.Row
+print(consulta.respuesta(con, '@usuario', ZoneInfo('Europe/Madrid'))[0])"
+```
+
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
 2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.

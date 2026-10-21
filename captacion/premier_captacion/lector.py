@@ -37,7 +37,7 @@ import signal
 import sys
 import time
 
-from . import carpetas, db, guardia
+from . import carpetas, db, guardia, historico
 from .enlaces import hashes_invitacion, textos_de
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
@@ -93,6 +93,7 @@ def ajustes_desde(entorno, cfg):
         max_carpetas=_entero(entorno, "CAPTACION_MAX_CARPETAS", 10),
         max_chats=_entero(entorno, "CAPTACION_MAX_CHATS_CARPETA", 100),
         simular=simular,
+        bienvenidas_manuales=entorno.get("CAPTACION_BIENVENIDAS_MANUALES", "").strip() == "1",
     )
 
 
@@ -230,11 +231,17 @@ async def procesar(mensaje, otro, entrada, org, tg_real):
     tg_real.recordar(entrada)
     ts = mensaje.date.timestamp()
     if mensaje.out:
+        tipo = historico.tipo_bienvenida_manual(mensaje.message) if org.aj.bienvenidas_manuales else None
+        if tipo:  # el dueño acaba de darle la bienvenida a mano: entra en el embudo
+            historico.apuntar_bienvenida(org.con, otro.id, ts, tipo, _usuario(otro), historico=False)
         await org.al_enviar(otro.id, mensaje.id, ts, textos_de(mensaje))
     else:
-        usuario = {"id": otro.id, "first_name": getattr(otro, "first_name", None),
-                   "last_name": getattr(otro, "last_name", None), "username": getattr(otro, "username", None)}
-        await org.al_recibir(otro.id, mensaje.id, ts, mensaje.message or "", usuario=usuario)
+        await org.al_recibir(otro.id, mensaje.id, ts, mensaje.message or "", usuario=_usuario(otro))
+
+
+def _usuario(otro):
+    return {"id": otro.id, "first_name": getattr(otro, "first_name", None),
+            "last_name": getattr(otro, "last_name", None), "username": getattr(otro, "username", None)}
 
 
 async def recuperar_perdido(client, con, org, tg_real, horizonte):
@@ -254,10 +261,10 @@ async def recuperar_perdido(client, con, org, tg_real, horizonte):
         if getattr(otro, "bot", False) or getattr(otro, "is_self", False):
             continue
         fila = db.obtener_usuario(con, otro.id)
-        if not db.es_del_embudo(fila):
-            continue
+        if not db.es_del_embudo(fila) and not org.aj.bienvenidas_manuales:
+            continue  # (con bienvenidas manuales, también quien pudo recibir una mientras estaba parado)
         async for mensaje in client.iter_messages(otro, reverse=True, offset_date=desde,
-                                                  min_id=fila["ultimo_msg_id"] or 0, limit=300):
+                                                  min_id=(fila["ultimo_msg_id"] if fila else None) or 0, limit=300):
             await procesar(mensaje, otro, dialogo.input_entity, org, tg_real)
 
 
@@ -477,8 +484,6 @@ def main(argv=None):
                 return 2
             return asyncio.run(iniciar_sesion(entorno))
         if args.modo == "historico":
-            from . import historico
-
             return asyncio.run(historico.ejecutar(cfg, entorno))
         return asyncio.run(servicio(cfg, entorno))
     except ErrorConfig as e:
