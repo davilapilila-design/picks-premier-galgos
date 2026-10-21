@@ -37,7 +37,7 @@ import signal
 import sys
 import time
 
-from . import carpetas, db, guardia, historico
+from . import carpetas, consulta, db, guardia, historico
 from .enlaces import hashes_invitacion, textos_de
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
@@ -445,6 +445,40 @@ async def canal_de_enlace(entorno, texto):
     return 0
 
 
+async def apuntar_gratuita(cfg, entorno, usuario, bienvenida, gratuita, enlace):
+    """Apunta a mano la bienvenida y la gratuita de alguien cuyo chat ya no se
+    puede leer. Solo lee de Telegram (busca a la persona por su @)."""
+    from datetime import datetime
+
+    hashes = hashes_invitacion([enlace])
+    if not hashes:
+        log.error("Eso no parece un enlace de invitación (t.me/+…)")
+        return 1
+    try:
+        tss = [datetime.strptime(t, "%Y-%m-%d %H:%M").replace(tzinfo=cfg.tz).timestamp() for t in (bienvenida, gratuita)]
+    except ValueError:
+        log.error("Las fechas van como «AAAA-MM-DD HH:MM» (hora de España)")
+        return 1
+    api_id, api_hash, sesion = credenciales_api(entorno)
+    client = crear_cliente(sesion, api_id, api_hash, "historico")
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
+            return 2
+        otro = await client.get_entity(usuario.lstrip("@"))
+    finally:
+        await client.disconnect()
+    con = db.abrir(cfg.db_path)
+    try:
+        canal = historico.apuntar_gratuita_a_mano(con, _usuario(otro), tss[0], tss[1], hashes[0])
+        fila = db.obtener_usuario(con, otro.id)
+        print(f"✓ Apuntado (canal «{canal}»):\n" + consulta.ficha(con, fila, cfg.tz))
+    finally:
+        con.close()
+    return 0
+
+
 def marcar_embudo_prueba(cfg, user_id):
     """Solo pruebas: marca a alguien como si hubiera recibido la bienvenida."""
     con = db.abrir(cfg.db_path)
@@ -464,8 +498,12 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
-                        choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace"])
-    parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba) o enlace (canal-de-enlace)")
+                        choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace",
+                                 "apuntar-gratuita"])
+    parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace) "
+                                                "o @usuario (apuntar-gratuita)")
+    parser.add_argument("mas", nargs="*", help="apuntar-gratuita: «AAAA-MM-DD HH:MM» de la bienvenida y de la "
+                                               "gratuita, y el enlace de venta")
     args = parser.parse_args(argv)
     entorno = os.environ
     try:
@@ -485,6 +523,10 @@ def main(argv=None):
             return asyncio.run(iniciar_sesion(entorno))
         if args.modo == "historico":
             return asyncio.run(historico.ejecutar(cfg, entorno))
+        if args.modo == "apuntar-gratuita":
+            if not args.dato or len(args.mas) != 3:
+                parser.error('apuntar-gratuita @usuario "AAAA-MM-DD HH:MM" "AAAA-MM-DD HH:MM" <enlace de venta>')
+            return asyncio.run(apuntar_gratuita(cfg, entorno, args.dato, *args.mas))
         return asyncio.run(servicio(cfg, entorno))
     except ErrorConfig as e:
         log.error("Configuración incorrecta: %s", e)

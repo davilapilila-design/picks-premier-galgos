@@ -85,6 +85,28 @@ def apuntar_bienvenida(con, user_id, ts, tipo, usuario, historico=True):
                                **({"historico": True} if historico else {}))
 
 
+def apuntar_gratuita_a_mano(con, usuario, bienvenida_ts, enlace_ts, hash_enlace,
+                            tipo=mensajes.TIPO_MANUAL_BUENAS):
+    """Apunta a mano una bienvenida y una gratuita que ya no se pueden leer
+    (p. ej. el chat se borró antes de encender el lector). Devuelve el canal."""
+    user_id = usuario["id"]
+    if not db.es_del_embudo(db.obtener_usuario(con, user_id)):
+        apuntar_bienvenida(con, user_id, bienvenida_ts, tipo, usuario, historico=False)
+    guardado = db.enlace_guardado(con, hash_enlace)
+    canal = (guardado["titulo"] if guardado is not None else None) or "desconocido"
+    enlace = enlaces.enlace(hash_enlace)
+    with con:
+        db.actualizar_datos_usuario(con, time.time(), usuario)
+        if not db.existe_evento(con, user_id, "enlace_venta", enlace_ts):
+            db.registrar_evento(con, enlace_ts, "enlace_venta", user_id, enlace=enlace, canal=canal,
+                                apuntado_a_mano=True)
+        fila = db.obtener_usuario(con, user_id)
+        if fila["enlace_venta_ts"] is None or enlace_ts < fila["enlace_venta_ts"]:
+            db.actualizar_campos(con, user_id, time.time(), enlace_venta_ts=int(enlace_ts),
+                                 enlace_venta=enlace, canal_venta=canal)
+    return canal
+
+
 async def repasar_chat(client, con, org, user_id, desde_msg_id):
     """Primera respuesta y primer enlace de venta después de la bienvenida."""
     fila = db.obtener_usuario(con, user_id)

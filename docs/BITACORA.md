@@ -18,7 +18,14 @@ Entradas más recientes arriba.
   histórico en real (cubre desde el 18/10) y encender `captacion-lector@real`
   en simulación. Sin bot real no hay avisos.
 - Pruebas: 179, pasan en Python 3.9, 3.12 y 3.13.
-- Commits: (este commit)
+- Hecho en la VM el mismo día: histórico repetido (1059 bienvenidas a mano,
+  341 respuestas, 273 con enlace de venta) y `captacion-lector@real` en
+  marcha. Un cliente al que se dio la gratuita el 20/10 no salía: borró el
+  chat antes de encender la lectura. Para esos casos sueltos, nuevo modo
+  `lector.sh real apuntar-gratuita @usuario "bienvenida" "gratuita" enlace`
+  (busca a la persona por su @, solo lectura; el evento queda marcado como
+  apuntado a mano; el canal sale de los enlaces ya conocidos).
+- Commits: `bd47b44`, (este commit)
 
 ## 2026-10-19 — Captación: consultar en el bot a quién se le dio la gratuita (/gratuita)
 - **Qué**: el dueño quiere que conste que, aunque se borren los mensajes,

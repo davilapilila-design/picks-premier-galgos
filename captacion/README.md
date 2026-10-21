@@ -445,6 +445,15 @@ con = sqlite3.connect('file:/var/lib/premier-captacion/real.db?mode=ro', uri=Tru
 print(consulta.respuesta(con, '@usuario', ZoneInfo('Europe/Madrid'))[0])"
 ```
 
+Para apuntar a mano una gratuita que ya no se puede leer (chat borrado antes
+de encender la lectura), con las horas de España de la bienvenida y de la
+gratuita y el enlace de venta (solo lee de Telegram: busca a la persona):
+```bash
+systemctl stop captacion-lector@real
+bash /opt/premier-captacion/lector.sh real apuntar-gratuita @usuario "AAAA-MM-DD HH:MM" "AAAA-MM-DD HH:MM" https://t.me/+…
+systemctl start captacion-lector@real
+```
+
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
 2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.

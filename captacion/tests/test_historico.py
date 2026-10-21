@@ -145,3 +145,22 @@ class TestHistorico(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestApuntarGratuitaAMano(unittest.TestCase):
+    def test_apunta_bienvenida_y_gratuita_con_el_canal_conocido(self):
+        con = conexion()
+        self.addCleanup(con.close)
+        db.guardar_enlace(con, "VENTAFALSA01", -100555, "Pack de la tarde", 1_000)
+        usuario = {"id": 77, "first_name": "Iker", "last_name": None, "username": "iker_falso"}
+        canal = historico.apuntar_gratuita_a_mano(con, usuario, 2_000, 3_000, "VENTAFALSA01")
+        self.assertEqual(canal, "Pack de la tarde")
+        fila = db.obtener_usuario(con, 77)
+        self.assertEqual((fila["bienvenida_ts"], fila["bienvenida_tipo"]), (2_000, mensajes.TIPO_MANUAL_BUENAS))
+        self.assertEqual((fila["enlace_venta_ts"], fila["canal_venta"]), (3_000, "Pack de la tarde"))
+        self.assertEqual(fila["enlace_venta"], "https://t.me/+VENTAFALSA01")
+        historico.apuntar_gratuita_a_mano(con, usuario, 2_000, 3_000, "VENTAFALSA01")  # repetir no duplica
+        tipos = [f["tipo"] for f in con.execute("SELECT tipo FROM eventos ORDER BY id")]
+        self.assertEqual(tipos, ["bienvenida_manual", "enlace_venta"])
+        detalle = con.execute("SELECT detalle FROM eventos WHERE tipo = 'enlace_venta'").fetchone()[0]
+        self.assertIn('"apuntado_a_mano": true', detalle)

@@ -219,3 +219,33 @@ class TestTelefono(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestApuntarGratuita(unittest.TestCase):
+    def test_busca_por_arroba_y_apunta(self):
+        import os
+        import tempfile
+        ruta = os.path.join(tempfile.mkdtemp(), "x.db")
+        cfg = cargar_config({"CAPTACION_DB": ruta}, requiere_bot=False)
+        iker = SimpleNamespace(id=77, first_name="Iker", last_name=None, username="iker_falso")
+
+        class Cliente:
+            async def connect(self): pass
+            async def disconnect(self): pass
+            async def is_user_authorized(self): return True
+            async def get_entity(self, quien):
+                assert quien == "iker_falso"
+                return iker
+
+        entorno = {"CAPTACION_API_ID": "123456", "CAPTACION_API_HASH": "0123456789abcdef0123456789abcdef",
+                   "CAPTACION_SESION": "/tmp/sesion"}
+        with mock.patch.object(lector, "crear_cliente", return_value=Cliente()) as crear, \
+                mock.patch("builtins.print") as imprimir:
+            r = asyncio.run(lector.apuntar_gratuita(cfg, entorno, "@iker_falso", "2026-10-20 16:56",
+                                                    "2026-10-20 18:45", "https://t.me/+VENTAFALSA01"))
+        self.assertEqual(r, 0)
+        self.assertEqual(crear.call_args[0][3], "historico")  # solo lectura
+        self.assertIn("🎁 Gratuita: 20/10/2026 a las 18:45", imprimir.call_args[0][0])
+        con = db.abrir(ruta)
+        self.addCleanup(con.close)
+        self.assertEqual(db.obtener_usuario(con, 77)["enlace_venta"], "https://t.me/+VENTAFALSA01")
