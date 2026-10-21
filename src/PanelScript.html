@@ -246,12 +246,26 @@ function iniciarPanelPG(root, inicial, pedirDatos){
     show("vError");
   }
 
-  function cargar(){
+  // Últimos datos buenos en este navegador (2026-10-21): si el servidor
+  // falla (avería de Google leyendo la hoja, arranque en frío que acaba en
+  // error...), mejor enseñar lo último que se vio que una pantalla de error.
+  // Todo en try/catch: sin localStorage (modo privado...) funciona igual.
+  var CLAVE_LOCAL="pgPanelDatos_v1";
+  function guardarLocal(d){ try{ if(d&&d.hayDatos) localStorage.setItem(CLAVE_LOCAL, JSON.stringify(d)); }catch(e){} }
+  function leerLocal(){ try{ var t=localStorage.getItem(CLAVE_LOCAL); return t?JSON.parse(t):null; }catch(e){ return null; } }
+
+  // Un reintento automático antes de rendirse; luego la copia local.
+  function cargar(intento){
     show("vLoad");
-    pedirDatos(pintarPanel, mostrarError);
+    pedirDatos(function(d){ guardarLocal(d); pintarPanel(d); }, function(err){
+      if(!intento){ setTimeout(function(){ cargar(1); }, 1500); return; }
+      var copia=leerLocal();
+      if(copia){ pintarPanel(copia); return; }
+      mostrarError(err);
+    });
   }
 
-  $("btnRetry").addEventListener("click",cargar);
+  $("btnRetry").addEventListener("click",function(){ cargar(0); });
   $("btnMore").addEventListener("click",function(){ st.shown+=PAGE; renderRows(); });
   $("segGran").addEventListener("click",function(e){
     var b=e.target.closest("button"); if(!b) return;
@@ -273,6 +287,6 @@ function iniciarPanelPG(root, inicial, pedirDatos){
 
   // Datos ya incrustados (caché del servidor caliente, ver Dashboard.gs):
   // se pinta al instante. Si vienen a null, se piden con pedirDatos.
-  if (inicial) pintarPanel(inicial); else cargar();
+  if (inicial){ guardarLocal(inicial); pintarPanel(inicial); } else cargar(0);
 }
 </script>

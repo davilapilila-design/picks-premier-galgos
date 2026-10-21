@@ -3,6 +3,35 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-21 — Avería de Google leyendo la hoja: panel en error ("HTTP 404") y lento; ahora aguanta (desplegado, v35)
+- El dueño vio en `premiergalgos.com` "No hemos podido leer el registro"
+  (HTTP 404) y cargas eternas. **Causa: avería de Google, no del código**:
+  desde las 14:03 UTC todas las tareas programadas (`refrescarCachePanel`,
+  `resolverApuestasExoticas`, `reintentarMensajesConError`) fallaban con
+  "We're sorry, a server error occurred while reading from storage. Error
+  code INTERNAL" al leer la hoja. A las 14:44 UTC ya volvía a responder.
+  Con el refresco fallando, la caché del panel (TTL 15 min) caducó; el
+  panel pidió `?formato=json`, que tuvo que leer la hoja (rota), y Google
+  devolvió 404. A eso se suman arranques en frío de 12 s vistos ese día.
+- **Fallo de diseño propio corregido** - el panel dependía de que la hoja
+  respondiera cada 15 min:
+  - `Dashboard.gs`: cada vez que se guarda la caché se guarda también una
+    **copia de respaldo** (`panel_v1_resp_`, TTL máximo de CacheService: 6
+    h, nunca se invalida). Si `getMetricasPanel` no puede calcular, sirve
+    el respaldo en vez de lanzar.
+  - `PanelScript.html`: si la petición de datos falla, **un reintento** a
+    los 1,5 s; si vuelve a fallar, los **últimos datos que vio ese
+    navegador** (`localStorage`, `pgPanelDatos_v1`); solo sin copia sale la
+    pantalla de error. Vale para el enlace directo y para WordPress; el
+    bloque de WordPress no se toca.
+- Probado en local (servidor: hoja rota con y sin respaldo; navegador: json
+  404 una vez / siempre con y sin copia local) y en vivo en
+  `premiergalgos.com` tras desplegar: panel con datos en 2,5-3,2 s.
+- Lo que NO resuelve: si Google falla durante más de 6 h seguidas y el
+  visitante nunca había entrado, verá el error. Y los arranques en frío de
+  Apps Script siguen ahí (opciones A/B de la entrada del 2026-10-18).
+- Commits: (este commit)
+
 ## 2026-10-18 (cont. 2) — Panel en WordPress sin iframe ni cookies: adiós al "No se puede abrir el archivo" (desplegado, v34)
 - **Problema** (captura del dueño, móvil con sesión de Google abierta como
   premiergalgos@gmail.com): `premiergalgos.com` mostraba la pantalla de

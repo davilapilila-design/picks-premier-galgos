@@ -458,6 +458,14 @@ function construirDatosPanel_() {
 const CACHE_PANEL_PREFIJO = 'panel_v1_';
 const CACHE_PANEL_TTL_SEG = 15 * 60;
 const CACHE_PANEL_TROZO = 90000; // < 100 KB por valor de CacheService
+// Copia de respaldo (2026-10-21, ver docs/BITACORA.md): los últimos datos
+// BUENOS, con el TTL máximo de CacheService (6 h) y que no se invalida
+// nunca. Solo se usa si calcular falla - visto en real: Google devolvió
+// "server error occurred while reading from storage. Error code INTERNAL"
+// al leer la hoja durante más de media hora, la caché normal caducó y el
+// panel se quedó sin datos ("No hemos podido leer el registro").
+const CACHE_PANEL_RESPALDO_PREFIJO = 'panel_v1_resp_';
+const CACHE_PANEL_RESPALDO_TTL_SEG = 6 * 60 * 60;
 
 function serializarCachePanel_(datos) {
   const blob = Utilities.newBlob('', 'application/json').setDataFromString(JSON.stringify(datos), 'UTF-8');
@@ -477,21 +485,25 @@ function deserializarCachePanel_(trozos) {
 
 function guardarCachePanel_(datos) {
   const trozos = serializarCachePanel_(datos);
-  const valores = {};
-  trozos.forEach(function (t, i) { valores[CACHE_PANEL_PREFIJO + i] = t; });
-  // El índice va en el mismo putAll que los trozos: si no está, no se lee.
-  valores[CACHE_PANEL_PREFIJO + 'n'] = String(trozos.length);
-  CacheService.getScriptCache().putAll(valores, CACHE_PANEL_TTL_SEG);
+  const cache = CacheService.getScriptCache();
+  [[CACHE_PANEL_PREFIJO, CACHE_PANEL_TTL_SEG], [CACHE_PANEL_RESPALDO_PREFIJO, CACHE_PANEL_RESPALDO_TTL_SEG]].forEach(function (par) {
+    const valores = {};
+    trozos.forEach(function (t, i) { valores[par[0] + i] = t; });
+    // El índice va en el mismo putAll que los trozos: si no está, no se lee.
+    valores[par[0] + 'n'] = String(trozos.length);
+    cache.putAll(valores, par[1]);
+  });
 }
 
 /** null si no hay caché (o falta algún trozo) - nunca lanza. */
-function leerCachePanel_() {
+function leerCachePanel_(prefijo) {
+  prefijo = prefijo || CACHE_PANEL_PREFIJO;
   try {
     const cache = CacheService.getScriptCache();
-    const n = Number(cache.get(CACHE_PANEL_PREFIJO + 'n'));
+    const n = Number(cache.get(prefijo + 'n'));
     if (!n) return null;
     const claves = [];
-    for (let i = 0; i < n; i++) claves.push(CACHE_PANEL_PREFIJO + i);
+    for (let i = 0; i < n; i++) claves.push(prefijo + i);
     const valores = cache.getAll(claves);
     const trozos = claves.map(function (k) { return valores[k]; });
     if (trozos.some(function (t) { return !t; })) return null;
@@ -515,11 +527,21 @@ function invalidarCachePanel_() {
  * Llamada desde el cliente (Panel.html) vía google.script.run cuando la
  * página no trae ya los datos incrustados (ver doGet) o al pulsar
  * "Reintentar". Sirve de la caché si la hay; si no, calcula y la rellena.
+ * Si calcular falla (la hoja no responde), sirve la copia de respaldo antes
+ * que un error.
  */
 function getMetricasPanel() {
   const enCache = leerCachePanel_();
   if (enCache) return enCache;
-  const datos = construirDatosPanel_();
+  let datos;
+  try {
+    datos = construirDatosPanel_();
+  } catch (err) {
+    const respaldo = leerCachePanel_(CACHE_PANEL_RESPALDO_PREFIJO);
+    Logger.log('getMetricasPanel: no se pudo calcular (' + err + '), ' + (respaldo ? 'sirvo el respaldo' : 'sin respaldo'));
+    if (respaldo) return respaldo;
+    throw err;
+  }
   try {
     guardarCachePanel_(datos);
   } catch (err) {
