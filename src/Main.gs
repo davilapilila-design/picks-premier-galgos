@@ -110,8 +110,15 @@ function manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward) 
     return;
   }
 
-  const fechaPick = fechaForward || fechaRecibido;
+  registrarPickExtraido_(msg, texto, resultado, fechaForward || fechaRecibido);
+}
 
+/**
+ * Parte final de manejarPickNuevo_ (pick ya extraído y válido): lo guarda,
+ * marca el mensaje como procesado y publica la confirmación respondiendo
+ * al pick. Separada para poder reutilizarla en reprocesarMensaje.
+ */
+function registrarPickExtraido_(msg, texto, resultado, fechaPick) {
   if (resultado.esExotica) {
     appendApuestaExotica(msg.message_id, fechaPick, resultado.tipoApuesta, resultado.hipodromo,
       resultado.horaCarrera, resultado.combinaciones, resultado.stakeTotal,
@@ -461,16 +468,10 @@ function reintentarMensajesConError() {
         continue;
       }
 
-      const fechaPick = fechaForward || fechaRecibido;
-      appendApuestaConPatas(messageId, fechaPick, resultado.tipoApuesta, resultado.cuota, resultado.stake, resultado.patas);
-      sheet.getRange(filaSheet, index['estado'] + 1).setValue(ESTADO_PROCESADO);
-
-      const textoConfirmacion = construirTextoConfirmacion_(resultado);
-      const confirmMessageId = sendTelegramMessage(TELEGRAM_CHAT_ID, textoConfirmacion, messageId);
-      if (confirmMessageId) {
-        const filaApuesta = findApuestaByMessageIdRecienCreada_(messageId);
-        if (filaApuesta) setApuestaConfirmMessageId(filaApuesta.row, confirmMessageId);
-      }
+      // Mismo registro que un pick nuevo (incluye gemela/trío, que antes
+      // aquí se habría intentado guardar como si fuera una simple).
+      registrarPickExtraido_({ message_id: messageId, chat: { id: TELEGRAM_CHAT_ID } },
+        contenido, resultado, fechaForward || fechaRecibido);
       resueltos++;
     }
 
@@ -690,6 +691,74 @@ function repararPicksAtascados_2026_09_02() {
  *
  * Ejecutar A MANO desde el editor, una sola vez.
  */
+/**
+ * Reprocesa un pick que se quedó en revision_manual/error por un fallo
+ * puntual de la IA (caso real 2026-10-20, msg 519: Gemini devolvió una
+ * respuesta sin tipo_apuesta; repetida días después con el mismo texto y
+ * foto salió bien). Solo actúa si el mensaje no tiene ya apuesta (dedup por
+ * message_id) y SOLO publica en el grupo si la extracción sale bien - si
+ * vuelve a fallar no manda nada y devuelve el motivo.
+ * `clasp run-function reprocesarMensaje --params '["519"]'`.
+ */
+function reprocesarMensaje(messageId) {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const fila = datos.filter(function (f) { return String(f[index['message_id']]) === String(messageId); })[0];
+  if (!fila) return 'msg ' + messageId + ': no está en mensajes_crudos';
+
+  const estado = fila[index['estado']];
+  if (estado !== ESTADO_REVISION_MANUAL && estado !== ESTADO_ERROR) {
+    return 'msg ' + messageId + ': estado "' + estado + '", no se reprocesa';
+  }
+  if (findApuestaPatasByMessageId(messageId).length > 0 || findApuestaExoticaByMessageIdRecienCreada_(messageId)) {
+    return 'msg ' + messageId + ': ya tiene apuesta registrada, no se duplica';
+  }
+
+  const texto = fila[index['contenido']];
+  const fotoFileId = fila[index['foto_file_id']];
+  const resultado = extraerPick(texto, fotoFileId ? downloadTelegramPhoto(fotoFileId) : null);
+  if (!resultado.ok) {
+    return 'msg ' + messageId + ': la IA sigue sin poder leerlo (' + motivoRevisionManual_(resultado) + '); no se ha publicado nada';
+  }
+
+  const msg = { message_id: fila[index['message_id']], chat: { id: TELEGRAM_CHAT_ID } };
+  registrarPickExtraido_(msg, texto, resultado, fila[index['fecha_forward']] || fila[index['fecha_recibido']]);
+  return 'msg ' + messageId + ': registrado como ' + resultado.tipoApuesta + ' y confirmación publicada';
+}
+
+/**
+ * Lista los disparadores instalados (función y tipo) - para comprobar desde
+ * `clasp run-function listarTriggers` que los jobs periódicos existen.
+ */
+function listarTriggers() {
+  return ScriptApp.getProjectTriggers().map(function (t) {
+    return t.getHandlerFunction() + ' (' + t.getEventType() + ')';
+  });
+}
+
+/**
+ * Pasa un pick de revision_manual a error para que lo recoja
+ * reintentarMensajesConError (trigger cada 2h) - útil cuando el fallo fue
+ * de la IA y no hay cuota de Gemini para reprocesarlo en el momento. Mismas
+ * garantías que reprocesarMensaje: no toca comandos ni mensajes que ya
+ * tienen apuesta. `clasp run-function marcarParaReintento --params '["519"]'`.
+ */
+function marcarParaReintento(messageId) {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const fila = datos.filter(function (f) { return String(f[index['message_id']]) === String(messageId); })[0];
+  if (!fila) return 'msg ' + messageId + ': no está en mensajes_crudos';
+  if (fila[index['estado']] !== ESTADO_REVISION_MANUAL) return 'msg ' + messageId + ': estado "' + fila[index['estado']] + '", no se toca';
+  if (String(fila[index['contenido']] || '').trim().charAt(0) === '/') return 'msg ' + messageId + ': es un comando, no un pick';
+  if (findApuestaPatasByMessageId(messageId).length > 0 || findApuestaExoticaByMessageIdRecienCreada_(messageId)) {
+    return 'msg ' + messageId + ': ya tiene apuesta registrada, no se toca';
+  }
+  actualizarEstadoMensajeCrudo_(messageId, ESTADO_ERROR);
+  return 'msg ' + messageId + ': marcado como error; reintentarMensajesConError lo procesará en su próxima pasada';
+}
+
 function repararStarPelaw20260905() {
   const messageId = '245';
   const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);

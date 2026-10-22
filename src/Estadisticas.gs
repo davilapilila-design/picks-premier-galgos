@@ -58,7 +58,7 @@ function rangoUltimosDias_(ahora, dias) {
  * obtenerFilasExoticasNormalizadas_). Las filas sin message_id son las
  * vacías con fórmula de la hoja y se ignoran.
  */
-function calcularEstadisticasPeriodo_(filas, rango) {
+function calcularEstadisticasPeriodo_(filas, rango, mensajes) {
   const delPeriodo = filas.filter(function (f) {
     if (!f.messageId || f.oculto === true || !(f.fechaPick instanceof Date)) return false;
     const clave = claveDiaMadrid_(f.fechaPick);
@@ -79,7 +79,40 @@ function calcularEstadisticasPeriodo_(filas, rango) {
     roiPct: metricas.hayDatos ? metricas.roiPct : 0,
     pctAciertos: metricas.hayDatos ? metricas.pctAciertos : 0,
     pendientes: pendientes,
+    sinRegistrar: picksSinRegistrar_(mensajes || [], rango),
   };
+}
+
+/**
+ * Picks del periodo que nunca llegaron a `apuestas` (estado revision_manual o
+ * error en mensajes_crudos) - sin esto /stats no los veía: caso real msg 519
+ * (2026-10-20), un fallo puntual de la IA lo dejó fuera y nadie se enteró.
+ * Los comandos ("/stats", "/stas 10" con errata...) no son picks.
+ * `mensajes`: [{messageId, fecha (Date), estado, contenido}].
+ */
+function picksSinRegistrar_(mensajes, rango) {
+  return mensajes.filter(function (m) {
+    if (m.estado !== ESTADO_REVISION_MANUAL && m.estado !== ESTADO_ERROR) return false;
+    if (String(m.contenido || '').trim().charAt(0) === '/') return false;
+    if (!(m.fecha instanceof Date)) return false;
+    const clave = claveDiaMadrid_(m.fecha);
+    return clave >= rango.desde && clave <= rango.hasta;
+  }).map(function (m) { return m.messageId; });
+}
+
+function leerMensajesEstadisticas_() {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues().map(function (f) {
+    return {
+      messageId: String(f[index['message_id']]),
+      fecha: f[index['fecha_forward']] || f[index['fecha_recibido']],
+      estado: f[index['estado']],
+      contenido: f[index['contenido']],
+    };
+  });
 }
 
 // --- Textos ---
@@ -90,7 +123,7 @@ function formatearNumeroEs_(n, decimales, conSigno) {
   return signo + redondeado.toFixed(decimales).replace('.', ',');
 }
 
-/** Devuelve [mensaje de estadísticas, mensaje de pendientes o null]. */
+/** Devuelve [mensaje de estadísticas, mensaje de pendientes/sin registrar o null]. */
 function construirTextosEstadisticas_(titulo, rango, stats) {
   const cabecera = '📊 ' + titulo + ' · ' + etiquetaClave_(rango.desde) +
     (rango.desde === rango.hasta ? '' : ' – ' + etiquetaClave_(rango.hasta));
@@ -106,8 +139,13 @@ function construirTextosEstadisticas_(titulo, rango, stats) {
       'Acierto: ' + formatearNumeroEs_(stats.pctAciertos, 1, false) + ' %',
     ].join('\n');
   }
-  const pendientes = stats.pendientes > 0 ? 'Pendientes de resultado: ' + stats.pendientes : null;
-  return [principal, pendientes];
+  const avisos = [];
+  if (stats.pendientes > 0) avisos.push('Pendientes de resultado: ' + stats.pendientes);
+  if (stats.sinRegistrar && stats.sinRegistrar.length > 0) {
+    avisos.push('⚠️ Picks sin registrar (la IA no pudo leerlos, revisar a mano): ' + stats.sinRegistrar.length +
+      ' (msg ' + stats.sinRegistrar.join(', ') + ')');
+  }
+  return [principal, avisos.length > 0 ? avisos.join('\n') : null];
 }
 
 function tituloUltimosDias_(dias) {
@@ -132,17 +170,18 @@ function parsearComandoStats_(texto) {
   return { dias: dias };
 }
 
-function textosComandoStats_(comando, ahora, filas) {
+function textosComandoStats_(comando, ahora, filas, mensajes) {
   if (comando.error) return [comando.error, null];
   const rango = rangoUltimosDias_(ahora, comando.dias);
   return construirTextosEstadisticas_(tituloUltimosDias_(comando.dias), rango,
-    calcularEstadisticasPeriodo_(filas, rango));
+    calcularEstadisticasPeriodo_(filas, rango, mensajes));
 }
 
 /** Llamada desde doPost (Main.gs). */
 function manejarComandoStats_(msg, comando) {
   const filas = comando.error ? [] : leerFilasEstadisticas_();
-  const textos = textosComandoStats_(comando, new Date(), filas);
+  const mensajes = comando.error ? [] : leerMensajesEstadisticas_();
+  const textos = textosComandoStats_(comando, new Date(), filas, mensajes);
   enviarTextosEstadisticas_(msg.chat.id, textos, msg.message_id);
   actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
 }
@@ -153,9 +192,9 @@ function leerFilasEstadisticas_() {
   return obtenerFilasApuestas_().concat(obtenerFilasExoticasNormalizadas_());
 }
 
-function textosResumenSemanal_(ahora, filas) {
+function textosResumenSemanal_(ahora, filas, mensajes) {
   const rango = rangoSemanaAnterior_(ahora);
-  return construirTextosEstadisticas_('Resumen semanal', rango, calcularEstadisticasPeriodo_(filas, rango));
+  return construirTextosEstadisticas_('Resumen semanal', rango, calcularEstadisticasPeriodo_(filas, rango, mensajes));
 }
 
 function enviarTextosEstadisticas_(chatId, textos, replyTo) {
@@ -165,7 +204,8 @@ function enviarTextosEstadisticas_(chatId, textos, replyTo) {
 
 /** La ejecuta el trigger de los lunes. */
 function enviarResumenSemanal() {
-  enviarTextosEstadisticas_(TELEGRAM_CHAT_ID, textosResumenSemanal_(new Date(), leerFilasEstadisticas_()));
+  enviarTextosEstadisticas_(TELEGRAM_CHAT_ID,
+    textosResumenSemanal_(new Date(), leerFilasEstadisticas_(), leerMensajesEstadisticas_()));
 }
 
 /**
@@ -175,8 +215,9 @@ function enviarResumenSemanal() {
  */
 function previsualizarResumenSemanal(dias) {
   const filas = leerFilasEstadisticas_();
-  const textos = dias ? textosComandoStats_({ dias: Number(dias) }, new Date(), filas)
-    : textosResumenSemanal_(new Date(), filas);
+  const mensajes = leerMensajesEstadisticas_();
+  const textos = dias ? textosComandoStats_({ dias: Number(dias) }, new Date(), filas, mensajes)
+    : textosResumenSemanal_(new Date(), filas, mensajes);
   return textos.filter(Boolean).join('\n\n---\n\n');
 }
 
@@ -246,6 +287,22 @@ function test_estadisticas() {
   textos = construirTextosEstadisticas_('Último día', { desde: '2026-09-25', hasta: '2026-09-25' },
     calcularEstadisticasPeriodo_([], semana));
   assertIguales_(textos[0], '📊 Último día · 25/09\nSin apuestas resueltas.', 'periodo vacio');
+
+  // Picks sin registrar (revision_manual / error), caso real msg 519.
+  const mensajes = [
+    { messageId: '519', fecha: d('2026-09-24'), estado: ESTADO_REVISION_MANUAL, contenido: '20:39 Central Park T3' },
+    { messageId: '520', fecha: d('2026-09-26'), estado: ESTADO_ERROR, contenido: 'foto sin texto' },
+    { messageId: '437', fecha: d('2026-09-23'), estado: ESTADO_REVISION_MANUAL, contenido: '/stas 10' },
+    { messageId: '400', fecha: d('2026-09-01'), estado: ESTADO_REVISION_MANUAL, contenido: 'fuera del periodo' },
+    { messageId: '401', fecha: d('2026-09-22'), estado: ESTADO_PROCESADO, contenido: 'ya registrado' },
+  ];
+  textos = construirTextosEstadisticas_('Resumen semanal', semana, calcularEstadisticasPeriodo_(filas, semana, mensajes));
+  assertIguales_(textos[1], 'Pendientes de resultado: 1\n⚠️ Picks sin registrar (la IA no pudo leerlos, revisar a mano): 2 (msg 519, 520)',
+    'sin registrar: solo picks del periodo en revision_manual/error, sin comandos');
+  textos = construirTextosEstadisticas_('Resumen semanal', semana,
+    calcularEstadisticasPeriodo_([filas[0]], semana, [mensajes[0]]));
+  assertIguales_(textos[1], '⚠️ Picks sin registrar (la IA no pudo leerlos, revisar a mano): 1 (msg 519)',
+    'sin pendientes pero con un pick sin registrar -> sigue habiendo segundo mensaje');
 
   // Comando.
   function c(t) { return JSON.stringify(parsearComandoStats_(t)); }
