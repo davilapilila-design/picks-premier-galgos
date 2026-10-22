@@ -3,6 +3,52 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-22 — Pick 519 en revisión manual por un fallo puntual de Gemini; /stats ahora avisa de los picks sin registrar
+El dueño vio en el grupo "Pick guardado pero necesita revisión manual: tipo de
+apuesta no soportado todavía (sin identificar...)" para un pick simple normal
+(msg 519, 20/10, "20:39 Central Park · Galgo T3 Coolside Spyman · Cuota 4.50 ·
+Stake 4", reenviado, con foto del boleto de Sky Bet), y preguntó por qué `/stats`
+no lo avisaba.
+- **Causa del fallo**: Gemini devolvió ese día una respuesta sin
+  `tipo_apuesta`. Repetida ahora (texto solo y texto + foto, con
+  `probarExtraccionMensaje`, Telegram.gs, nueva) sale bien: simple, T3, 4,50,
+  stake 4. No es el pick ni la foto (el boleto es correcto; trae la trampa
+  como "3. Coolside Spyman" en vez del cuadrado de color, y la hora 1h antes,
+  como siempre). Al intentar cazar la respuesta mala se agotó la cuota diaria
+  de Gemini (429) - se paró ahí para no dejar sin cuota a los picks reales.
+- **El fallo de fondo**: una respuesta rara de la IA se trataba como
+  `revision_manual`, que nunca se reintenta, así que un fallo puntual = pick
+  perdido. Ahora (`normalizarRespuestaGemini_`, AI.gs, con test) una respuesta
+  200 sin `tipo_apuesta` de texto (o JSON roto) se trata como fallo técnico:
+  se repite la llamada como con un 503 y, si sigue mal, el pick va a `error`
+  con el aviso de "lo reintentaré yo solo" y lo recoge
+  `reintentarMensajesConError` (cada 2h). Si viene envuelta en una lista de un
+  elemento, se desenvuelve. "otro" sigue yendo a revisión manual (correcto).
+- `reintentarMensajesConError` registra ahora con `registrarPickExtraido_`
+  (la parte final de `manejarPickNuevo_`, separada): antes guardaba siempre
+  como simple/doble/triple y habría roto una gemela/trío reintentada.
+- **/stats y resumen de los lunes**: solo leían `apuestas`/`apuestas_exoticas`,
+  y un pick en `revision_manual`/`error` nunca llega ahí - por eso no avisaba.
+  Ahora leen también `mensajes_crudos` y añaden "⚠️ Picks sin registrar (...):
+  N (msg ...)" con los del periodo, sin contar comandos (había un "/stas 10"
+  con errata en `revision_manual`, msg 437). Test ampliado; previsualizado con
+  datos reales: "/stats 7" muestra 22 resueltas y "Picks sin registrar: 1
+  (msg 519)".
+- **Msg 519**: el dueño pidió publicarlo en el canal si se lograba sacar. Sin
+  cuota para reprocesarlo en el momento, se pasó a `error` con
+  `marcarParaReintento` (Main.gs, nueva: no toca comandos ni mensajes con
+  apuesta ya registrada); `reintentarMensajesConError` lo registrará y
+  publicará la confirmación en el grupo cuando vuelva la cuota. Comprobado
+  con `listarTriggers` (Main.gs, nueva) que ese disparador está instalado.
+  También queda `reprocesarMensaje(messageId)` (Main.gs) para hacerlo al
+  momento: extrae primero y SOLO publica si sale bien.
+- Tests en el Apps Script real vía `clasp run`: test_estadisticas,
+  test_normalizarRespuestaGemini, test_normalizarCanodromo,
+  test_calcularResolucionExotica, testReglasAuditoria - todos OK. Desplegado
+  v36. El panel no se ha tocado.
+
+Commits: (este commit)
+
 ## 2026-10-21 — Avería de Google leyendo la hoja: panel en error ("HTTP 404") y lento; ahora aguanta (desplegado, v35)
 - El dueño vio en `premiergalgos.com` "No hemos podido leer el registro"
   (HTTP 404) y cargas eternas. **Causa: avería de Google, no del código**:

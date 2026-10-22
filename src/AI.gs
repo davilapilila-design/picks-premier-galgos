@@ -143,7 +143,14 @@ function callGeminiExtraction_(texto, fotoBlob) {
     if (status === 200) {
       const body = JSON.parse(response.getContentText());
       const textoRespuesta = body.candidates[0].content.parts[0].text.trim();
-      return JSON.parse(textoRespuesta);
+      const extraido = normalizarRespuestaGemini_(textoRespuesta);
+      if (extraido) return extraido;
+      // Respuesta 200 pero sin forma válida = fallo puntual del modelo, no un
+      // pick ilegible (msg 519, 2026-10-20) - se reintenta como un 503.
+      ultimoError = new Error('Respuesta de Gemini sin tipo_apuesta: ' + textoRespuesta.slice(0, 300));
+      if (intento === MAX_REINTENTOS_GEMINI - 1) throw ultimoError;
+      Utilities.sleep(3000 * Math.pow(2, intento));
+      continue;
     }
 
     ultimoError = new Error('Error de la API de Gemini (' + status + '): ' + response.getContentText());
@@ -154,6 +161,43 @@ function callGeminiExtraction_(texto, fotoBlob) {
     Utilities.sleep(3000 * Math.pow(2, intento)); // 3s, 6s, 12s
   }
   throw ultimoError;
+}
+
+/**
+ * Bug real 2026-10-20 (msg 519): un pick simple perfectamente legible acabó
+ * en revision_manual con tipo "sin identificar" porque Gemini devolvió, esa
+ * vez, una respuesta sin `tipo_apuesta` (repetida con el mismo texto y foto
+ * salió bien). revision_manual no se reintenta nunca, así que un fallo
+ * puntual del modelo se convertía en un pick perdido. Devuelve el objeto
+ * extraído, o null si la respuesta no tiene la forma esperada (JSON mal
+ * formado, o sin `tipo_apuesta` de texto) para que se trate como fallo
+ * técnico. Si viene envuelto en una lista de un solo elemento, se desenvuelve.
+ */
+function normalizarRespuestaGemini_(textoRespuesta) {
+  let extraido;
+  try {
+    extraido = JSON.parse(textoRespuesta);
+  } catch (err) {
+    return null;
+  }
+  if (Array.isArray(extraido) && extraido.length === 1) extraido = extraido[0];
+  if (!extraido || typeof extraido !== 'object' || Array.isArray(extraido)) return null;
+  if (typeof extraido.tipo_apuesta !== 'string' || extraido.tipo_apuesta.trim() === '') return null;
+  extraido.tipo_apuesta = extraido.tipo_apuesta.trim().toLowerCase();
+  return extraido;
+}
+
+function test_normalizarRespuestaGemini() {
+  const ok = normalizarRespuestaGemini_('{"tipo_apuesta":"simple","patas":[]}');
+  assertIguales_(ok.tipo_apuesta, 'simple', 'respuesta normal pasa tal cual');
+  assertIguales_(normalizarRespuestaGemini_('[{"tipo_apuesta":"doble"}]').tipo_apuesta, 'doble', 'lista de 1 elemento se desenvuelve');
+  assertIguales_(normalizarRespuestaGemini_('{"tipo_apuesta":" Simple "}').tipo_apuesta, 'simple', 'mayusculas/espacios');
+  assertIguales_(normalizarRespuestaGemini_('{"tipo_apuesta":null,"patas":[]}'), null, 'sin tipo -> fallo tecnico (caso msg 519)');
+  assertIguales_(normalizarRespuestaGemini_('{"patas":[]}'), null, 'campo ausente -> fallo tecnico');
+  assertIguales_(normalizarRespuestaGemini_('no es json'), null, 'JSON roto -> fallo tecnico');
+  assertIguales_(normalizarRespuestaGemini_('[{"tipo_apuesta":"simple"},{"tipo_apuesta":"doble"}]'), null, 'lista de varios -> fallo tecnico, no se elige');
+  assertIguales_(normalizarRespuestaGemini_('{"tipo_apuesta":"otro"}').tipo_apuesta, 'otro', '"otro" es valido (va a revision manual, correcto)');
+  Logger.log('test_normalizarRespuestaGemini: OK, todas las comprobaciones pasaron.');
 }
 
 /**
