@@ -46,7 +46,12 @@ class Base(unittest.TestCase):
     def organizador(self, **ajustes):
         aj = dict(canal_principal=CANAL, simular=False)
         aj.update(ajustes)
-        return Organizador(self.con, self.tg, MADRID, Ajustes(**aj), avisar=self.avisos.append,
+        self.teclados = []
+
+        def avisar(texto, teclado=None):
+            self.avisos.append(texto)
+            self.teclados.append(teclado)
+        return Organizador(self.con, self.tg, MADRID, Ajustes(**aj), avisar=avisar,
                            reloj=lambda: self.ahora)
 
     def del_embudo(self, uid, nombre="Ana", **campos):
@@ -354,6 +359,8 @@ class TestAvisoGratuitaRepetida(Base):
         self.assertIn("Iker (@iker)", avisos[0])
         self.assertIn("ya la tuvo el", avisos[0])
         self.assertIn("«Pack martes»", avisos[0])
+        boton = self.teclados[self.avisos.index(avisos[0])]["inline_keyboard"][0][0]
+        self.assertEqual(boton, {"text": "🔎 Ver más info", "callback_data": "gra:600"})
 
     def test_quien_ya_estaba_en_el_canal_aunque_no_tenga_bienvenida(self):
         with self.con:

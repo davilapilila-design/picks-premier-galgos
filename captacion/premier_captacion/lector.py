@@ -275,21 +275,22 @@ def crear_avisador(cfg):
     llegan en el orden en que se piden: los envía un solo hilo, uno detrás de
     otro (antes iban a la vez y se desordenaban)."""
     if not cfg.bot_token or cfg.propietario_id is None:
-        return lambda texto: log.warning("AVISO (sin bot configurado): %s", texto)
+        return lambda texto, teclado=None: log.warning("AVISO (sin bot configurado): %s", texto)
     api = BotAPI(cfg.bot_token)
     hilo = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="avisos")
 
-    def enviar(texto):
+    def enviar(texto, teclado):
         try:
-            api.llamar("sendMessage", chat_id=cfg.propietario_id, text=texto[:4000])
+            extra = {"reply_markup": teclado} if teclado else {}
+            api.llamar("sendMessage", chat_id=cfg.propietario_id, text=texto[:4000], **extra)
         except (ErrorTelegram, ErrorRed) as e:
             log.error("No se pudo enviar un aviso por el bot: %s", e)
         except Exception:
             log.exception("Fallo inesperado enviando un aviso por el bot")
 
-    def avisar(texto):
+    def avisar(texto, teclado=None):
         log.info("AVISO: %s", texto)
-        hilo.submit(enviar, texto)  # al salir del programa se envían los que queden
+        hilo.submit(enviar, texto, teclado)  # al salir del programa se envían los que queden
 
     return avisar
 

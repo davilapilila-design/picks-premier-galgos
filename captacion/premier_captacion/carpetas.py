@@ -120,7 +120,7 @@ class Organizador:
         self.tg = tg
         self.tz = tz
         self.aj = ajustes
-        self.avisar = avisar or (lambda texto: None)
+        self.avisar = avisar or (lambda texto, teclado=None: None)
         self.reloj = reloj
         self._candado_creado = None
         self._dia_simulado = None
@@ -223,7 +223,10 @@ class Organizador:
             motivo = "ya estaba en el canal"
         with self.con:
             db.registrar_evento(self.con, ts, "aviso_gratuita_repetida", user_id, estado=estado)
-        self.avisar(f"⚠️ {quien} te ha escrito pidiendo la gratuita, pero {motivo}.")
+        # El botón lo atiende el bot (/gratuita): enseña la ficha completa.
+        from .consulta import CALLBACK  # (consulta importa este módulo)
+        self.avisar(f"⚠️ {quien} te ha escrito pidiendo la gratuita, pero {motivo}.",
+                    {"inline_keyboard": [[{"text": "🔎 Ver más info", "callback_data": f"{CALLBACK}{user_id}"}]]})
 
     async def al_recibir(self, user_id, msg_id, ts, texto, usuario=None):
         """Un mensaje que alguien le ha enviado al dueño por privado."""

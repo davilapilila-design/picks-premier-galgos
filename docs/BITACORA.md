@@ -37,8 +37,13 @@ Entradas más recientes arriba.
   «nueva»). Una vez al día por persona (evento `aviso_gratuita_repetida`) y
   solo por mensajes recientes. Aprobado por el dueño, también para quien ya
   estaba en el canal.
+- Probado por el dueño en el bot de prueba. A petición suya, el aviso lleva
+  el botón «🔎 Ver más info», que enseña la ficha completa (la de
+  /gratuita).
+- Lista de suscriptores leída en la real: 1673 de 1798 (93 %; Telegram da
+  200 de golpe, el resto sale por búsquedas).
 - Pruebas: 191, pasan en Python 3.9, 3.12 y 3.13.
-- Commits: (este commit)
+- Commits: `f3ba322`, (este commit)
 
 ## 2026-10-21 — Captación: el lector apunta en directo las bienvenidas que el dueño da a mano
 - **Qué**: el dueño buscó con la consulta a un cliente al que dio la
