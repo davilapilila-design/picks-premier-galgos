@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import threading
 import time
 import unittest
@@ -51,6 +52,14 @@ class TestGuardia(unittest.TestCase):
     def test_una_lista_con_una_prohibida_se_bloquea_entera(self):
         with self.assertRaises(guardia.PeticionProhibida):
             guardia.comprobar([peticion("users.GetUsersRequest"), peticion("messages.SendMessageRequest")], "lector")
+
+    def test_suscriptores_solo_en_su_modo_y_sin_carpetas(self):
+        guardia.comprobar(peticion("channels.GetParticipantsRequest"), "suscriptores")
+        for modo in ("historico", "simulacion", "lector"):
+            with self.subTest(modo), self.assertRaises(guardia.PeticionProhibida):
+                guardia.comprobar(peticion("channels.GetParticipantsRequest"), modo)
+        with self.assertRaises(guardia.PeticionProhibida):
+            guardia.comprobar(peticion("messages.UpdateDialogFilterRequest"), "suscriptores")
 
     def test_iniciar_sesion_solo_en_su_modo(self):
         guardia.comprobar(peticion("auth.SendCodeRequest"), "iniciar-sesion")
@@ -249,3 +258,47 @@ class TestApuntarGratuita(unittest.TestCase):
         con = db.abrir(ruta)
         self.addCleanup(con.close)
         self.assertEqual(db.obtener_usuario(con, 77)["enlace_venta"], "https://t.me/+VENTAFALSA01")
+
+
+HAY_TELETHON = importlib.util.find_spec("telethon") is not None
+
+
+@unittest.skipUnless(HAY_TELETHON, "necesita Telethon (venv de la VM)")
+class TestLeerSuscriptores(unittest.TestCase):
+    def test_lista_directa_y_busquedas_hasta_tenerlos_todos(self):
+        import os
+        import tempfile
+        ruta = os.path.join(tempfile.mkdtemp(), "x.db")
+        cfg = cargar_config({"CAPTACION_DB": ruta, "CAPTACION_CANAL_ID": "-1001234567890"}, requiere_bot=False)
+        busquedas = []
+
+        class Cliente:
+            flood_sleep_threshold = 0
+            async def connect(self): pass
+            async def disconnect(self): pass
+            async def is_user_authorized(self): return True
+            async def get_entity(self, peer): return "canal"
+            async def __call__(self, peticion):
+                return SimpleNamespace(full_chat=SimpleNamespace(participants_count=5))
+
+            def iter_participants(self, canal, search=None):
+                busquedas.append(search)
+                ids = {None: [1, 2, 3], "a": [3, 4], "b": [5]}.get(search, [])
+
+                async def gen():
+                    for i in ids:
+                        yield SimpleNamespace(id=i)
+                return gen()
+
+        entorno = {"CAPTACION_API_ID": "123456", "CAPTACION_API_HASH": "0123456789abcdef0123456789abcdef",
+                   "CAPTACION_SESION": "/tmp/sesion"}
+        with mock.patch.object(lector, "crear_cliente", return_value=Cliente()) as crear, \
+                mock.patch("builtins.print") as imprimir:
+            self.assertEqual(asyncio.run(lector.leer_suscriptores(cfg, entorno)), 0)
+        self.assertEqual(crear.call_args[0][3], "suscriptores")
+        self.assertEqual(busquedas, [None, "a", "b"])  # para al tenerlos todos
+        self.assertIn("Leídos 5 de 5 suscriptores (100%)", imprimir.call_args[0][0])
+        con = db.abrir(ruta)
+        self.addCleanup(con.close)
+        self.assertTrue(all(db.es_miembro(con, i) for i in range(1, 6)))
+        self.assertFalse(db.es_miembro(con, 6))

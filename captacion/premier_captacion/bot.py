@@ -271,33 +271,36 @@ class BotCaptacion:
                         "resumen). Para volver a aceptar: /reanudar", clave=f"pausa:{pausa}")
             return
 
-        if fila["bienvenida_ts"] is not None:
-            # Ya la recibió alguna vez (p. ej. salió del canal y vuelve).
-            log.info("Solicitud de %s: ya tenía bienvenida, se acepta sin mensaje", uid)
+        recurrente = db.ya_conocido(self.con, uid, fila)
+        if recurrente:
+            # Ya estaba en el canal o ya pasó por aquí (p. ej. salió y vuelve):
+            # bienvenida sin la gratuita.
             with self.con:
                 db.registrar_evento(self.con, ahora, "ya_recibida", uid, tipo_mensaje=fila["bienvenida_tipo"])
-        elif retraso > self.cfg.ventana_bienvenida_s:
+        if retraso > self.cfg.ventana_bienvenida_s:
             log.info("Solicitud de %s con %ss de espera: fuera de plazo para escribirle", uid, retraso)
             with self.con:
                 db.registrar_evento(self.con, ahora, "bienvenida_fallida", uid, motivo="fuera_de_plazo")
             self._fuera_de_plazo += 1
         else:
-            self._enviar_bienvenida(sol, usuario)
+            self._enviar_bienvenida(sol, usuario, recurrente)
 
         self._aceptar(chat["id"], usuario)
 
-    def _enviar_bienvenida(self, sol, usuario):
+    def _enviar_bienvenida(self, sol, usuario, recurrente=False):
         uid = usuario["id"]
         # El texto y su tipo: los que haya puesto el dueño con /textos, o los
         # de partida.
-        tipo = textos.tipo_bienvenida(self.con)
+        if recurrente:
+            tipo = mensajes.TIPO_BIENVENIDA_RECURRENTE
+            texto = textos.actual(self.con, "bienvenida_recurrente")
+            teclado = mensajes.teclado_bienvenida_recurrente(self.cfg.perfil)
+        else:
+            tipo = textos.tipo_bienvenida(self.con)
+            texto = textos.actual(self.con, "bienvenida")
+            teclado = mensajes.teclado_respuesta(self.cfg.perfil)
         try:
-            self.api.llamar(
-                "sendMessage",
-                chat_id=sol.get("user_chat_id", uid),
-                text=textos.actual(self.con, "bienvenida"),
-                reply_markup=mensajes.teclado_respuesta(self.cfg.perfil),
-            )
+            self.api.llamar("sendMessage", chat_id=sol.get("user_chat_id", uid), text=texto, reply_markup=teclado)
         except ErrorTelegram as e:
             with self.con:
                 db.registrar_evento(self.con, self.reloj(), "bienvenida_fallida", uid, motivo=e.descripcion)
@@ -307,9 +310,16 @@ class BotCaptacion:
             return
         ahora = self.reloj()
         with self.con:
-            db.marcar_bienvenida(self.con, uid, ahora, tipo)
+            if recurrente:
+                # La primera bienvenida que recibió se conserva (para las
+                # estadísticas); si no tenía ninguna, cuenta esta.
+                if db.obtener_usuario(self.con, uid)["bienvenida_ts"] is None:
+                    db.marcar_bienvenida(self.con, uid, ahora, tipo)
+                db.actualizar_campos(self.con, uid, ahora, recurrente_ts=int(ahora))
+            else:
+                db.marcar_bienvenida(self.con, uid, ahora, tipo)
             db.registrar_evento(self.con, ahora, "bienvenida_enviada", uid, tipo_mensaje=tipo)
-        log.info("Bienvenida enviada a %s", uid)
+        log.info("Bienvenida%s enviada a %s", " sin gratuita" if recurrente else "", uid)
 
     def _aceptar(self, chat_id, usuario):
         uid = usuario["id"]
@@ -374,12 +384,15 @@ class BotCaptacion:
         if ultima is not None and ahora - ultima < self.cfg.pausa_redireccion_s:
             return
         # A quien ya tiene la apuesta de regalo (el dueño le envió un enlace
-        # de venta) no se le vuelve a hacer la pregunta de la bienvenida.
-        con_gratuita = fila["enlace_venta_ts"] is not None
+        # de venta) o es recurrente no se le vuelve a hacer la pregunta de la
+        # bienvenida (que lleva a la gratuita).
+        estado = db.estado_oferta(self.con, uid, fila)
+        con_gratuita = estado != "nueva"
         clave = "redireccion_gratuita" if con_gratuita else "redireccion"
         try:
             self.api.llamar("sendMessage", chat_id=uid, text=textos.actual(self.con, clave),
-                            reply_markup=mensajes.teclado_redireccion(self.cfg.perfil, con_gratuita))
+                            reply_markup=mensajes.teclado_redireccion(self.cfg.perfil, con_gratuita,
+                                                                      estado == "recurrente"))
         except ErrorTelegram as e:
             with self.con:
                 db.registrar_evento(self.con, ahora, "redireccion_fallida", uid, motivo=e.descripcion)
@@ -459,13 +472,13 @@ class BotCaptacion:
             if fila is not None:
                 self._responder(uid, consulta.ficha(self.con, fila, self.cfg.tz))
 
-    def _pantalla_dudas(self, tema, con_gratuita):
+    def _pantalla_dudas(self, tema, con_gratuita, recurrente=False):
         """(texto, teclado) del menú de dudas (tema None) o de un tema."""
         if tema is None:
             return textos.actual(self.con, "faq_menu"), mensajes.teclado_menu_faq()
         pie = textos.actual(self.con, "faq_pie_gratuita" if con_gratuita else "faq_pie")
         texto = mensajes.mensaje_tema(tema, textos.actual(self.con, f"faq:{tema}"), pie)
-        return texto, mensajes.teclado_tema(tema, self.cfg.perfil, con_gratuita)
+        return texto, mensajes.teclado_tema(tema, self.cfg.perfil, con_gratuita, recurrente)
 
     def _boton_dudas(self, cq, uid, datos):
         if datos in (mensajes.CALLBACK_DUDAS, mensajes.CALLBACK_MENU):
@@ -474,9 +487,8 @@ class BotCaptacion:
             tema = datos.split(":", 1)[1]
             if tema not in mensajes.FAQ:
                 return
-        fila = db.obtener_usuario(self.con, uid)
-        con_gratuita = fila is not None and fila["enlace_venta_ts"] is not None
-        texto, teclado = self._pantalla_dudas(tema, con_gratuita)
+        estado = db.estado_oferta(self.con, uid, db.obtener_usuario(self.con, uid))
+        texto, teclado = self._pantalla_dudas(tema, estado != "nueva", estado == "recurrente")
         if datos == mensajes.CALLBACK_DUDAS:
             # Desde la respuesta del bot: el menú va en un mensaje nuevo (la
             # respuesta, con sus botones, se queda donde está).
@@ -581,6 +593,8 @@ class BotCaptacion:
         perfil = self.cfg.perfil
         if clave == "bienvenida":
             return texto, mensajes.teclado_respuesta(perfil)
+        if clave == "bienvenida_recurrente":
+            return texto, mensajes.teclado_bienvenida_recurrente(perfil)
         if clave in ("redireccion", "redireccion_gratuita"):
             return texto, mensajes.teclado_redireccion(perfil, clave == "redireccion_gratuita")
         if clave == "faq_menu":

@@ -60,6 +60,10 @@ MODOS = {
     # hubiera un fallo en el código, Telegram no recibiría nada que escriba.
     "simulacion": LECTURA | {"account.UpdateStatusRequest"},
     "lector": LECTURA | CARPETAS | {"account.UpdateStatusRequest"},
+    # Leer la lista de suscriptores del canal principal (solo lectura;
+    # autorizado por el dueño el 2026-10-23), para no ofrecer la gratuita a
+    # quien ya estaba dentro.
+    "suscriptores": LECTURA | {"channels.GetParticipantsRequest"},
 }
 
 

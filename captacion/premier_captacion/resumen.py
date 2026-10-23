@@ -130,7 +130,7 @@ def _cuerpo(est, anterior=None, nombres_tipo=None):
     if est["sin_bienvenida"]:
         lineas.append(f"⚠️ Sin bienvenida por algún problema: {sum(est['sin_bienvenida'].values())}")
         lineas += _desglose(est["sin_bienvenida"], MOTIVOS)
-    lineas.append(f"🔁 Volvieron (ya tenían bienvenida): {est['ya_recibida']}")
+    lineas.append(f"🔁 Ya estaban o volvieron (bienvenida sin gratuita): {est['ya_recibida']}")
     lineas.append(f"✅ Aceptadas: {est['aceptadas']}")
     if est["en_pausa"]:
         lineas.append(f"⏸️ Sin atender por la pausa (para aceptar a mano): {est['en_pausa']}")

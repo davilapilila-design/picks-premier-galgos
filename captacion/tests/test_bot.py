@@ -54,17 +54,18 @@ class TestSolicitudes(Base):
         self.assertEqual(fila["username"], "pepe")
         self.assertEqual(tipos_eventos(self.con), ["solicitud", "bienvenida_enviada", "aceptada"])
 
-    def test_si_vuelve_se_acepta_sin_volver_a_escribirle(self):
+    def test_si_vuelve_se_acepta_con_la_bienvenida_sin_gratuita(self):
         self.bot.procesar(update_solicitud(1, uid=500))
         self.api.llamadas.clear()
         self.reloj.ahora += 90 * 24 * 3600  # meses después
         self.bot.procesar(update_solicitud(2, uid=500, fecha=self.reloj.ahora, enlace_nombre="otro"))
 
-        self.assertEqual(self.api.metodos(), ["approveChatJoinRequest"])
+        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        self.assertEqual(self.api.llamadas[0][1]["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual(fila["num_solicitudes"], 2)
         self.assertEqual(fila["enlace_entrada"], "landing")  # se guarda el de la primera vez
-        self.assertEqual(tipos_eventos(self.con)[-3:], ["solicitud", "ya_recibida", "aceptada"])
+        self.assertEqual(tipos_eventos(self.con)[-4:], ["solicitud", "ya_recibida", "bienvenida_enviada", "aceptada"])
 
     def test_fuera_de_plazo_se_acepta_sin_bienvenida_y_avisa_una_vez_por_lote(self):
         self.reloj.ahora = 1_000_000 + 400  # la solicitud lleva 400 s esperando
@@ -497,3 +498,57 @@ class TestArranqueYBucle(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRecurrentes(Base):
+    """Quien ya estaba en el canal o vuelve a entrar: bienvenida sin gratuita."""
+
+    def ultimo_a(self, uid):
+        return self.api.envios_a(uid)[-1]
+
+    def test_quien_vuelve_recibe_la_bienvenida_sin_gratuita(self):
+        self.bot.procesar(update_solicitud(1, uid=500))
+        self.reloj.ahora += 3600
+        self.bot.procesar(update_solicitud(2, uid=500, fecha=self.reloj.ahora))
+        envio = self.ultimo_a(500)
+        self.assertEqual(envio["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
+        self.assertEqual(envio["reply_markup"], mensajes.teclado_bienvenida_recurrente(PERFIL))
+        self.assertIn("approveChatJoinRequest", self.api.metodos()[-1:])
+        fila = db.obtener_usuario(self.con, 500)
+        self.assertEqual(fila["bienvenida_tipo"], mensajes.TIPO_BIENVENIDA_BOT)  # se conserva la primera
+        self.assertEqual(fila["recurrente_ts"], self.reloj.ahora)
+
+    def test_quien_ya_estaba_en_el_canal_tampoco_recibe_la_gratuita(self):
+        with self.con:
+            db.guardar_miembros(self.con, [501], 1)
+        self.bot.procesar(update_solicitud(1, uid=501))
+        self.assertEqual(self.ultimo_a(501)["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
+        fila = db.obtener_usuario(self.con, 501)
+        self.assertEqual(fila["bienvenida_tipo"], mensajes.TIPO_BIENVENIDA_RECURRENTE)  # no tenía otra
+        self.assertNotIn(mensajes.FRASE_PRIMERA_VEZ, json.dumps(self.api.envios_a(501), ensure_ascii=False))
+
+    def test_al_escribir_al_bot_escribeme_con_consulta_y_sin_la_pregunta(self):
+        with self.con:
+            db.guardar_miembros(self.con, [502], 1)
+        self.bot.procesar(update_mensaje(1, uid=502, texto="hola"))
+        envio = self.ultimo_a(502)
+        self.assertEqual(envio["text"], mensajes.TEXTO_REDIRECCION_CON_GRATUITA)
+        self.assertEqual(envio["reply_markup"], mensajes.teclado_redireccion(PERFIL, True, True))
+        self.assertIn(quote("Hola, tengo una consulta"), envio["reply_markup"]["inline_keyboard"][0][0]["url"])
+        self.bot.procesar(update_boton(2, "faq:unidades", uid=502))
+        self.assertIn(quote("tengo una consulta sobre las unidades"), json.dumps(self.api.llamadas[-1][1]))
+
+    def test_el_nuevo_en_la_lista_por_la_bienvenida_del_bot_sigue_siendo_nuevo(self):
+        self.bot.procesar(update_solicitud(1, uid=503))
+        with self.con:
+            db.guardar_miembros(self.con, [503], self.reloj.ahora + 10)  # la lista se leyó después
+        self.bot.procesar(update_mensaje(2, uid=503, texto="hola"))
+        self.assertEqual(self.ultimo_a(503)["text"], mensajes.TEXTO_REDIRECCION)
+
+    def test_en_pausa_tampoco_se_le_escribe(self):
+        with self.con:
+            db.guardar_miembros(self.con, [504], 1)
+        self.bot.procesar(update_mensaje(1, uid=PROPIETARIO, texto="/pausar"))
+        self.bot.procesar(update_solicitud(2, uid=504))
+        self.assertEqual(self.api.envios_a(504), [])
+        self.assertNotIn("approveChatJoinRequest", self.api.metodos())

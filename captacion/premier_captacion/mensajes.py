@@ -52,11 +52,14 @@ def negrita(texto):
 TIPO_BIENVENIDA_BOT = "bot_b_v1"
 TIPO_MANUAL_BUENAS = "manual_buenas"
 TIPO_MANUAL_BUENOS_DIAS = "manual_buenos_dias"
+# A quien ya estaba en el canal o vuelve a entrar: sin la gratuita.
+TIPO_BIENVENIDA_RECURRENTE = "bot_recurrente"
 
 TIPOS_MENSAJE = {
     TIPO_BIENVENIDA_BOT: "Bienvenida del bot, versión B (dos botones), desde 2026-10",
     TIPO_MANUAL_BUENAS: "Bienvenida manual «Buenas! Bienvenido a PREMIER GALGOS», antes del bot",
     TIPO_MANUAL_BUENOS_DIAS: "Bienvenida manual «Buenos días y bienvenido a Premier Galgos», antes del bot",
+    TIPO_BIENVENIDA_RECURRENTE: "Bienvenida del bot sin la gratuita (ya estaba en el canal o volvió a entrar)",
 }
 
 
@@ -69,6 +72,17 @@ TEXTO_BIENVENIDA = (
     "\n"
     "Para recibirla, dime: ¿ya has apostado en galgos o es tu primera vez? "
     "Pulsa tu respuesta y me escribes directamente 💙"
+)
+
+# A quien ya estaba en el canal o ya pasó por aquí y vuelve a pedir entrar:
+# sin la gratuita y sin que se note que es otro mensaje (el dueño no quiere
+# que busquen el truco de salir y entrar). Lleva las dudas y «escríbeme» con
+# un texto ya escrito distinto («consulta» en vez de «duda»), para que el
+# dueño sepa que es alguien que vuelve.
+TEXTO_BIENVENIDA_RECURRENTE = (
+    f"Buenas! Bienvenido a {negrita('PREMIER GALGOS')} 🐕\n"
+    "\n"
+    "Aquí tienes las dudas más frecuentes 📚 y, si necesitas algo concreto, escríbeme 💙"
 )
 
 # Respuesta cuando alguien escribe al bot en vez de al perfil del dueño.
@@ -134,9 +148,11 @@ TEXTO_MANUAL_BUENOS_DIAS = (
 
 # Para la pestaña «Tipos de mensaje» del Sheet: de dónde sale cada tipo y
 # su texto completo.
-ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot", TIPO_MANUAL_BUENAS: "manual", TIPO_MANUAL_BUENOS_DIAS: "manual"}
+ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot", TIPO_MANUAL_BUENAS: "manual", TIPO_MANUAL_BUENOS_DIAS: "manual",
+               TIPO_BIENVENIDA_RECURRENTE: "bot"}
 TEXTOS_TIPO = {
     TIPO_BIENVENIDA_BOT: TEXTO_BIENVENIDA,
+    TIPO_BIENVENIDA_RECURRENTE: TEXTO_BIENVENIDA_RECURRENTE,
     TIPO_MANUAL_BUENAS: TEXTO_MANUAL_BUENAS,
     TIPO_MANUAL_BUENOS_DIAS: TEXTO_MANUAL_BUENOS_DIAS,
 }
@@ -161,19 +177,28 @@ def teclado_respuesta(usuario):
     }
 
 
-def teclado_redireccion(usuario, con_gratuita):
+def teclado_redireccion(usuario, con_gratuita, recurrente=False):
     """Respuesta a quien escribe al bot: los dos botones de la bienvenida (o
-    «escríbeme», si ya tiene la gratuita) y el de las dudas frecuentes."""
-    filas = [[boton_escribeme(usuario)]] if con_gratuita else _filas_botones(usuario)
+    «escríbeme», si ya tiene la gratuita o es recurrente) y el de las dudas
+    frecuentes."""
+    filas = [[boton_escribeme(usuario, recurrente=recurrente)]] if con_gratuita else _filas_botones(usuario)
     return {"inline_keyboard": filas + [[{"text": "📚 Dudas frecuentes", "callback_data": CALLBACK_DUDAS}]]}
+
+
+def teclado_bienvenida_recurrente(usuario):
+    return {"inline_keyboard": [[{"text": "📚 Dudas frecuentes", "callback_data": CALLBACK_DUDAS}],
+                                [boton_escribeme(usuario, recurrente=True)]]}
 
 
 def _filas_botones(usuario):
     return [[{"text": boton, "url": enlace_perfil(usuario, texto)}] for boton, texto in BOTONES]
 
 
-def boton_escribeme(usuario, duda=None):
-    texto = f"Hola, tengo una duda sobre {duda}" if duda else "Hola, tengo una duda"
+def boton_escribeme(usuario, duda=None, recurrente=False):
+    # Recurrentes: «consulta» en vez de «duda». El cliente ve el mismo botón;
+    # el dueño, al leer el mensaje, sabe que es alguien que vuelve.
+    palabra = "consulta" if recurrente else "duda"
+    texto = f"Hola, tengo una {palabra} sobre {duda}" if duda else f"Hola, tengo una {palabra}"
     return {"text": "✉️ Escríbeme", "url": enlace_perfil(usuario, texto)}
 
 
@@ -328,10 +353,10 @@ def mensaje_tema(tema, texto, pie):
     return f"{FAQ[tema]['titulo']}\n\n{texto}\n\n{pie}"
 
 
-def teclado_tema(tema, usuario, con_gratuita):
+def teclado_tema(tema, usuario, con_gratuita, recurrente=False):
     filas = [[{"text": texto, "callback_data": f"faq:{destino}"}] for destino, texto in FAQ[tema].get("enlaces", ())]
     if con_gratuita:
-        filas.append([boton_escribeme(usuario, FAQ[tema]["duda"])])
+        filas.append([boton_escribeme(usuario, FAQ[tema]["duda"], recurrente=recurrente)])
     else:
         filas += _filas_botones(usuario)
     filas.append([{"text": "⬅️ Otras dudas", "callback_data": CALLBACK_MENU}])
@@ -343,6 +368,7 @@ def teclado_tema(tema, usuario, con_gratuita):
 # del menú. Ver textos.py.
 TEXTOS_EDITABLES = {
     "bienvenida": ("👋 Bienvenida", TEXTO_BIENVENIDA),
+    "bienvenida_recurrente": ("🔁 Bienvenida sin gratuita (ya estaba o vuelve)", TEXTO_BIENVENIDA_RECURRENTE),
     "redireccion": ("💬 Si escriben al bot (sin la gratuita)", TEXTO_REDIRECCION),
     "redireccion_gratuita": ("💬 Si escriben al bot (con la gratuita)", TEXTO_REDIRECCION_CON_GRATUITA),
     "faq_menu": ("📚 Menú de dudas", FAQ_TITULO),

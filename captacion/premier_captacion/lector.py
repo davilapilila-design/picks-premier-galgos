@@ -479,6 +479,54 @@ async def apuntar_gratuita(cfg, entorno, usuario, bienvenida, gratuita, enlace):
     return 0
 
 
+# Búsquedas para sacar más suscriptores de los que Telegram da de una vez.
+_BUSQUEDAS_SUSCRIPTORES = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+async def leer_suscriptores(cfg, entorno):
+    """Guarda quién está ahora en el canal principal (solo los ids), para que
+    si sale y vuelve a entrar reciba la bienvenida sin la gratuita. Solo
+    lectura. Telegram puede no dar la lista entera de un canal grande: se
+    pide también por búsquedas y se dice cuántos se han conseguido."""
+    from telethon.tl import functions, types
+
+    if cfg.canal_id is None:
+        log.error("Falta el canal principal (CAPTACION_CANAL_ID) en esta instancia")
+        return 1
+    api_id, api_hash, sesion = credenciales_api(entorno)
+    client = crear_cliente(sesion, api_id, api_hash, "suscriptores")
+    client.flood_sleep_threshold = 15 * 60
+    ids = set()
+    await client.connect()
+    try:
+        if not await client.is_user_authorized():
+            log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
+            return 2
+        canal = await client.get_entity(types.PeerChannel(carpetas.id_canal_puro(cfg.canal_id)))
+        total = (await client(functions.channels.GetFullChannelRequest(canal))).full_chat.participants_count
+        async for p in client.iter_participants(canal):
+            ids.add(p.id)
+        log.info("Lista directa: %s de %s", len(ids), total)
+        for letra in _BUSQUEDAS_SUSCRIPTORES:
+            if total and len(ids) >= total:
+                break
+            async for p in client.iter_participants(canal, search=letra):
+                ids.add(p.id)
+            log.info("Tras buscar «%s»: %s de %s", letra, len(ids), total)
+    finally:
+        await client.disconnect()
+    con = db.abrir(cfg.db_path)
+    try:
+        with con:
+            db.guardar_miembros(con, ids, time.time())
+        guardados = con.execute("SELECT COUNT(*) FROM miembros_canal").fetchone()[0]
+    finally:
+        con.close()
+    porcentaje = f" ({100 * len(ids) // total}%)" if total else ""
+    print(f"✓ Leídos {len(ids)} de {total} suscriptores{porcentaje}. En total hay {guardados} guardados.")
+    return 0
+
+
 def marcar_embudo_prueba(cfg, user_id):
     """Solo pruebas: marca a alguien como si hubiera recibido la bienvenida."""
     con = db.abrir(cfg.db_path)
@@ -499,7 +547,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
                         choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace",
-                                 "apuntar-gratuita"])
+                                 "apuntar-gratuita", "suscriptores"])
     parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace) "
                                                 "o @usuario (apuntar-gratuita)")
     parser.add_argument("mas", nargs="*", help="apuntar-gratuita: «AAAA-MM-DD HH:MM» de la bienvenida y de la "
@@ -523,6 +571,8 @@ def main(argv=None):
             return asyncio.run(iniciar_sesion(entorno))
         if args.modo == "historico":
             return asyncio.run(historico.ejecutar(cfg, entorno))
+        if args.modo == "suscriptores":
+            return asyncio.run(leer_suscriptores(cfg, entorno))
         if args.modo == "apuntar-gratuita":
             if not args.dato or len(args.mas) != 3:
                 parser.error('apuntar-gratuita @usuario "AAAA-MM-DD HH:MM" "AAAA-MM-DD HH:MM" <enlace de venta>')

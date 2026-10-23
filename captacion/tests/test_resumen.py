@@ -50,7 +50,7 @@ class TestDiario(Base):
         self.assertIn("👋 Bienvenidas enviadas: 1", lineas)
         self.assertIn("⚠️ Sin bienvenida por algún problema: 1", lineas)
         self.assertIn("   · llegaron con más de 5 min de espera (¿bot parado?): 1", lineas)
-        self.assertIn("🔁 Volvieron (ya tenían bienvenida): 0", lineas)
+        self.assertIn("🔁 Ya estaban o volvieron (bienvenida sin gratuita): 0", lineas)
         self.assertIn("✅ Aceptadas: 2", lineas)
         self.assertIn("🤖 Escribieron al bot: 1 persona", lineas)
 

@@ -3,6 +3,30 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-23 — Captación: bienvenida sin gratuita a quien ya estaba en el canal o vuelve
+- **Qué**: el dueño ha visto que algunos salen y vuelven a entrar al canal
+  (borrando mensajes) para conseguir otra gratuita. Pide no ofrecer la
+  gratuita a quien ya está en el canal principal (unos 1798) y que, si
+  salen y vuelven, el bot les mande una bienvenida sin gratuita, sin que se
+  note, pero que él lo distinga.
+- **Cómo**: tabla nueva `miembros_canal` (solo ids) y columna
+  `usuarios.recurrente_ts` (migración 4). Modo nuevo del lector
+  `suscriptores`, solo lectura, que lee la lista del canal (también por
+  búsquedas, por si Telegram no la da entera) y dice cuántos consiguió.
+  Para ello el candado tiene un modo `suscriptores` con
+  `channels.GetParticipantsRequest` (autorizado por el dueño en el chat el
+  2026-10-23; ningún otro modo lo tiene). Al pedir entrar quien ya estaba,
+  ya recibió bienvenida o ya tuvo la gratuita: bienvenida «Buenas!
+  Bienvenido a PREMIER GALGOS… aquí tienes las dudas más frecuentes… y si
+  necesitas algo concreto, escríbeme» (tipo `bot_recurrente`, cambiable con
+  /textos), botones «📚 Dudas frecuentes» y «✉️ Escríbeme» con «Hola, tengo
+  una consulta» ya escrito («consulta» en vez de «duda»: lo pidió el dueño
+  para reconocerlos). Al escribir al bot o en las dudas tampoco se les
+  ofrece la gratuita. Antes, a quien volvía no se le enviaba nada.
+- El dueño descartó «Bienvenido de nuevo» (demasiado intrusivo).
+- Pruebas: 188, pasan en Python 3.9, 3.12 y 3.13.
+- Commits: (este commit)
+
 ## 2026-10-21 — Captación: el lector apunta en directo las bienvenidas que el dueño da a mano
 - **Qué**: el dueño buscó con la consulta a un cliente al que dio la
   gratuita hoy y no salía: la instancia real solo tenía el histórico del
@@ -25,7 +49,7 @@ Entradas más recientes arriba.
   `lector.sh real apuntar-gratuita @usuario "bienvenida" "gratuita" enlace`
   (busca a la persona por su @, solo lectura; el evento queda marcado como
   apuntado a mano; el canal sale de los enlaces ya conocidos).
-- Commits: `bd47b44`, (este commit)
+- Commits: `bd47b44`, `8413e3f`
 
 ## 2026-10-19 — Captación: consultar en el bot a quién se le dio la gratuita (/gratuita)
 - **Qué**: el dueño quiere que conste que, aunque se borren los mensajes,

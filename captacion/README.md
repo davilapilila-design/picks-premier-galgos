@@ -454,6 +454,22 @@ bash /opt/premier-captacion/lector.sh real apuntar-gratuita @usuario "AAAA-MM-DD
 systemctl start captacion-lector@real
 ```
 
+### Quien ya estaba en el canal o vuelve: bienvenida sin gratuita
+Quien ya recibió alguna bienvenida, ya tuvo la gratuita o estaba en el canal
+cuando se leyó su lista, si pide entrar recibe otra bienvenida sin la
+gratuita, con «📚 Dudas frecuentes» y «✉️ Escríbeme». El cliente no nota
+nada; tú sí: el texto ya escrito dice «Hola, tengo una consulta» (los
+demás, «duda»). Se cambia con `/textos` → «🔁 Bienvenida sin gratuita».
+
+Leer la lista de suscriptores del canal (solo lectura; repetirlo de vez en
+cuando no duplica nada):
+```bash
+systemctl stop captacion-lector@real
+bash /opt/premier-captacion/lector.sh real suscriptores
+systemctl start captacion-lector@real
+```
+(En la instancia de prueba, igual con `prueba`: lee el canal de prueba.)
+
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
 2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.

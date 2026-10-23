@@ -54,6 +54,10 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   reciben su tipo solas (bot_b_v2…). Los botones de la bienvenida y sus
   frases no se exponen a `/textos`: de ellas depende saber qué eligió cada
   persona.
+- Quien ya estaba en el canal (`miembros_canal`) o ya pasó por aquí
+  recibe la bienvenida sin gratuita (`db.ya_conocido`, `db.estado_oferta`):
+  no debe notarse que es otro mensaje; lo distingue el texto ya escrito
+  («consulta» en vez de «duda»).
 - El bot (fase 1) usa solo la librería estándar; el Sheet (gspread 6.1.4) y
   el lector (Telethon 1.45.0) usan el venv `/opt/premier-captacion/venv`.
   Compatible con Python 3.9+. Tests: `cd captacion && python3 -m unittest

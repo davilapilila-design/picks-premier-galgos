@@ -82,6 +82,15 @@ MIGRACIONES = [
     );
     CREATE INDEX textos_clave ON textos (clave, id);
     """,
+    # 4 (quien ya estaba en el canal o vuelve a entrar recibe la bienvenida
+    # sin la gratuita; pedido por el dueño el 2026-10-23)
+    """
+    CREATE TABLE miembros_canal (
+        user_id INTEGER PRIMARY KEY,
+        visto_ts INTEGER NOT NULL
+    );
+    ALTER TABLE usuarios ADD COLUMN recurrente_ts INTEGER;
+    """,
 ]
 
 
@@ -193,6 +202,42 @@ def obtener_usuario(con, user_id):
 def es_del_embudo(fila):
     """¿Recibió alguna bienvenida (del bot o, con la fase 4, manual)?"""
     return fila is not None and fila["bienvenida_ts"] is not None
+
+
+def guardar_miembros(con, user_ids, ts):
+    """Apunta a quien está en el canal principal (lista leída por el lector).
+    Solo se guarda el id: basta para no ofrecerles la gratuita."""
+    con.executemany("INSERT OR IGNORE INTO miembros_canal (user_id, visto_ts) VALUES (?, ?)",
+                    [(uid, int(ts)) for uid in user_ids])
+
+
+def es_miembro(con, user_id):
+    return con.execute("SELECT 1 FROM miembros_canal WHERE user_id = ?", (user_id,)).fetchone() is not None
+
+
+def ya_conocido(con, user_id, fila):
+    """¿Estaba ya en el canal o pasó antes por aquí? Entonces, si vuelve a
+    pedir entrar, recibe la bienvenida sin la gratuita."""
+    if fila is not None and any(fila[c] is not None for c in ("bienvenida_ts", "enlace_venta_ts", "recurrente_ts")):
+        return True
+    return es_miembro(con, user_id)
+
+
+def estado_oferta(con, user_id, fila):
+    """Qué se le ofrece cuando escribe al bot o mira las dudas:
+    "nueva" (aún puede pedir la gratuita), "gratuita" (ya la tiene) o
+    "recurrente" (ya estaba en el canal o volvió a entrar: sin gratuita, y con
+    un texto ya escrito distinto para que el dueño lo reconozca)."""
+    if fila is not None and fila["enlace_venta_ts"] is not None:
+        return "gratuita"
+    if fila is not None and fila["recurrente_ts"] is not None:
+        return "recurrente"
+    # En la lista del canal pero con la bienvenida normal del bot: entró como
+    # cliente nuevo (la lista se leyó después), así que sigue siendo nueva.
+    nueva_del_bot = fila is not None and (fila["bienvenida_tipo"] or "").startswith("bot_b")
+    if es_miembro(con, user_id) and not nueva_del_bot:
+        return "recurrente"
+    return "nueva"
 
 
 def actualizar_campos(con, user_id, ts, **campos):
