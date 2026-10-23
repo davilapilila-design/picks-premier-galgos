@@ -13,7 +13,12 @@
  * solas - ver docs/BITACORA.md).
  */
 
-const GEMINI_MODEL = 'gemini-3.6-flash';
+// Principal y respaldo (2026-10-23): si el principal está saturado (503) o
+// sin cuota (429), el pick se extrae en el momento con el segundo en vez de
+// esperar al reintento de reintentarMensajesConError. Son modelos distintos,
+// con capacidad y cuota diaria propias. `listarModelosGemini()` dice cuáles
+// tiene disponibles la clave.
+const GEMINI_MODELOS = ['gemini-3.6-flash', 'gemini-3.5-flash'];
 
 const EXTRACTION_SYSTEM_PROMPT = [
   'Extraes datos estructurados de picks de apuestas de galgos (carreras de',
@@ -94,7 +99,21 @@ const EXTRACTION_SYSTEM_PROMPT = [
   '  valores.',
 ].join('\n');
 
-function callGeminiExtraction_(texto, fotoBlob) {
+/**
+ * Modelos de Gemini disponibles para la clave (solo los que admiten
+ * generateContent). Consultar la lista NO gasta cuota de generación.
+ * `clasp run-function listarModelosGemini`.
+ */
+function listarModelosGemini() {
+  const resp = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' +
+    getAiApiKey_(), { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) return 'Error ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 300);
+  return (JSON.parse(resp.getContentText()).models || [])
+    .filter(function (m) { return (m.supportedGenerationMethods || []).indexOf('generateContent') !== -1; })
+    .map(function (m) { return m.name.replace('models/', ''); });
+}
+
+function callGeminiExtraction_(texto, fotoBlob, modelos) {
   const parts = [{ text: texto || '(sin texto, solo imagen)' }];
   if (fotoBlob) {
     parts.push({
@@ -118,8 +137,30 @@ function callGeminiExtraction_(texto, fotoBlob) {
     },
   };
 
+  // Modelo principal y, si está saturado/sin cuota, el de respaldo (ver
+  // GEMINI_MODELOS). `modelos` solo se pasa para probar uno concreto.
+  const lista = modelos || GEMINI_MODELOS;
+  let ultimoError;
+  for (let i = 0; i < lista.length; i++) {
+    try {
+      return llamarModeloGemini_(lista[i], payload);
+    } catch (err) {
+      ultimoError = err;
+      Logger.log('Gemini ' + lista[i] + ' falló: ' + String(err).slice(0, 200));
+      if (!err.transitorio) throw err;
+    }
+  }
+  throw ultimoError;
+}
+
+/**
+ * Una llamada a UN modelo, con reintentos. Lanza un Error con
+ * `transitorio = true` si el fallo es de los que puede arreglar otro modelo
+ * o esperar (429 cuota/ritmo, 500, 503 saturado, respuesta mal formada).
+ */
+function llamarModeloGemini_(modelo, payload) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-    GEMINI_MODEL + ':generateContent?key=' + getAiApiKey_();
+    modelo + ':generateContent?key=' + getAiApiKey_();
 
   // Reintentos ante 429 (rate-limit del tier gratis) y 503 (sobrecarga
   // transitoria): probado en producción el 2026-08-26 que sin esto, un
@@ -128,7 +169,7 @@ function callGeminiExtraction_(texto, fotoBlob) {
   // "revision_manual" sin necesidad - 2 picks reales del tipster se
   // perdieron así el mismo día. 3 intentos con espera creciente (Apps
   // Script tiene 6 min de límite de ejecución total, esto añade como
-  // mucho ~20s en el peor caso).
+  // mucho ~20s en el peor caso por modelo).
   const MAX_REINTENTOS_GEMINI = 3;
   let ultimoError;
   for (let intento = 0; intento < MAX_REINTENTOS_GEMINI; intento++) {
@@ -147,18 +188,14 @@ function callGeminiExtraction_(texto, fotoBlob) {
       if (extraido) return extraido;
       // Respuesta 200 pero sin forma válida = fallo puntual del modelo, no un
       // pick ilegible (msg 519, 2026-10-20) - se reintenta como un 503.
-      ultimoError = new Error('Respuesta de Gemini sin tipo_apuesta: ' + textoRespuesta.slice(0, 300));
-      if (intento === MAX_REINTENTOS_GEMINI - 1) throw ultimoError;
-      Utilities.sleep(3000 * Math.pow(2, intento));
-      continue;
+      ultimoError = new Error('Respuesta de Gemini (' + modelo + ') sin tipo_apuesta: ' + textoRespuesta.slice(0, 300));
+      ultimoError.transitorio = true;
+    } else {
+      ultimoError = new Error('Error de la API de Gemini (' + status + ', ' + modelo + '): ' + response.getContentText());
+      ultimoError.transitorio = status === 429 || status === 500 || status === 503;
+      if (!ultimoError.transitorio) throw ultimoError;
     }
-
-    ultimoError = new Error('Error de la API de Gemini (' + status + '): ' + response.getContentText());
-    const esReintentable = status === 429 || status === 503;
-    if (!esReintentable || intento === MAX_REINTENTOS_GEMINI - 1) {
-      throw ultimoError;
-    }
-    Utilities.sleep(3000 * Math.pow(2, intento)); // 3s, 6s, 12s
+    if (intento < MAX_REINTENTOS_GEMINI - 1) Utilities.sleep(3000 * Math.pow(2, intento)); // 3s, 6s
   }
   throw ultimoError;
 }

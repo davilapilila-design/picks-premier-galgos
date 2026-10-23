@@ -62,16 +62,18 @@ function fotoDeMensajeBase64(messageId) {
  * Diagnóstico: repite la extracción de la IA de un mensaje ya guardado, con
  * su texto Y su foto (tal como llegó), y devuelve el JSON crudo de Gemini.
  * `clasp run-function probarExtraccionMensaje --params '["519"]'`. Gasta una
- * petición de la cuota de Gemini por llamada; no escribe nada.
+ * petición de la cuota de Gemini por llamada; no escribe nada. `modelo`
+ * (opcional) fuerza uno concreto, p. ej. para probar el de respaldo.
  */
-function probarExtraccionMensaje(messageId) {
+function probarExtraccionMensaje(messageId, modelo) {
   const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
   const index = getHeaderIndex_(sheet);
   const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   const fila = datos.filter(function (f) { return String(f[index['message_id']]) === String(messageId); })[0];
   if (!fila) return null;
   const fileId = fila[index['foto_file_id']];
-  return callGeminiExtraction_(fila[index['contenido']], fileId ? downloadTelegramPhoto(fileId) : null);
+  return callGeminiExtraction_(fila[index['contenido']], fileId ? downloadTelegramPhoto(fileId) : null,
+    modelo ? [modelo] : undefined);
 }
 
 function mejorFotoFileId(photoArray) {

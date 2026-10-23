@@ -482,10 +482,13 @@ function reintentarMensajesConError() {
 }
 
 /**
- * Ejecutar UNA VEZ a mano desde el editor de Apps Script para instalar el
- * disparador periódico. Cada 2h en vez de más seguido - con solo 20
- * peticiones/día de cuota gratis, reintentar cada pocos minutos no ayuda a
- * que la cuota se libere antes, solo generaría más ejecuciones fallidas.
+ * Ejecutar UNA VEZ (editor o `clasp run-function configurarTriggerReintentos`)
+ * para instalar el disparador periódico. Cada 15 min (antes cada 2h, cambiado
+ * 2026-10-23): la mayoría de fallos son saturaciones puntuales de Gemini (503)
+ * que se pasan en minutos, y con 2h la confirmación llegaba al grupo horas
+ * tarde. No malgasta cuota: si no hay mensajes en `error` no llama a Gemini, y
+ * con la cuota agotada corta en el primer 429 (las peticiones rechazadas con
+ * 429 no consumen cuota).
  */
 function configurarTriggerReintentos() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -493,8 +496,9 @@ function configurarTriggerReintentos() {
       ScriptApp.deleteTrigger(t);
     }
   });
-  ScriptApp.newTrigger('reintentarMensajesConError').timeBased().everyHours(2).create();
-  Logger.log('Disparador instalado: reintentarMensajesConError cada 2 horas.');
+  ScriptApp.newTrigger('reintentarMensajesConError').timeBased().everyMinutes(15).create();
+  Logger.log('Disparador instalado: reintentarMensajesConError cada 15 minutos.');
+  return 'reintentarMensajesConError cada 15 minutos';
 }
 
 /**
