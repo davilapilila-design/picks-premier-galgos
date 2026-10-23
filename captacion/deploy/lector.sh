@@ -37,4 +37,15 @@ export CAPTACION_SESION="/var/lib/premier-captacion/$INSTANCIA-cuenta"
 export PYTHONDONTWRITEBYTECODE=1
 cd /opt/premier-captacion
 umask 077
+if [ "${1:-}" = analisis ]; then
+    # El análisis escribe en un Google Sheet: la credencial solo la lee root,
+    # así que se le deja una copia privada mientras dura y luego se borra.
+    [ -f /etc/premier-captacion/google.json ] || fallo "Falta la credencial de Google: ejecuta antes instalar.sh."
+    CREDENCIAL=$(mktemp)
+    trap 'rm -f "$CREDENCIAL"' EXIT
+    install -m 600 -o captacion -g captacion /etc/premier-captacion/google.json "$CREDENCIAL"
+    export CAPTACION_GOOGLE_CREDENCIAL="$CREDENCIAL"
+    runuser -p -u captacion -- /opt/premier-captacion/venv/bin/python -m premier_captacion.lector "$@"
+    exit $?
+fi
 exec runuser -p -u captacion -- /opt/premier-captacion/venv/bin/python -m premier_captacion.lector "$@"
