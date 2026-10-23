@@ -3,6 +3,76 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-23 (cont.) — El bot reconoce los mensajes que no son picks antes de llamar a la IA
+El dueño escribió "/stas 10" (errata de /stats) el 10/10 y el bot lo trató
+como un pick: lo mandó a Gemini (gastando cuota), contestó "Pick guardado pero
+necesita revisión manual" y quedó como pick fallido (msg 437). Pidió que el
+bot lo detectara usando lo que ya sabe de todas las apuestas.
+- Medido sobre el histórico completo (289 mensajes): los **275 picks reales
+  tienen hora de carrera Y "stake"** (272 también "cuota"; las 3 que no son
+  gemelas/tríos); **ninguno** de los 14 mensajes que no eran picks (todos
+  comandos) cumple "hora + (cuota o stake)".
+- `avisoSiNoEsPick_` (Main.gs, con test): se aplica en `doPost` antes de la IA
+  (después de `/stats` y de las respuestas a confirmaciones, que no cambian).
+  Con foto se trata siempre como pick. Si empieza por `/` es un comando: si no
+  es uno conocido, contesta "Comando no reconocido: /stas. ¿Querías decir
+  /stats? …" (sugerencia por distancia de edición ≤ 2). Si es texto sin hora ni
+  cuota/stake, contesta "Esto no parece un pick (…)". En ambos casos no llama a
+  Gemini y deja el mensaje en el estado nuevo `no_es_pick` (Config.gs), que no
+  cuenta como pick fallido. Un pick con datos incompletos sigue yendo a
+  revisión manual (correcto).
+- Validado contra todo el histórico con `comprobarDetectorPicksHistorico`
+  (Main.gs, no gasta cuota): 0 picks reales descartados.
+- Msg 437 pasado a `no_es_pick` con `marcarComoNoPick` (Main.gs: solo actúa si
+  la regla lo descarta y no tiene apuesta; con el 519 se niega).
+- Tests OK en el Apps Script real (test_avisoSiNoEsPick, test_estadisticas,
+  test_normalizarRespuestaGemini, testReglasAuditoria). Desplegado v38.
+
+Commits: (este commit)
+
+## 2026-10-23 — Picks registrados tarde: análisis y dos arreglos (modelo de respaldo de Gemini + reintento cada 15 min)
+El msg 519 se registró solo esta madrugada (reintento automático, confirmación
+publicada, `confirm_message_id` 555). Su resultado seguía `pendiente` porque
+`picks-resultados` (VM) no corre de noche: primera pasada del día 10:35
+(`scripts/deploy/picks-resultados.timer`). El dueño sospechó que lo de los
+picks tardíos había pasado más veces. Comparando, pick a pick, publicación
+(`fecha_forward`), llegada al bot (`fecha_recibido`) y registro (`creado_en`)
+desde el 27/08:
+- **Ningún pick perdido**: no hay mensajes sin apuesta salvo el comando con
+  errata `/stas 10` (msg 437), ni apuestas pendientes de más de 2 días.
+- **27 picks llegaron al grupo del bot >6h después de publicarse** (reenviados
+  tarde; p. ej. 249-256: publicados 07/09, recibidos 08/09 21:21). El bot los
+  registró en segundos; las estadísticas usan la fecha de publicación.
+- **23 picks llegaron a tiempo pero fallaron al primer intento** y los recogió
+  `reintentarMensajesConError` entre 1 y 8 h después (registro siempre a las
+  "y 19", la hora del disparador de 2h). Registros de ejecución (`clasp logs`,
+  solo guarda ~1,5 días): Gemini 503 "high demand" (msg 545) y 429 de cuota
+  (los reintentos del 519, tras gastar la cuota investigándolo).
+
+Arreglos (los dos que no cuestan dinero; activar facturación en la clave de
+Gemini queda como opción del dueño):
+- **Modelo de respaldo** (`src/AI.gs`): `GEMINI_MODELOS = ['gemini-3.6-flash',
+  'gemini-3.5-flash']`. `callGeminiExtraction_` prueba el principal con sus
+  reintentos (`llamarModeloGemini_`) y, si el fallo es transitorio (429, 500,
+  503 o respuesta mal formada), el de respaldo en el momento; un error de otro
+  tipo (400...) falla sin cambiar de modelo. Modelos distintos = capacidad y
+  cuota diaria propias. Elegido de la lista real de la clave
+  (`listarModelosGemini`, nueva, no gasta cuota); probado con el msg 519
+  forzando el de respaldo (`probarExtraccionMensaje(id, modelo)`): extrae bien
+  con la misma petición (JSON + foto + thinkingBudget). Lógica de cambio
+  probada en local simulando respuestas (principal bien / saturado / sin
+  cuota / respuesta rara / los dos sin cuota → error con "429", que es lo que
+  usa el reintento para cortar / 400 sin cambiar de modelo).
+- **Reintento cada 15 min** (`configurarTriggerReintentos`, antes 2h):
+  reinstalado con `clasp run` y comprobado con `listarTriggers`. No malgasta
+  cuota (sin mensajes en `error` no llama a Gemini; con la cuota agotada corta
+  en el primer 429, que no consume cuota).
+- Tests en el Apps Script real OK (test_normalizarRespuestaGemini,
+  test_estadisticas, test_normalizarCanodromo, testReglasAuditoria).
+  Desplegado v37.
+
+Commits: (este commit)
+
 ## 2026-10-22 — Pick 519 en revisión manual por un fallo puntual de Gemini; /stats ahora avisa de los picks sin registrar
 El dueño vio en el grupo "Pick guardado pero necesita revisión manual: tipo de
 apuesta no soportado todavía (sin identificar...)" para un pick simple normal
