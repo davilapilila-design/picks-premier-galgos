@@ -78,6 +78,9 @@ const ESTADO_PENDIENTE = 'pendiente';
 const ESTADO_PROCESADO = 'procesado';
 const ESTADO_REVISION_MANUAL = 'revision_manual';
 const ESTADO_ERROR = 'error';
+// Mensaje que no es un pick (comando con errata, texto suelto): no se manda a
+// la IA ni cuenta como pick fallido - ver avisoSiNoEsPick_ en Main.gs.
+const ESTADO_NO_ES_PICK = 'no_es_pick';
 
 // Por PATA (una carrera de un pick, simple o dentro de una combinada) -
 // cuota/stake se validan aparte, son de la apuesta combinada entera, no

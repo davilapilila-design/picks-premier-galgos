@@ -3,6 +3,33 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-23 (cont.) — El bot reconoce los mensajes que no son picks antes de llamar a la IA
+El dueño escribió "/stas 10" (errata de /stats) el 10/10 y el bot lo trató
+como un pick: lo mandó a Gemini (gastando cuota), contestó "Pick guardado pero
+necesita revisión manual" y quedó como pick fallido (msg 437). Pidió que el
+bot lo detectara usando lo que ya sabe de todas las apuestas.
+- Medido sobre el histórico completo (289 mensajes): los **275 picks reales
+  tienen hora de carrera Y "stake"** (272 también "cuota"; las 3 que no son
+  gemelas/tríos); **ninguno** de los 14 mensajes que no eran picks (todos
+  comandos) cumple "hora + (cuota o stake)".
+- `avisoSiNoEsPick_` (Main.gs, con test): se aplica en `doPost` antes de la IA
+  (después de `/stats` y de las respuestas a confirmaciones, que no cambian).
+  Con foto se trata siempre como pick. Si empieza por `/` es un comando: si no
+  es uno conocido, contesta "Comando no reconocido: /stas. ¿Querías decir
+  /stats? …" (sugerencia por distancia de edición ≤ 2). Si es texto sin hora ni
+  cuota/stake, contesta "Esto no parece un pick (…)". En ambos casos no llama a
+  Gemini y deja el mensaje en el estado nuevo `no_es_pick` (Config.gs), que no
+  cuenta como pick fallido. Un pick con datos incompletos sigue yendo a
+  revisión manual (correcto).
+- Validado contra todo el histórico con `comprobarDetectorPicksHistorico`
+  (Main.gs, no gasta cuota): 0 picks reales descartados.
+- Msg 437 pasado a `no_es_pick` con `marcarComoNoPick` (Main.gs: solo actúa si
+  la regla lo descarta y no tiene apuesta; con el 519 se niega).
+- Tests OK en el Apps Script real (test_avisoSiNoEsPick, test_estadisticas,
+  test_normalizarRespuestaGemini, testReglasAuditoria). Desplegado v38.
+
+Commits: (este commit)
+
 ## 2026-10-23 — Picks registrados tarde: análisis y dos arreglos (modelo de respaldo de Gemini + reintento cada 15 min)
 El msg 519 se registró solo esta madrugada (reintento automático, confirmación
 publicada, `confirm_message_id` 555). Su resultado seguía `pendiente` porque

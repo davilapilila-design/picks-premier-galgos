@@ -46,10 +46,14 @@ function doPost(e) {
     // `/stats N` (Estadisticas.gs): se contesta aquí y NO se trata como pick
     // (si no, iría a la IA y acabaría en revision_manual).
     const comandoStats = msg.reply_to_message ? null : parsearComandoStats_(texto);
+    const avisoNoPick = comandoStats || msg.reply_to_message ? null : avisoSiNoEsPick_(texto, !!fotoFileId);
     if (comandoStats) {
       manejarComandoStats_(msg, comandoStats);
     } else if (msg.reply_to_message) {
       manejarReply_(msg, texto);
+    } else if (avisoNoPick) {
+      sendTelegramMessage(msg.chat.id, avisoNoPick, msg.message_id);
+      actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_NO_ES_PICK);
     } else {
       manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward);
     }
@@ -146,6 +150,114 @@ function registrarPickExtraido_(msg, texto, resultado, fechaPick) {
       setApuestaConfirmMessageId(fila.row, confirmMessageId);
     }
   }
+}
+
+/**
+ * ¿Es esto un pick? Se decide ANTES de llamar a la IA (bug real 2026-10-10:
+ * "/stas 10", errata de /stats, fue a Gemini, gastó cuota y acabó como "pick
+ * en revisión manual"). Regla sacada de todo el histórico (2026-10-23): los
+ * 275 picks reales tienen hora de carrera Y "cuota"/"stake" (las gemelas/tríos
+ * no llevan cuota pero sí stake); ninguno de los 14 mensajes que no eran
+ * picks la cumple. Con foto se trata siempre como pick (el boleto puede traer
+ * los datos aunque el texto sea corto). Devuelve null si parece un pick, o el
+ * aviso que hay que contestar en el grupo si no.
+ */
+const COMANDOS_CONOCIDOS = ['/stats'];
+
+function avisoSiNoEsPick_(texto, tieneFoto) {
+  const t = String(texto || '').trim();
+  if (tieneFoto) return null;
+  if (t.charAt(0) === '/') {
+    const comando = t.split(/\s+/)[0].split('@')[0].toLowerCase();
+    const parecido = COMANDOS_CONOCIDOS.filter(function (c) { return distanciaEdicion_(comando, c) <= 2; })[0];
+    return 'Comando no reconocido: ' + comando + '.' +
+      (parecido ? ' ¿Querías decir ' + parecido + '? ' + STATS_FORMATO_COMANDO : '') +
+      ' No lo registro como pick.';
+  }
+  const tieneHora = /\b\d{1,2}[:;.]\d{2}\b/.test(t);
+  const tieneCuotaOStake = /c[iu]ota|stake/i.test(t);
+  if (tieneHora && tieneCuotaOStake) return null;
+  return 'Esto no parece un pick (no veo ' +
+    (!tieneHora && !tieneCuotaOStake ? 'hora de carrera ni cuota/stake' : !tieneHora ? 'hora de carrera' : 'cuota ni stake') +
+    '), así que no lo registro. Si era un pick, revisa el formato y vuelve a enviarlo.';
+}
+
+/** Distancia de edición (Levenshtein) - para sugerir el comando correcto ante una errata. */
+function distanciaEdicion_(a, b) {
+  let previa = [];
+  for (let j = 0; j <= b.length; j++) previa.push(j);
+  for (let i = 1; i <= a.length; i++) {
+    const actual = [i];
+    for (let j = 1; j <= b.length; j++) {
+      actual.push(Math.min(previa[j] + 1, actual[j - 1] + 1, previa[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    }
+    previa = actual;
+  }
+  return previa[b.length];
+}
+
+function test_avisoSiNoEsPick() {
+  const pick = '20:39 Central Park\n\nGalgo T3 Coolside Spyman\n\nCuota 4.50🔥\n\n⚠️Stake 4⚠️';
+  assertIguales_(avisoSiNoEsPick_(pick, false), null, 'pick real (msg 519) -> es pick');
+  assertIguales_(avisoSiNoEsPick_('13;46 Harlow\nGalgo T4 Besties Boy\nCiota 2.50\nStake 4', false), null, 'erratas ";" y "Ciota" -> es pick');
+  assertIguales_(avisoSiNoEsPick_('22:31 Star Pelaw\nGEMELA 3-4 Y 4-3\nSTAKE 2 CADA UNA', false), null, 'gemela (sin cuota, con stake) -> es pick');
+  assertIguales_(avisoSiNoEsPick_('21:10 Central Park T6 Turnthemagicon\nCuota 2.30', false), null, 'pick sin stake -> es pick (la IA lo mandara a revision manual)');
+  assertIguales_(avisoSiNoEsPick_('', true), null, 'solo foto -> se trata como pick');
+  assertIguales_(avisoSiNoEsPick_('/stas 10', false),
+    'Comando no reconocido: /stas. ¿Querías decir /stats? ' + STATS_FORMATO_COMANDO + ' No lo registro como pick.', 'caso real msg 437');
+  assertIguales_(avisoSiNoEsPick_('/stat@PremierGalgosBot', false).indexOf('¿Querías decir /stats?') !== -1, true, 'errata con @bot');
+  assertIguales_(avisoSiNoEsPick_('/ayuda', false), 'Comando no reconocido: /ayuda. No lo registro como pick.', 'comando sin parecido');
+  assertIguales_(avisoSiNoEsPick_('buenos dias', false),
+    'Esto no parece un pick (no veo hora de carrera ni cuota/stake), así que no lo registro. Si era un pick, revisa el formato y vuelve a enviarlo.', 'texto suelto');
+  assertIguales_(avisoSiNoEsPick_('a las 20:39 corre bien', false).indexOf('no veo cuota ni stake') !== -1, true, 'hora sin cuota/stake');
+  assertIguales_(distanciaEdicion_('/stas', '/stats'), 1, 'distancia /stas');
+  Logger.log('test_avisoSiNoEsPick: OK, todas las comprobaciones pasaron.');
+  return 'OK';
+}
+
+/**
+ * Comprueba la regla de avisoSiNoEsPick_ contra TODO el histórico de
+ * mensajes_crudos (no llama a la IA): cuántos picks reales (con apuesta)
+ * descartaría - debe ser 0 - y qué mensajes trataría como "no es pick".
+ * `clasp run-function comprobarDetectorPicksHistorico`.
+ */
+function comprobarDetectorPicksHistorico() {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const conApuesta = {};
+  obtenerFilasApuestas_().concat(obtenerFilasExoticasNormalizadas_()).forEach(function (f) { conApuesta[f.messageId] = true; });
+  const picksDescartados = [];
+  const noPicks = [];
+  datos.forEach(function (f) {
+    const id = String(f[index['message_id']]);
+    if (!id) return;
+    const aviso = avisoSiNoEsPick_(f[index['contenido']], !!f[index['foto_file_id']]);
+    if (aviso && conApuesta[id]) picksDescartados.push(id);
+    if (aviso) noPicks.push(id + ' ' + String(f[index['contenido']]).slice(0, 20));
+  });
+  return { mensajes: datos.length, picksRealesDescartados: picksDescartados, tratadosComoNoPick: noPicks };
+}
+
+/**
+ * Marca como no_es_pick un mensaje que hoy la regla de avisoSiNoEsPick_
+ * descartaría (p. ej. el "/stas 10" del 10/10, msg 437, que se quedó en
+ * revision_manual). Solo toca mensajes sin apuesta y en revision_manual/error.
+ */
+function marcarComoNoPick(messageId) {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const datos = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const fila = datos.filter(function (f) { return String(f[index['message_id']]) === String(messageId); })[0];
+  if (!fila) return 'msg ' + messageId + ': no está en mensajes_crudos';
+  const estado = fila[index['estado']];
+  if (estado !== ESTADO_REVISION_MANUAL && estado !== ESTADO_ERROR) return 'msg ' + messageId + ': estado "' + estado + '", no se toca';
+  if (!avisoSiNoEsPick_(fila[index['contenido']], !!fila[index['foto_file_id']])) return 'msg ' + messageId + ': parece un pick, no se toca';
+  if (findApuestaPatasByMessageId(messageId).length > 0 || findApuestaExoticaByMessageIdRecienCreada_(messageId)) {
+    return 'msg ' + messageId + ': tiene apuesta registrada, no se toca';
+  }
+  actualizarEstadoMensajeCrudo_(messageId, ESTADO_NO_ES_PICK);
+  return 'msg ' + messageId + ': marcado como no_es_pick';
 }
 
 /**
