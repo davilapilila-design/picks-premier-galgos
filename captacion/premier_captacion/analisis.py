@@ -133,13 +133,17 @@ async def leer_canales(client, cfg, tz):
     apuestas, picks, canales, grupo = [], [], [], None
     for peer in peers:
         ent = await client.get_entity(peer)
-        if isinstance(ent, types.Channel) and ent.megagroup and "picks" in carpetas.normalizar(ent.title):
+        if not isinstance(ent, (types.Channel, types.Chat)) or ent.id == principal:
+            continue  # personas o bots metidos en la carpeta, y el canal principal
+        if "picks" in carpetas.normalizar(ent.title) and not getattr(ent, "broadcast", False):
             grupo = ent
-        elif isinstance(ent, types.Channel) and ent.broadcast and ent.id != principal:
+        else:
+            # Los «canales» de venta pueden ser canales o grupos de Telegram.
             canales.append(ent)
     if grupo is None:
         raise RuntimeError(f"No encuentro el grupo de picks en la carpeta «{CARPETA}»")
-    log.info("Carpeta «%s»: %s canales de venta y el grupo «%s»", CARPETA, len(canales), grupo.title)
+    log.info("Carpeta «%s» (%s chats): %s canales/grupos de venta y el grupo «%s»",
+             CARPETA, len(peers), len(canales), grupo.title)
 
     async for m in client.iter_messages(grupo, offset_date=desde, reverse=True):
         reenvio = None
