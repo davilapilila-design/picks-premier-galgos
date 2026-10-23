@@ -105,7 +105,7 @@ def _solo_letras(texto):
 
 
 async def _carpeta(client, nombre):
-    """(peers de la carpeta o None, títulos de todas las carpetas)."""
+    """(la carpeta de Telegram o None, títulos de todas las carpetas)."""
     from telethon.tl import functions
 
     res = await client(functions.messages.GetDialogFiltersRequest())
@@ -116,23 +116,53 @@ async def _carpeta(client, nombre):
             continue  # «Todos los chats»
         titulos.append(titulo)
         if _solo_letras(nombre) in _solo_letras(titulo):
-            return list(getattr(f, "pinned_peers", None) or []) + list(getattr(f, "include_peers", None) or []), titulos
+            return f, titulos
     return None, titulos
+
+
+def _id_peer(peer):
+    return getattr(peer, "channel_id", None) or getattr(peer, "chat_id", None) or getattr(peer, "user_id", None)
+
+
+async def chats_de_carpeta(client, carpeta):
+    """Canales y grupos de una carpeta: los puestos a mano y, si la carpeta
+    tiene marcado «Canales» o «Grupos», todos los de ese tipo (menos los
+    excluidos). Las opciones de silenciados/leídos no se aplican: cambian
+    a cada rato y se prefiere no dejarse ninguno."""
+    from telethon.tl import types
+
+    explicitos = list(getattr(carpeta, "pinned_peers", None) or []) + list(getattr(carpeta, "include_peers", None) or [])
+    fuera = {_id_peer(p) for p in getattr(carpeta, "exclude_peers", None) or []}
+    chats = {}
+    for peer in explicitos:
+        ent = await client.get_entity(peer)
+        chats[ent.id] = ent
+    canales, grupos = getattr(carpeta, "broadcasts", False), getattr(carpeta, "groups", False)
+    if canales or grupos:
+        async for d in client.iter_dialogs():
+            e = d.entity
+            if e.id in chats or e.id in fuera or (getattr(carpeta, "exclude_archived", False) and d.archived):
+                continue
+            es_canal = isinstance(e, types.Channel) and e.broadcast
+            es_grupo = isinstance(e, types.Chat) or (isinstance(e, types.Channel) and e.megagroup)
+            if (canales and es_canal) or (grupos and es_grupo):
+                chats[e.id] = e
+    return list(chats.values())
 
 
 async def leer_canales(client, cfg, tz):
     """(apuestas de los canales de venta, mensajes del grupo de picks, resumen por canal)."""
     from telethon.tl import types
 
-    peers, titulos = await _carpeta(client, CARPETA)
-    if peers is None:
+    carpeta, titulos = await _carpeta(client, CARPETA)
+    if carpeta is None:
         raise RuntimeError(f"No encuentro la carpeta «{CARPETA}». Tus carpetas: "
                            + ", ".join(f"«{t}»" for t in titulos))
     principal = carpetas.id_canal_puro(cfg.canal_id)
     desde = datetime(DESDE.year, DESDE.month, DESDE.day, tzinfo=tz)
     apuestas, picks, canales, grupo = [], [], [], None
-    for peer in peers:
-        ent = await client.get_entity(peer)
+    peers = await chats_de_carpeta(client, carpeta)
+    for ent in peers:
         if not isinstance(ent, (types.Channel, types.Chat)) or ent.id == principal:
             continue  # personas o bots metidos en la carpeta, y el canal principal
         if "picks" in carpetas.normalizar(ent.title) and not getattr(ent, "broadcast", False):

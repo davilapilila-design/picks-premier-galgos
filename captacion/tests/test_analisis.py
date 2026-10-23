@@ -108,6 +108,8 @@ class TestLeerCanales(unittest.TestCase):
         venta_grupo = types.Chat(id=9, title="Miercoles Harlow 8.50", photo=None, participants_count=3,
                                  date=None, version=1)
         persona = types.User(id=500, first_name="Ana")
+        otro_tipster = types.Channel(id=11, title="Tipster ajeno", photo=None, date=None, broadcast=True)
+        de_la_regla = types.Channel(id=12, title="Jueves Central Park", photo=None, date=None, broadcast=True)
         grupo = types.Channel(id=8, title="Picks Premier Galgos", photo=None, date=None, megagroup=True)
         cuando = datetime(2026, 8, 1, 18, 0, tzinfo=timezone.utc)
         mensajes = {
@@ -118,13 +120,19 @@ class TestLeerCanales(unittest.TestCase):
                 channel_post=1, from_id=types.PeerChannel(7)), date=cuando)],
             1000000001: [],
             9: [SimpleNamespace(id=4, message="Harlow 20:03 T3 Cuota 8.50 Stake 1", photo=None, date=cuando)],
+            12: [],
         }
 
         class Cliente:
             async def __call__(self, peticion):
                 return SimpleNamespace(filters=[SimpleNamespace(
                     id=3, title=SimpleNamespace(text="💰 CH. Venta"), pinned_peers=[],
-                    include_peers=[principal, venta, grupo, venta_grupo, persona])])
+                    include_peers=[principal, venta, grupo, venta_grupo, persona], broadcasts=True,
+                    exclude_peers=[types.InputPeerChannel(11, 0)], exclude_archived=False)])
+
+            async def iter_dialogs(self):
+                for e in (persona, otro_tipster, de_la_regla, venta):
+                    yield SimpleNamespace(entity=e, archived=False)
 
             async def get_entity(self, peer):
                 return peer
@@ -144,6 +152,7 @@ class TestLeerCanales(unittest.TestCase):
             analisis.asyncio.sleep = orig
         self.assertEqual([a["msg_id"] for a in apuestas], [1, 4])
         self.assertEqual(resumen, [{"canal": "Premier Galgos Debut", "id": 7, "apuestas": 1, "solo_foto": 1},
-                                   {"canal": "Miercoles Harlow 8.50", "id": 9, "apuestas": 1, "solo_foto": 0}])
+                                   {"canal": "Miercoles Harlow 8.50", "id": 9, "apuestas": 1, "solo_foto": 0},
+                                   {"canal": "Jueves Central Park", "id": 12, "apuestas": 0, "solo_foto": 0}])
         # La 1 estaba reenviada en el grupo; la 4 (de un grupo de venta) no.
         self.assertEqual([a["msg_id"] for a in analisis.emparejar(apuestas, picks)], [4])
