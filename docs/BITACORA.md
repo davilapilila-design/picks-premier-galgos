@@ -25,6 +25,19 @@ Entradas más recientes arriba.
   ofrece la gratuita. Antes, a quien volvía no se le enviaba nada.
 - El dueño descartó «Bienvenido de nuevo» (demasiado intrusivo).
 - Pruebas: 188, pasan en Python 3.9, 3.12 y 3.13.
+- Commits: `b9002b1`
+
+## 2026-10-23 — Captación: aviso si alguien pide la gratuita y ya la tuvo o ya estaba en el canal
+- **Qué**: el dueño pregunta qué pasa si alguien copia la frase de los
+  botones de la gratuita. El sistema reconoce a cada persona por su id de
+  Telegram, no por lo que escribe; ahora además el lector avisa por el bot
+  («⚠️ … te ha escrito pidiendo la gratuita, pero ya la tuvo el DD/MM
+  («canal»)» o «… ya estaba en el canal») cuando quien escribe esa frase ya
+  tuvo la gratuita o ya estaba en el canal (`db.estado_oferta` distinto de
+  «nueva»). Una vez al día por persona (evento `aviso_gratuita_repetida`) y
+  solo por mensajes recientes. Aprobado por el dueño, también para quien ya
+  estaba en el canal.
+- Pruebas: 191, pasan en Python 3.9, 3.12 y 3.13.
 - Commits: (este commit)
 
 ## 2026-10-21 — Captación: el lector apunta en directo las bienvenidas que el dueño da a mano

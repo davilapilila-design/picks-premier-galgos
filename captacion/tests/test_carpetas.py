@@ -339,6 +339,39 @@ class TestSimulacion(Base):
         self.assertEqual(real.cambios, [("crear", "16.10", frozenset({777}))])  # solo lo del dueño
 
 
+class TestAvisoGratuitaRepetida(Base):
+    FRASE = "¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕"
+
+    def avisos_gratuita(self):
+        return [a for a in self.avisos if "pidiendo la gratuita" in a]
+
+    def test_quien_ya_la_tuvo_avisa_una_vez_al_dia(self):
+        self.del_embudo(600, "Iker", enlace_venta_ts=int(self.ahora) - 86400 * 3, canal_venta="Pack martes")
+        self.recibe(600, 10, self.FRASE)
+        self.recibe(600, 11, self.FRASE)
+        avisos = self.avisos_gratuita()
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("Iker (@iker)", avisos[0])
+        self.assertIn("ya la tuvo el", avisos[0])
+        self.assertIn("«Pack martes»", avisos[0])
+
+    def test_quien_ya_estaba_en_el_canal_aunque_no_tenga_bienvenida(self):
+        with self.con:
+            db.guardar_miembros(self.con, [601], 1)
+        self.correr(self.org.al_recibir(601, 10, self.ahora, self.FRASE, usuario=usuario(601, "Leo", None)))
+        self.assertEqual(len(self.avisos_gratuita()), 1)
+        self.assertIn("Leo te ha escrito", self.avisos_gratuita()[0])
+        self.assertIn("ya estaba en el canal", self.avisos_gratuita()[0])
+
+    def test_los_nuevos_y_otros_mensajes_no_avisan(self):
+        self.del_embudo(602, "Ana")
+        self.recibe(602, 10, self.FRASE)  # nueva: es lo normal
+        self.del_embudo(603, "Bea", enlace_venta_ts=1, canal_venta="X")
+        self.recibe(603, 10, "hola, ¿a qué hora es el pack?")
+        self.recibe(603, 11, self.FRASE, momento=self.ahora - 2 * 86400)  # antiguo, recuperado
+        self.assertEqual(self.avisos_gratuita(), [])
+
+
 class TestAyudas(unittest.TestCase):
     def test_titulos_de_dias(self):
         # Día.mes, como las carpetas del dueño.

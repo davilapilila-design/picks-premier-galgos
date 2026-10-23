@@ -470,6 +470,11 @@ systemctl start captacion-lector@real
 ```
 (En la instancia de prueba, igual con `prueba`: lee el canal de prueba.)
 
+Si alguien que ya tuvo la gratuita, o que ya estaba en el canal, te escribe
+la frase de los botones de la gratuita (p. ej. copiada), el lector te avisa
+por el bot: «⚠️ … te ha escrito pidiendo la gratuita, pero ya la tuvo el …»
+(una vez al día por persona). En la instancia real, cuando exista su bot.
+
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
 2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.

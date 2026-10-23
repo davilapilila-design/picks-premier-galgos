@@ -91,6 +91,7 @@ ETIQUETAS_EVENTO = {
     "solicitud_en_pausa": "Solicitud sin atender (bot en pausa)",
     "faq": "Miró las dudas frecuentes",
     "texto_cambiado": "Texto cambiado desde el bot (/textos)",
+    "aviso_gratuita_repetida": "Pidió la gratuita y ya la tuvo o ya estaba",
 }
 
 MOTIVOS = {

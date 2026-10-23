@@ -42,6 +42,8 @@ log = logging.getLogger("captacion.carpetas")
 _RE_DIA = re.compile(r"^(\d{1,2})\.(\d{1,2})$")
 # Cuánto se fía uno de lo que se sabe de un enlace antes de volver a preguntar.
 VIGENCIA_ENLACE_S = 30 * 24 * 3600
+# Aviso de «pide la gratuita y ya la tuvo»: como mucho uno al día por persona.
+AVISO_GRATUITA_S = 24 * 3600
 
 
 @dataclass(frozen=True)
@@ -194,10 +196,40 @@ class Organizador:
     def _ya_visto(self, fila, msg_id):
         return fila["ultimo_msg_id"] is not None and msg_id <= fila["ultimo_msg_id"]
 
+    def _vigilar_gratuita(self, user_id, ts, texto, fila, usuario):
+        """Avisa al dueño si alguien que ya tuvo la gratuita, o que ya estaba
+        en el canal, le escribe la frase de los botones de la gratuita (p. ej.
+        copiada tras salir y volver a entrar). Una vez al día por persona, y
+        solo por mensajes recientes (no al recuperar lo antiguo)."""
+        if detectar_boton(texto) is None or self.reloj() - ts > AVISO_GRATUITA_S:
+            return
+        estado = db.estado_oferta(self.con, user_id, fila)
+        if estado == "nueva":
+            return
+        if self.con.execute("SELECT 1 FROM eventos WHERE user_id = ? AND tipo = 'aviso_gratuita_repetida' "
+                            "AND ts > ?", (user_id, int(ts) - AVISO_GRATUITA_S)).fetchone():
+            return
+        if usuario:
+            nombre = db.nombre_completo(usuario) or "sin nombre"
+            quien = f"{nombre} (@{usuario['username']})" if usuario.get("username") else nombre
+        else:
+            quien = self._nombre(user_id)
+        if estado == "gratuita":
+            motivo = (f"ya la tuvo el {datetime.fromtimestamp(fila['enlace_venta_ts'], self.tz):%d/%m} "
+                      f"(«{fila['canal_venta'] or 'canal desconocido'}»)")
+        elif fila is not None and fila["recurrente_ts"] is not None:
+            motivo = "ya estaba en el canal o ya había pasado por aquí (le llegó la bienvenida sin gratuita)"
+        else:
+            motivo = "ya estaba en el canal"
+        with self.con:
+            db.registrar_evento(self.con, ts, "aviso_gratuita_repetida", user_id, estado=estado)
+        self.avisar(f"⚠️ {quien} te ha escrito pidiendo la gratuita, pero {motivo}.")
+
     async def al_recibir(self, user_id, msg_id, ts, texto, usuario=None):
         """Un mensaje que alguien le ha enviado al dueño por privado."""
         async with self._candado:
             fila = db.obtener_usuario(self.con, user_id)
+            self._vigilar_gratuita(user_id, ts, texto, fila, usuario)
             if not db.es_del_embudo(fila) or self._ya_visto(fila, msg_id):
                 return
             dia = self._dia(ts)
