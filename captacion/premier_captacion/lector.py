@@ -528,6 +528,12 @@ async def leer_suscriptores(cfg, entorno):
     return 0
 
 
+def _id_sheet(dato):
+    """El id de un Google Sheet, también si se pega el enlace entero."""
+    m = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", dato)
+    return m.group(1) if m else dato.strip()
+
+
 def marcar_embudo_prueba(cfg, user_id):
     """Solo pruebas: marca a alguien como si hubiera recibido la bienvenida."""
     con = db.abrir(cfg.db_path)
@@ -548,7 +554,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
                         choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace",
-                                 "apuntar-gratuita", "suscriptores"])
+                                 "apuntar-gratuita", "suscriptores", "analisis"])
     parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace) "
                                                 "o @usuario (apuntar-gratuita)")
     parser.add_argument("mas", nargs="*", help="apuntar-gratuita: «AAAA-MM-DD HH:MM» de la bienvenida y de la "
@@ -572,6 +578,11 @@ def main(argv=None):
             return asyncio.run(iniciar_sesion(entorno))
         if args.modo == "historico":
             return asyncio.run(historico.ejecutar(cfg, entorno))
+        if args.modo == "analisis":
+            if not args.dato:
+                parser.error("analisis necesita el id (o el enlace) del Google Sheet donde escribirlo")
+            from . import analisis
+            return asyncio.run(analisis.ejecutar(cfg, entorno, _id_sheet(args.dato), crear_cliente, credenciales_api))
         if args.modo == "suscriptores":
             return asyncio.run(leer_suscriptores(cfg, entorno))
         if args.modo == "apuntar-gratuita":

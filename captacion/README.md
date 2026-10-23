@@ -475,6 +475,18 @@ la frase de los botones de la gratuita (p. ej. copiada), el lector te avisa
 por el bot: «⚠️ … te ha escrito pidiendo la gratuita, pero ya la tuvo el …»
 (una vez al día por persona). En la instancia real, cuando exista su bot.
 
+### Análisis puntual: apuestas que faltan en el grupo de picks y chats con clientes
+Solo lectura (`premier_captacion/analisis.py`). Lee la carpeta «ch ventas»
+(canales de venta desde el 22/07, canal principal y grupo de picks) y los
+chats con clientes, y lo escribe en pestañas «Análisis · …» del Sheet que se
+le pase (compartido con la cuenta de servicio). A los clientes no se les
+nombra (C0001…). Tarda un rato: mejor dentro de tmux.
+```bash
+systemctl stop captacion-lector@real
+bash /opt/premier-captacion/lector.sh real analisis <enlace o id del Sheet>
+systemctl start captacion-lector@real
+```
+
 ### Fase 6: carpetas en tu cuenta real
 1. Si no lo hiciste en la fase 4: `bash /opt/premier-captacion/conectar-cuenta.sh real`.
 2. `systemctl enable --now captacion-lector@real`: arranca en **simulación**.

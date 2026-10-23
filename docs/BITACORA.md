@@ -3,6 +3,26 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: análisis puntual de canales de venta y chats con clientes
+- **Qué**: el dueño pide (1) saber qué apuestas de los canales de venta
+  (desde el 22/07, carpeta «ch ventas» de su cuenta) no están en el grupo
+  «Picks Premier Galgos», que es el que alimenta la hoja del proyecto de
+  picks, para el seguimiento de apuestas; y (2) leer los chats con
+  clientes para buscar patrones (cómo piden la gratuita, qué preguntan) y
+  mejorar las dudas frecuentes. Las compensaciones las da por los canales,
+  no por privado.
+- **Cómo**: modo `analisis` del lector (`analisis.py`), solo lectura (modo
+  `historico` del candado, sin ampliarlo). Una apuesta = mensaje de canal
+  con hora de carrera y cuota/stake (o gemela/trío); está en el grupo si
+  allí está reenviada o hay un mensaje de un día cercano con las mismas
+  horas. Las fotos sin texto se cuentan aparte para revisarlas a mano.
+  Chats: lo que escriben cliente y dueño, con la etapa (antes/después de
+  la gratuita) y si es recurrente; clientes como C0001… Se escribe en
+  pestañas «Análisis · …» del Sheet de pruebas de captación (las demás
+  pestañas no se tocan), que puedo leer con el conector de Google Drive.
+- Pruebas: 198, pasan en Python 3.9, 3.12 y 3.13.
+- Commits: (este commit)
+
 ## 2026-10-23 — Captación: bienvenida sin gratuita a quien ya estaba en el canal o vuelve
 - **Qué**: el dueño ha visto que algunos salen y vuelven a entrar al canal
   (borrando mensajes) para conseguir otra gratuita. Pide no ofrecer la
@@ -43,7 +63,7 @@ Entradas más recientes arriba.
 - Lista de suscriptores leída en la real: 1673 de 1798 (93 %; Telegram da
   200 de golpe, el resto sale por búsquedas).
 - Pruebas: 191, pasan en Python 3.9, 3.12 y 3.13.
-- Commits: `f3ba322`, (este commit)
+- Commits: `f3ba322`, `88d6561`
 
 ## 2026-10-21 — Captación: el lector apunta en directo las bienvenidas que el dueño da a mano
 - **Qué**: el dueño buscó con la consulta a un cliente al que dio la

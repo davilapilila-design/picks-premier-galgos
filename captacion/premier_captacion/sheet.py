@@ -360,6 +360,11 @@ class PestanaGoogle:
         if self.ws.row_count > ultima:
             self.ws.batch_clear([f"A{ultima + 1}:{_letra_columna(self.ncols)}{self.ws.row_count}"])
 
+    def escribir(self, filas, desde_fila):
+        """Escribe `filas` a partir de `desde_fila` sin tocar el resto."""
+        self._asegurar_tamano(desde_fila + len(filas) - 1)
+        self.ws.update(values=filas, range_name=f"A{desde_fila}", raw=True)
+
     def ids(self):
         valores = self.ws.col_values(1, value_render_option="UNFORMATTED_VALUE")
         return [int(v) for v in valores[len(self.filas_cabecera):] if isinstance(v, (int, float))]
