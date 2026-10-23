@@ -99,24 +99,35 @@ def _fecha_hora(ts, tz):
 
 # --- Lectura de Telegram ------------------------------------------------------------
 
+def _solo_letras(texto):
+    """«📊 CH. Ventas» -> «chventas»: sin emojis, espacios, puntos ni tildes."""
+    return "".join(c for c in carpetas.normalizar(texto) if c.isalnum())
+
+
 async def _carpeta(client, nombre):
+    """(peers de la carpeta o None, títulos de todas las carpetas)."""
     from telethon.tl import functions
 
     res = await client(functions.messages.GetDialogFiltersRequest())
+    titulos = []
     for f in getattr(res, "filters", res):
         titulo = getattr(getattr(f, "title", ""), "text", getattr(f, "title", "")) or ""
-        if carpetas.normalizar(titulo).strip() == carpetas.normalizar(nombre):
-            return list(getattr(f, "pinned_peers", None) or []) + list(getattr(f, "include_peers", None) or [])
-    return None
+        if not hasattr(f, "id"):
+            continue  # «Todos los chats»
+        titulos.append(titulo)
+        if _solo_letras(nombre) in _solo_letras(titulo):
+            return list(getattr(f, "pinned_peers", None) or []) + list(getattr(f, "include_peers", None) or []), titulos
+    return None, titulos
 
 
 async def leer_canales(client, cfg, tz):
     """(apuestas de los canales de venta, mensajes del grupo de picks, resumen por canal)."""
     from telethon.tl import types
 
-    peers = await _carpeta(client, CARPETA)
+    peers, titulos = await _carpeta(client, CARPETA)
     if peers is None:
-        raise RuntimeError(f"No encuentro la carpeta «{CARPETA}»")
+        raise RuntimeError(f"No encuentro la carpeta «{CARPETA}». Tus carpetas: "
+                           + ", ".join(f"«{t}»" for t in titulos))
     principal = carpetas.id_canal_puro(cfg.canal_id)
     desde = datetime(DESDE.year, DESDE.month, DESDE.day, tzinfo=tz)
     apuestas, picks, canales, grupo = [], [], [], None
