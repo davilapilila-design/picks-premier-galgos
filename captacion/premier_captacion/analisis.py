@@ -26,7 +26,7 @@ from . import carpetas, db, sheet
 
 log = logging.getLogger("captacion.analisis")
 
-CARPETA = "ch ventas"
+CARPETA = "ch venta"  # «CH Venta» en su Telegram (también vale «ch ventas»)
 DESDE = date(2026, 7, 22)  # primer canal de venta («Premier Galgos Debut»)
 MAX_TEXTO = 1000
 MAX_MENSAJES_CHAT = 500

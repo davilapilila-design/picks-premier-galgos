@@ -119,7 +119,7 @@ class TestLeerCanales(unittest.TestCase):
         class Cliente:
             async def __call__(self, peticion):
                 return SimpleNamespace(filters=[SimpleNamespace(
-                    id=3, title=SimpleNamespace(text="💰 CH. Ventas"), pinned_peers=[],
+                    id=3, title=SimpleNamespace(text="💰 CH. Venta"), pinned_peers=[],
                     include_peers=[principal, venta, grupo])])
 
             async def get_entity(self, peer):
