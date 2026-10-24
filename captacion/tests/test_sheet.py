@@ -205,7 +205,8 @@ class TestSincronizar(unittest.TestCase):
         self.assertEqual(eventos[-1][5:8], ["Texto cambiado desde el bot (/textos)", "bot_b_v2", "texto: 👋 Bienvenida"])
 
     def test_detalle_de_las_dudas(self):
-        self.assertEqual(sheet.texto_detalle({"tema": "packs"}), "tema: 📦 Packs: nuestra garantía")
+        self.assertEqual(sheet.texto_detalle({"tema": "packs"}), "tema: 📦 Precios y garantía")
+        self.assertEqual(sheet.texto_detalle({"tema": "bank"}), "tema: bank")  # tema de antes, ya quitado
         self.assertEqual(sheet.texto_detalle({"tema": "menu"}), "tema: menú")
 
     def test_solo_el_resumen_va_como_formulas(self):

@@ -206,9 +206,10 @@ def boton_escribeme(usuario, duda=None, recurrente=False):
 # Se abren desde la respuesta del bot a quien le escribe («📚 Dudas
 # frecuentes»). Cada tema: botón del menú, título, texto de partida (lo puede
 # cambiar el dueño con /textos), de qué tema es la duda si escribe, y botones
-# a otros temas. «otras_casas» es un submenú de «casas»: no sale en el menú.
-# La redacción de los textos (y de las dos respuestas de arriba) la revisó el
-# dueño el mismo día con su estilo: no retocarla sin él.
+# a otros temas. Los que no salen en el menú (en_menu False) se llegan desde
+# otro tema. Rehechas el 2026-10-24 con el dueño a partir de lo que preguntan
+# sus clientes (análisis de los chats): menú de 4 botones, «Empiezo de cero»
+# en 3 pasos y respuestas de 2-3 líneas. No retocar los textos sin él.
 CALLBACK_DUDAS = "faq"          # desde la respuesta del bot: el menú, en un mensaje nuevo
 CALLBACK_MENU = "faq:menu"      # «⬅️ Otras dudas»: vuelve al menú en el mismo mensaje
 
@@ -221,122 +222,121 @@ PIE_SIN_GRATUITA = (
 PIE_CON_GRATUITA = "¿Te queda alguna duda? Escríbeme y lo vemos 👇"
 
 FAQ = {
+    # 🆕 Empiezo de cero: tres pasos seguidos («Siguiente paso ➡️»).
     "casas": {
-        "boton": "🏦 Casas de apuestas",
-        "titulo": f"🏦 {negrita('Casas de apuestas')}",
+        "boton": "🆕 Empiezo de cero",
+        "titulo": f"🆕 {negrita('Paso 1 · Abre cuenta')}",
         "duda": "las casas de apuestas",
-        "enlaces": [("otras_casas", "🗺️ Otras casas y canódromos")],
+        "enlaces": [("otras_casas", "🗺️ Otras casas"), ("unidades", "Siguiente paso ➡️")],
         "texto": (
             f"Las que mejor van con nuestros picks: {negrita('Betway')}, {negrita('Betfair')} "
             f"y {negrita('Bet365')}.\n"
             "\n"
-            f"También valen {negrita('William Hill')} y {negrita('Sportium')}. A veces tienen "
-            "límites más altos, pero ponen las cuotas de otra manera:\n"
-            f"· {negrita('William Hill')}: 30 min antes en carreras normales y horas antes en "
-            "competiciones.\n"
-            f"· {negrita('Sportium')}: horas antes en competiciones; en las normales depende, pero "
-            "siempre con mucho margen. En Harlow y Star Pelaw no tiene cuotas tempranas.\n"
-            "\n"
-            f"{negrita('Mi consejo:')} ten cuenta en varias, o en todas. Así coges siempre la mejor "
-            "cuota y, si en alguna tienes problemas para apostar, sigues con otra ✅"
+            f"Ten {negrita('2 o 3')} abiertas y {negrita('verificadas')} antes de apostar: así coges "
+            "siempre la mejor cuota y, si una te limita, sigues con otra ✅"
         ),
     },
     "otras_casas": {
         "boton": "🗺️ Otras casas y canódromos",
         "titulo": f"🗺️ {negrita('Otras casas y canódromos')}",
         "duda": "las casas de apuestas",
-        "enlaces": [("casas", "⬅️ Casas de apuestas")],
+        "enlaces": [("casas", "⬅️ Paso 1 · Abre cuenta")],
         "en_menu": False,
         "texto": (
-            "Hay más casas con galgos, pero no tienen cuotas tempranas, o no siempre:\n"
+            f"También valen {negrita('William Hill')} (cuotas 30 min antes; horas antes en "
+            f"competiciones) y {negrita('Sportium')} (horas antes en competiciones; en Harlow y "
+            "Star Pelaw sin cuotas tempranas).\n"
             "\n"
-            f"· {negrita('Versus')} y {negrita('Retabet')}: sin cuotas tempranas y solo algunos "
-            "canódromos (Harlow, Star Pelaw, Doncaster…). No tienen Central Park, Nottingham, "
-            "Hove ni muchos más.\n"
-            f"· {negrita('Codere')}: tiene todos los canódromos, pero muchas veces sin cuotas "
-            "tempranas. En Central Park, Nottingham, Hove y otros las está publicando una hora "
-            "antes, aunque varía mucho.\n"
-            f"· {negrita('DAZN Bet')}, {negrita('888')} y {negrita('Pastón')}: todos los "
-            "canódromos, pero solo cuotas en directo, unos 5 min antes de la carrera."
+            "Hay más casas con galgos, pero no tienen cuotas tempranas, o no siempre:\n"
+            f"· {negrita('Versus')} y {negrita('Retabet')}: solo algunos canódromos (Harlow, Star "
+            "Pelaw, Doncaster…).\n"
+            f"· {negrita('Codere')}: todos los canódromos; a veces cuotas una hora antes.\n"
+            f"· {negrita('DAZN Bet')}, {negrita('888')} y {negrita('Pastón')}: solo cuotas en "
+            "directo, unos 5 min antes."
         ),
     },
     "unidades": {
-        "boton": "⚖️ Unidades",
-        "titulo": f"⚖️ {negrita('Unidades')}",
-        "duda": "las unidades",
+        "boton": "⚖️ Cuánto apostar",
+        "titulo": f"🆕 {negrita('Paso 2 · Cuánto apostar')}",
+        "duda": "cuánto apostar",
+        "en_menu": False,
+        "enlaces": [("ganador", "Siguiente paso ➡️")],
         "texto": (
-            f"Los stakes de los picks van en {negrita('unidades')}: «stake 2» son 2 unidades.\n"
+            f"Cada apuesta lleva un {negrita('stake')} en unidades. Te recomiendo un bank de "
+            f"{negrita('400-500 €')} y {negrita('10 € por unidad')}:\n"
+            f"stake 4 = 4 × 10 € = {negrita('40 €')}.\n"
             "\n"
-            f"Lo más fácil: un {negrita('valor fijo')} por unidad, de "
-            f"{negrita('al menos 10 €')}, y lo subes cuando crezca tu bank.\n"
-            "\n"
-            f"Ejemplo: con unidades de 10 €, un stake 2 son {negrita('20 €')}."
-        ),
-    },
-    "bank": {
-        "boton": "💰 Bank y stakes",
-        "titulo": f"💰 {negrita('Bank y stakes')}",
-        "duda": "el bank y los stakes",
-        "texto": (
-            f"El {negrita('bank')} es el dinero que apartas solo para apostar. Cada pick lleva su "
-            f"stake en unidades; de media, unas {negrita('4-5')}.\n"
-            "\n"
-            "Apuesta solo dinero que no te haga falta ahora mismo. Si lo necesitas, o "
-            "perderlo sería un problema grande para ti, no lo apuestes.\n"
-            "\n"
-            "+18 · Juega con responsabilidad."
+            "Apuesta solo dinero que no te haga falta. +18 · Juega con responsabilidad."
         ),
     },
     "ganador": {
-        "boton": "🏁 Apuesta a ganador",
-        "titulo": f"🏁 {negrita('Apuesta a ganador')}",
-        "duda": "las apuestas a ganador",
+        "boton": "🏁 Haz la apuesta",
+        "titulo": f"🆕 {negrita('Paso 3 · Haz la apuesta')}",
+        "duda": "cómo hacer la apuesta",
+        "en_menu": False,
+        "enlaces": [("gemelas", "🎯 Gemelas y tríos")],
         "texto": (
-            f"Nuestras apuestas son siempre {negrita('a ganador')}. {negrita('NUNCA')} pinches en "
-            "«colocado», salvo que te digamos lo contrario.\n"
+            f"Siempre {negrita('a ganador')}. {negrita('NUNCA')} a «colocado», salvo que te "
+            "digamos lo contrario.\n"
             "\n"
-            f"Apuestas a que el galgo llega {negrita('primero')}. Si gana, cobras stake × cuota; "
-            "si no, lo pierdes.\n"
-            "\n"
-            f"Ejemplo: 2 unidades a cuota {negrita('3,50')} → cobras {negrita('7')} (5 de beneficio) ✅\n"
-            "\n"
-            f"{negrita('Atento:')} cógela en cuanto te llegue el pick, la cuota puede bajar antes de "
-            "la carrera."
+            f"Hazla {negrita('en cuanto llegue')}: casi siempre la cuota baja."
         ),
     },
     "gemelas": {
         "boton": "🎯 Gemelas y tríos",
         "titulo": f"🎯 {negrita('Gemelas y tríos')}",
         "duda": "las gemelas y los tríos",
-        "enlaces": [("otras_casas", "🗺️ Otras casas y canódromos")],
+        "en_menu": False,
+        "enlaces": [("ganador", "⬅️ Paso 3 · Haz la apuesta")],
         "texto": (
-            f"{negrita('Gemela')}: aciertas el 1º y el 2º de una carrera. {negrita('Trío')}: el "
-            "1º, el 2º y el 3º. En las casas salen con esos mismos nombres.\n"
+            f"{negrita('Gemela')}: aciertas el 1º y el 2º. {negrita('Trío')}: el 1º, el 2º y el 3º. "
+            "En las casas salen con esos nombres.\n"
             "\n"
-            "Si son en cualquier orden (reversible), la gemela son 2 combinaciones (p. ej. "
-            "3-4 y 4-3) y el trío, 6. Cada una lleva su stake.\n"
+            f"Se pagan al {negrita('dividendo oficial')} después de la carrera, así que valen "
+            f"también las casas sin cuotas tempranas (menos {negrita('DAZN Bet')} y "
+            f"{negrita('Pastón')}, que no las tienen)."
+        ),
+    },
+    "horarios": {
+        "boton": "⏰ ¿Cuándo llegan?",
+        "titulo": f"⏰ {negrita('¿Cuándo llegan las apuestas?')}",
+        "duda": "los horarios",
+        "texto": (
+            f"Casi todos los días por la {negrita('tarde (18:00-18:45)')}. Algunos días también "
+            f"sobre las {negrita('11:00')} y las {negrita('15:00')}.\n"
             "\n"
-            f"No tienen cuota fija: se pagan al {negrita('dividendo oficial')} que publica el "
-            "canódromo después de la carrera. Por eso puedes hacerlas en las casas sin cuotas "
-            "tempranas (👇 Otras casas y canódromos). Ojo: "
-            f"{negrita('DAZN Bet')} y {negrita('Pastón')} no tienen gemelas ni tríos.\n"
-            "\n"
-            "Ejemplo real en Star Pelaw: gemela 3-4 y 4-3, stake 2 cada una = 4 unidades. "
-            f"Llegó 4-3 con dividendo {negrita('7,42')} → {negrita('14,84 unidades')} "
-            "(10,84 de beneficio) 📈"
+            f"Llegan con {negrita('más de 45 min')} de margen."
         ),
     },
     "packs": {
-        "boton": "📦 Packs: nuestra garantía",
-        "titulo": f"📦 {negrita('Packs: nuestra garantía')}",
+        "boton": "📦 Precios y garantía",
+        "titulo": f"📦 {negrita('Precios y garantía')}",
         "duda": "los packs",
         "texto": (
-            f"Casi todo lo que vendemos son {negrita('packs')} de dos o más galgos.\n"
+            f"Todas nuestras apuestas son {negrita('de pago')}: tienen valor y una rentabilidad "
+            "constante.\n"
             "\n"
-            "Si un pack sale en pérdidas, según las unidades perdidas "
-            f"{negrita('te damos el siguiente gratis o con descuento')}.\n"
+            f"1 galgo {negrita('15-25 €')} · 2 galgos {negrita('25-35 €')} · 3 galgos "
+            f"{negrita('35-45 €')}\n"
+            "En el enlace de pago tienes Bizum disponible.\n"
             "\n"
-            f"Y si fallan todos los galgos del pack, el siguiente es {negrita('siempre gratis')} 💙"
+            "🛡️ En los packs de 2 o más, si se pierden unidades, "
+            f"{negrita('la siguiente va con descuento o de regalo')}. Y si fallan todas, "
+            f"{negrita('siempre de regalo')} 💙"
+        ),
+    },
+    "problemas": {
+        "boton": "🆘 Tengo un problema",
+        "titulo": f"🆘 {negrita('Tengo un problema')}",
+        "duda": "un problema con la apuesta",
+        "texto": (
+            f"🔒 {negrita('Me limitan la cuenta')}\n"
+            "Es normal cuando se acierta. Sigue con otra de tus casas: por eso conviene tener "
+            "varias. En Bet365 hay un límite semanal de ingreso que puedes cambiar en tu cuenta.\n"
+            "\n"
+            f"📉 {negrita('La cuota ha bajado')}\n"
+            "Es buena señal: el 80% de nuestras apuestas acaban a cuota más baja. Si ha bajado "
+            "mucho, escríbeme."
         ),
     },
 }
@@ -372,8 +372,7 @@ TEXTOS_EDITABLES = {
     "redireccion": ("💬 Si escriben al bot (sin la gratuita)", TEXTO_REDIRECCION),
     "redireccion_gratuita": ("💬 Si escriben al bot (con la gratuita)", TEXTO_REDIRECCION_CON_GRATUITA),
     "faq_menu": ("📚 Menú de dudas", FAQ_TITULO),
-    **{f"faq:{t}": (f"Duda · {FAQ[t]['boton']}", FAQ[t]["texto"])
-       for t in ["casas", "otras_casas"] + [t for t in FAQ_MENU if t != "casas"]},
+    **{f"faq:{t}": (f"Duda · {FAQ[t]['boton']}", FAQ[t]["texto"]) for t in FAQ},
     "faq_pie": ("👉 Final de las dudas (sin la gratuita)", PIE_SIN_GRATUITA),
     "faq_pie_gratuita": ("👉 Final de las dudas (con la gratuita)", PIE_CON_GRATUITA),
 }

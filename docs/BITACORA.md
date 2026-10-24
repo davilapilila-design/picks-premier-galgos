@@ -3,6 +3,28 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: dudas frecuentes rehechas a partir de los chats con clientes
+- **Análisis de los chats** (CSV de la pestaña «Análisis · Chats clientes»,
+  procesado en local, sin subir nada al repo): desde el 22/07 escribieron
+  346 de 1075 clientes (32 %), 274 recibieron la gratuita (79 %); 3 de cada
+  4 se declaran novatos. Lo que más preguntan y no estaba en las dudas:
+  precio y cómo se paga, cómo apostar a galgos y abrir cuenta, horarios,
+  cuenta limitada, qué es gratis y qué de pago. El truco de salir y entrar
+  no deja rastro en los chats (solo en las solicitudes, que ya vigila el
+  bot). Las 11 apuestas de canales que faltaban en el grupo de picks: el
+  dueño añadió 6 a mano (2 descartadas, 2 falsos positivos).
+- **Nuevo flujo** (pedido por el dueño: sencillo, poco texto, para
+  novatos): menú de 4 botones. «🆕 Empiezo de cero» en 3 pasos encadenados
+  (abre cuenta → cuánto apostar → haz la apuesta; dentro, otras casas y
+  gemelas), «⏰ ¿Cuándo llegan?», «📦 Precios y garantía» y «🆘 Tengo un
+  problema» (cuenta limitada, cuota que baja). Unidades y bank se juntan;
+  apuesta a ganador va en el paso 3. Datos del dueño: bank 400-500 € y 10 €
+  por unidad; precios 1 galgo 15-25 €, 2 galgos 25-35 €, 3 galgos 35-45 €;
+  Bizum en el enlace de pago; «todas son de pago»; horarios sin canódromos;
+  consejos sobre límites sacados de sus propios mensajes.
+- Pruebas: 198, pasan en Python 3.9, 3.12 y 3.13.
+- Commits: `f220990`, `2d259e4`, `0de0024`, `9ba0127`, `3d8b857`, `2b0c9b3`
+
 ## 2026-10-24 — Captación: análisis puntual de canales de venta y chats con clientes
 - **Qué**: el dueño pide (1) saber qué apuestas de los canales de venta
   (desde el 22/07, carpeta «ch ventas» de su cuenta) no están en el grupo

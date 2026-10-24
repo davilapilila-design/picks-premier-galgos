@@ -16,15 +16,15 @@ class Base(unittest.TestCase):
 
 class TestGuardar(Base):
     def test_sin_cambios_vale_el_de_partida(self):
-        self.assertEqual(textos.actual(self.con, "faq:bank"), mensajes.FAQ["bank"]["texto"])
-        self.assertIsNone(textos.anterior(self.con, "faq:bank"))
+        self.assertEqual(textos.actual(self.con, "faq:horarios"), mensajes.FAQ["horarios"]["texto"])
+        self.assertIsNone(textos.anterior(self.con, "faq:horarios"))
         self.assertEqual(textos.tipo_bienvenida(self.con), mensajes.TIPO_BIENVENIDA_BOT)
 
     def test_vale_el_ultimo_y_se_puede_volver_atras(self):
-        self.assertIsNone(textos.guardar(self.con, "faq:bank", "A", 10))  # solo la bienvenida tiene tipo
-        self.assertEqual(textos.anterior(self.con, "faq:bank"), mensajes.FAQ["bank"]["texto"])
-        textos.guardar(self.con, "faq:bank", "B", 20)
-        self.assertEqual((textos.actual(self.con, "faq:bank"), textos.anterior(self.con, "faq:bank")), ("B", "A"))
+        self.assertIsNone(textos.guardar(self.con, "faq:horarios", "A", 10))  # solo la bienvenida tiene tipo
+        self.assertEqual(textos.anterior(self.con, "faq:horarios"), mensajes.FAQ["horarios"]["texto"])
+        textos.guardar(self.con, "faq:horarios", "B", 20)
+        self.assertEqual((textos.actual(self.con, "faq:horarios"), textos.anterior(self.con, "faq:horarios")), ("B", "A"))
         # Un texto no pisa a otro.
         self.assertEqual(textos.actual(self.con, "faq:packs"), mensajes.FAQ["packs"]["texto"])
 
@@ -66,9 +66,9 @@ class TestLoQueMandaElDueno(unittest.TestCase):
 class TestEdicion(Base):
     def test_dos_pasos_y_caduca(self):
         self.assertIsNone(textos.edicion(self.con, 100))
-        textos.empezar_edicion(self.con, "faq:bank", 100)
+        textos.empezar_edicion(self.con, "faq:horarios", 100)
         edicion = textos.edicion(self.con, 200)
-        self.assertEqual((edicion["clave"], edicion["nuevo"]), ("faq:bank", None))
+        self.assertEqual((edicion["clave"], edicion["nuevo"]), ("faq:horarios", None))
         textos.preparar(self.con, edicion, "Nuevo", 300)
         self.assertEqual(textos.edicion(self.con, 400)["nuevo"], "Nuevo")
         self.assertIsNone(textos.edicion(self.con, 300 + textos.CADUCIDAD_EDICION_S + 1))

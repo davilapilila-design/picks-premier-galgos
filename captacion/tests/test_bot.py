@@ -292,13 +292,15 @@ class TestDudas(Base):
         self.assertIn(mensajes.negrita("Betway"), tema["text"])
         self.assertTrue(tema["text"].endswith(mensajes.PIE_SIN_GRATUITA))
         datos = [b.get("callback_data") for fila in tema["reply_markup"]["inline_keyboard"] for b in fila]
-        # El submenú, los dos botones de la bienvenida (enlaces) y volver.
-        self.assertEqual(datos, ["faq:otras_casas", None, None, "faq:menu"])
+        # Otras casas, el paso siguiente, los dos botones de la bienvenida (enlaces) y volver.
+        self.assertEqual(datos, ["faq:otras_casas", "faq:unidades", None, None, "faq:menu"])
         self.bot.procesar(update_boton(3, "faq:otras_casas"))
         self.assertIn(mensajes.negrita("Codere"), self.ediciones()[-1]["text"])
-        self.bot.procesar(update_boton(4, "faq:menu"))
+        self.bot.procesar(update_boton(4, "faq:unidades"))  # «Siguiente paso ➡️» desde el paso 1
+        self.assertIn(mensajes.negrita("400-500 €"), self.ediciones()[-1]["text"])
+        self.bot.procesar(update_boton(5, "faq:menu"))
         self.assertEqual(self.ediciones()[-1]["text"], mensajes.FAQ_TITULO)
-        self.assertEqual(self.temas_vistos(), ["menu", "casas", "otras_casas", "menu"])
+        self.assertEqual(self.temas_vistos(), ["menu", "casas", "otras_casas", "unidades", "menu"])
 
     def test_con_la_gratuita_el_final_es_escribeme_sobre_ese_tema(self):
         self.con_gratuita(500)
@@ -330,7 +332,7 @@ class TestDudas(Base):
     def test_el_dueno_las_ve_con_dudas_y_no_cuenta(self):
         self.bot.procesar(update_mensaje(1, uid=PROPIETARIO, texto="/dudas"))
         self.assertEqual(self.api.envios_a(PROPIETARIO)[1]["text"], mensajes.FAQ_TITULO)
-        self.bot.procesar(update_boton(2, "faq:bank", uid=PROPIETARIO))
+        self.bot.procesar(update_boton(2, "faq:horarios", uid=PROPIETARIO))
         self.assertEqual(tipos_eventos(self.con), [])
 
 
@@ -413,11 +415,11 @@ class TestTextos(Base):
         self.assertEqual(textos.actual(self.con, "faq_menu"), mensajes.FAQ_TITULO)
 
     def test_si_pasa_media_hora_hay_que_empezar_otra_vez(self):
-        self.boton(1, "txt:faq:bank")
+        self.boton(1, "txt:faq:horarios")
         self.orden(2, "Texto nuevo del bank")
         self.reloj.ahora += 31 * 60
         self.assertIn("ya no está pendiente", self.boton(3, "txt_ok")["text"])
-        self.assertEqual(textos.actual(self.con, "faq:bank"), mensajes.FAQ["bank"]["texto"])
+        self.assertEqual(textos.actual(self.con, "faq:horarios"), mensajes.FAQ["horarios"]["texto"])
 
     def test_volver_al_anterior(self):
         self.cambiar(10, "faq:unidades", "Versión A")
@@ -536,7 +538,7 @@ class TestRecurrentes(Base):
         self.assertEqual(envio["reply_markup"], mensajes.teclado_redireccion(PERFIL, True, True))
         self.assertIn(quote("Hola, tengo una consulta"), envio["reply_markup"]["inline_keyboard"][0][0]["url"])
         self.bot.procesar(update_boton(2, "faq:unidades", uid=502))
-        self.assertIn(quote("tengo una consulta sobre las unidades"), json.dumps(self.api.llamadas[-1][1]))
+        self.assertIn(quote("tengo una consulta sobre cuánto apostar"), json.dumps(self.api.llamadas[-1][1]))
 
     def test_el_nuevo_en_la_lista_por_la_bienvenida_del_bot_sigue_siendo_nuevo(self):
         self.bot.procesar(update_solicitud(1, uid=503))

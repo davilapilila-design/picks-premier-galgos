@@ -191,7 +191,8 @@ def texto_detalle(detalle):
             if valor:
                 partes.append("del histórico")
         elif clave == "tema":
-            partes.append(f"tema: {mensajes.FAQ[valor]['boton'] if valor in mensajes.FAQ else 'menú'}")
+            nombre = mensajes.FAQ[valor]["boton"] if valor in mensajes.FAQ else ("menú" if valor == "menu" else valor)
+            partes.append(f"tema: {nombre}")
         elif clave == "clave":
             partes.append(f"texto: {mensajes.TEXTOS_EDITABLES.get(valor, (valor,))[0]}")
         else:

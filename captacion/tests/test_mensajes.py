@@ -66,8 +66,10 @@ class TestDudasFrecuentes(unittest.TestCase):
                 for destino, _ in datos.get("enlaces", ()):
                     self.assertIn(destino, mensajes.FAQ)
                 self.assertIn(f"faq:{tema}", mensajes.TEXTOS_EDITABLES)
-        self.assertNotIn("otras_casas", mensajes.FAQ_MENU)  # es un submenú de «casas»
-        self.assertEqual(mensajes.FAQ_MENU[0], "casas")
+        self.assertEqual(mensajes.FAQ_MENU, ["casas", "horarios", "packs", "problemas"])  # 4 botones
+        # El resto se llega desde algún tema (nadie se queda sin camino).
+        destinos = {d for datos in mensajes.FAQ.values() for d, _ in datos.get("enlaces", ())}
+        self.assertEqual(set(mensajes.FAQ) - set(mensajes.FAQ_MENU) - destinos, set())
 
     def test_caben_en_telegram(self):
         pie = max(mensajes.PIE_SIN_GRATUITA, mensajes.PIE_CON_GRATUITA, key=len)
@@ -85,7 +87,7 @@ class TestDudasFrecuentes(unittest.TestCase):
 
     def test_sin_la_gratuita_llevan_los_botones_de_la_bienvenida(self):
         bienvenida = [fila[0]["url"] for fila in mensajes.teclado_respuesta("Dronwhite")["inline_keyboard"]]
-        tema = mensajes.teclado_tema("unidades", "Dronwhite", False)["inline_keyboard"]
+        tema = mensajes.teclado_tema("horarios", "Dronwhite", False)["inline_keyboard"]
         self.assertEqual([fila[0].get("url") for fila in tema[:2]], bienvenida)
         redireccion = mensajes.teclado_redireccion("Dronwhite", False)["inline_keyboard"]
         self.assertEqual([fila[0].get("url") for fila in redireccion[:2]], bienvenida)
@@ -93,7 +95,7 @@ class TestDudasFrecuentes(unittest.TestCase):
 
     def test_con_la_gratuita_escribeme_con_el_tema(self):
         filas = mensajes.teclado_tema("gemelas", "Dronwhite", True)["inline_keyboard"]
-        self.assertEqual(filas[0][0]["callback_data"], "faq:otras_casas")
+        self.assertEqual(filas[0][0]["callback_data"], "faq:ganador")  # vuelve al paso 3
         borrador = parse_qs(urlparse(filas[1][0]["url"]).query)["text"][0]
         self.assertEqual(borrador, "Hola, tengo una duda sobre las gemelas y los tríos")
         self.assertEqual(filas[-1][0]["callback_data"], mensajes.CALLBACK_MENU)
