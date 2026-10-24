@@ -136,6 +136,10 @@ function registrarPickExtraido_(msg, texto, resultado, fechaPick) {
       resultado.stakePorCombinacion, texto);
     actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
 
+    if (duplicado && duplicado.tipo === 'seguro') {
+      const filaCopia = findApuestaExoticaByMessageIdRecienCreada_(msg.message_id);
+      if (filaCopia) setApuestaExoticaOculta_(filaCopia.row, true);
+    }
     const textoConfirmacionExotica = construirTextoConfirmacionExotica_(resultado) + avisoDuplicado;
     const confirmMessageIdExotica = sendTelegramMessage(msg.chat.id, textoConfirmacionExotica, msg.message_id);
     if (confirmMessageIdExotica) {
@@ -206,6 +210,11 @@ function buscarDuplicadoDePick_(messageId, resultado, mensajes, patas) {
   return posible ? { tipo: 'posible', original: String(posible.messageId) } : null;
 }
 
+function setApuestaExoticaOculta_(fila, oculto) {
+  const sheet = getSheet_(SHEET_APUESTAS_EXOTICAS);
+  sheet.getRange(fila, getHeaderIndex_(sheet)['oculto'] + 1).setValue(oculto);
+}
+
 function textoAvisoDuplicado_(duplicado, esExotica) {
   if (!duplicado) return '';
   if (duplicado.tipo === 'seguro' && !esExotica) {
@@ -213,8 +222,10 @@ function textoAvisoDuplicado_(duplicado, esExotica) {
       'cuente doble. Si es una apuesta nueva, responde "mostrar" a este mensaje.';
   }
   if (duplicado.tipo === 'seguro') {
-    return '\n\n⚠️ Este pick parece una copia del msg ' + duplicado.original + '. Revísalo: si es un reenvío, ' +
-      'cuenta doble.';
+    // Las respuestas "ocultar"/"mostrar" (Commands.gs) solo funcionan con
+    // `apuestas`, no con gemelas/tríos: deshacerlo es a mano.
+    return '\n\n⚠️ Este pick ya estaba registrado (msg ' + duplicado.original + '): lo guardo OCULTO para que no ' +
+      'cuente doble. Si es una apuesta nueva, avisa para volver a mostrarla.';
   }
   return '\n\n⚠️ Ya hay otro pick a esta misma carrera y trampa (msg ' + duplicado.original + '). Si es un ' +
     'reenvío, responde "ocultar" a este mensaje para que no cuente doble.';
@@ -275,6 +286,17 @@ function test_buscarDuplicadoDePick() {
   assertIguales_(buscarDuplicadoDePick_(27, pick, mensajes, patas), null, 'un mensaje sin apuesta no cuenta como original');
 
   assertIguales_(textoAvisoDuplicado_(null, false), '', 'sin duplicado no hay aviso');
+
+  // Caso real 245/570 (gemela Star Pelaw 05/09 reenviada el 24/10): mismo
+  // texto y misma publicación original al segundo, foto con otro file_id.
+  const fwdGemela = new Date('2026-09-05T20:26:01Z');
+  const textoGemela = '22:31 Star Pelaw\n\nGEMELA 3-4 Y 4-3';
+  const mensajesGemela = [
+    { messageId: 245, estado: ESTADO_PROCESADO, contenido: textoGemela, foto: 'F1', fechaForward: fwdGemela },
+    { messageId: 570, estado: ESTADO_PENDIENTE, contenido: textoGemela, foto: 'F2', fechaForward: new Date(fwdGemela.getTime()) },
+  ];
+  const rg = buscarDuplicadoDePick_(570, { esExotica: true }, mensajesGemela, []);
+  assertIguales_(rg && rg.tipo + ' ' + rg.original, 'seguro 245', 'gemela reenviada -> copia segura');
   Logger.log('test_buscarDuplicadoDePick: OK, todas las comprobaciones pasaron.');
   return 'OK';
 }
@@ -286,6 +308,16 @@ function test_buscarDuplicadoDePick() {
  * `clasp run-function ocultarCopiaDuplicada --params '["27","19"]'`.
  */
 function ocultarCopiaDuplicada(copia, original) {
+  const filaExotica = findApuestaExoticaByMessageIdRecienCreada_(copia);
+  if (filaExotica) {
+    const dupExotica = buscarDuplicadoDePick_(copia, { esExotica: true }, leerMensajesParaDuplicados_(), []);
+    if (!dupExotica || dupExotica.tipo !== 'seguro' || String(dupExotica.original) !== String(original)) {
+      return 'msg ' + copia + ': no es una copia segura de ' + original + ' (' + JSON.stringify(dupExotica) + '), no se toca';
+    }
+    setApuestaExoticaOculta_(filaExotica.row, true);
+    invalidarCachePanel_();
+    return 'msg ' + copia + ' (gemela/trío): oculto, copia segura del msg ' + original;
+  }
   const fila = findApuestaByMessageIdRecienCreada_(copia);
   if (!fila) return 'msg ' + copia + ': no tiene apuesta';
   const patasCopia = leerPatasParaDuplicados_().filter(function (p) { return String(p.messageId) === String(copia); });

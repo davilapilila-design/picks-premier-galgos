@@ -33,6 +33,19 @@ bloqueo) nunca se rellenaba.
   `test_buscarDuplicadoDePick` OK en el Apps Script real (el primer intento
   falló por un error del propio test: ponía la segunda publicación otro día).
   Desplegado v39.
+- **Mismo día, después**: el dueño reenvió al grupo 6 picks que una
+  comparación con los canales del tipster daba como "no enviados". Uno sí lo
+  estaba: la gemela Star Pelaw 05/09 22:31 (msg 245, desde el 08/09) entró de
+  nuevo como msg 570 a la 01:41, antes del despliegue de v39, y se resolvió
+  como ganada (+10,84 u contadas doble). Mismo texto y misma publicación
+  original al segundo (05/09 22:26:01); la foto tiene otro `file_id` por el
+  reenvío. Oculta con `ocultarCopiaDuplicada("570","245")` (ampliada a
+  gemelas/tríos; se negó con 245/570). Desde v40 las copias seguras de
+  gemela/trío también se registran ocultas (antes solo avisaba): las
+  respuestas "ocultar"/"mostrar" no funcionan con `apuestas_exoticas`, así que
+  deshacerlo es a mano. Los otros 5 (msgs 566, 567, 572, 573, 576) son picks
+  nuevos de verdad: registrados, pendientes de que `picks-resultados` (VM, desde
+  las 10:35) cargue sus carreras.
 
 Commits: (este commit)
 
