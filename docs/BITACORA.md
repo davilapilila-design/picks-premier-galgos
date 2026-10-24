@@ -16,7 +16,7 @@ Entradas más recientes arriba.
   el menú, lo pone en el mismo mensaje.
 - Si el mensaje de dudas falla, la solicitud se acepta igual. Texto editable
   con /textos («Mensaje de dudas tras la bienvenida»).
-- Commits: (este commit)
+- Commits: f0a856a
 
 ## 2026-10-24 — Captación: instancia real configurada y prueba apagada
 
