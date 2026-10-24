@@ -471,8 +471,10 @@ class BotCaptacion:
                         "✅ Funcionando." if pausa is None else
                         f"⏸️ Funcionando, pero EN PAUSA desde las {self._hora(pausa)}: no acepto a "
                         "nadie. Para volver: /reanudar")
+            en_lista = self.con.execute("SELECT COUNT(*) FROM miembros_canal").fetchone()[0]
             texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
                      f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
+                     f"En la lista de suscriptores del canal (sin gratuita si vuelven): {en_lista}\n"
                      f"Versión: {version_instalada()}")
         elif comando == "/start":
             texto = "✅ Bot de captación activo. Aquí te llegarán los avisos y los resúmenes.\n\n" + AYUDA_PROPIETARIO
