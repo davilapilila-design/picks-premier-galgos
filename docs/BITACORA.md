@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: instancia real configurada y prueba apagada
+
+- Bot real en simulación con propietario, Sheet propio y la memoria ya cargada
+  (suscriptores del canal, gratuitas e históricos de bienvenidas).
+- Instancia `prueba` apagada (servicios y temporizadores desactivados) y
+  borrada su sesión de Telethon de la cuenta del dueño; se conservan su
+  configuración y su base de datos por si hay que reactivarla
+  (`instalar.sh prueba`). Mientras tanto, los cambios se prueban en el bot real
+  con `/pausar` (simulación). Decisión del dueño.
+- Commits: (solo documentación)
+
 ## 2026-10-24 — Captación: modo simulación del bot para ponerlo en el canal real sin que actúe
 - **Qué**: el dueño quiere tener ya el bot definitivo en PREMIER GALGOS
   pero solo mirando: que le cuente lo que haría (bienvenida con o sin
@@ -2865,13 +2876,3 @@ patas que vayan quedando fuera de podio en el futuro:
   Galgos, stack y despliegue distintos).
 - Commits: (primer commit)
 
-## 2026-10-24 — Captación: instancia real configurada y prueba apagada
-
-- Bot real en simulación con propietario, Sheet propio y la memoria ya cargada
-  (suscriptores del canal, gratuitas e históricos de bienvenidas).
-- Instancia `prueba` apagada (servicios y temporizadores desactivados) y
-  borrada su sesión de Telethon de la cuenta del dueño; se conservan su
-  configuración y su base de datos por si hay que reactivarla
-  (`instalar.sh prueba`). Mientras tanto, los cambios se prueban en el bot real
-  con `/pausar` (simulación). Decisión del dueño.
-- Commits: (solo documentación)
