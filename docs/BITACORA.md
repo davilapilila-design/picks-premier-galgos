@@ -2848,7 +2848,7 @@ patas que vayan quedando fuera de podio en el futuro:
   expone cabeceras HTTP personalizadas en `doPost`, así que el secreto va
   como parámetro en la URL (`?token=`) en vez del header de Telegram.
 - Código de Apps Script versionado en este repo vía `clasp`.
-- Commits: (este commit)
+- Commits: 3c62c01, cce547c
 
 ## 2026-08-19 — Plan inicial del proyecto
 - Se revisó un primer borrador de plan (bot de Telegram para registrar picks
