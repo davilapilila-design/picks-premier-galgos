@@ -214,6 +214,10 @@ CALLBACK_DUDAS = "faq"          # desde la respuesta del bot: el menú, en un me
 CALLBACK_MENU = "faq:menu"      # «⬅️ Otras dudas»: vuelve al menú en el mismo mensaje
 
 FAQ_TITULO = f"📚 {negrita('Dudas frecuentes')}\n\nElige tu tema y te lo explico en un momento 👇"
+# Segundo mensaje, justo después de la bienvenida con gratuita (2026-10-24):
+# lleva ya el menú de temas. Al pulsar uno se cambia este mismo mensaje (una
+# vez aceptada la solicitud, el bot ya no puede enviarle mensajes nuevos).
+TEXTO_DUDAS_TRAS_BIENVENIDA = "¿Tienes alguna duda? Aquí tienes las más frecuentes 📚👇"
 
 PIE_SIN_GRATUITA = (
     "👉 ¿Aún no tienes tu apuesta de regalo? Pulsa abajo y escríbeme: "
@@ -371,6 +375,7 @@ TEXTOS_EDITABLES = {
     "bienvenida_recurrente": ("🔁 Bienvenida sin gratuita (ya estaba o vuelve)", TEXTO_BIENVENIDA_RECURRENTE),
     "redireccion": ("💬 Si escriben al bot (sin la gratuita)", TEXTO_REDIRECCION),
     "redireccion_gratuita": ("💬 Si escriben al bot (con la gratuita)", TEXTO_REDIRECCION_CON_GRATUITA),
+    "dudas_tras_bienvenida": ("📚 Mensaje de dudas tras la bienvenida", TEXTO_DUDAS_TRAS_BIENVENIDA),
     "faq_menu": ("📚 Menú de dudas", FAQ_TITULO),
     **{f"faq:{t}": (f"Duda · {FAQ[t]['boton']}", FAQ[t]["texto"]) for t in FAQ},
     "faq_pie": ("👉 Final de las dudas (sin la gratuita)", PIE_SIN_GRATUITA),

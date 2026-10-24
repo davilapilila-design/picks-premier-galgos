@@ -3,6 +3,21 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: mensaje de dudas justo después de la bienvenida con gratuita
+
+- Tras la bienvenida con gratuita, el bot envía un segundo mensaje («¿Tienes
+  alguna duda? Aquí tienes las más frecuentes») con el menú de temas, y
+  después acepta. Decisión del dueño: los dos seguidos, sin esperar 2-3 min,
+  porque Telegram solo deja escribir mientras la solicitud está pendiente y
+  esperar retrasaría la entrada al canal.
+- Los temas se abren cambiando ese mismo mensaje (ya aceptado, el bot no
+  puede enviarle mensajes nuevos si nunca le escribió). Por lo mismo, el
+  botón «Dudas frecuentes» de la bienvenida sin gratuita, si no puede enviar
+  el menú, lo pone en el mismo mensaje.
+- Si el mensaje de dudas falla, la solicitud se acepta igual. Texto editable
+  con /textos («Mensaje de dudas tras la bienvenida»).
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: instancia real configurada y prueba apagada
 
 - Bot real en simulación con propietario, Sheet propio y la memoria ya cargada

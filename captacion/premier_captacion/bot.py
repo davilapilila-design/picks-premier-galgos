@@ -303,7 +303,7 @@ class BotCaptacion:
                       "ya estaba en el canal" if db.es_miembro(self.con, uid) else "ya había pasado por aquí")
             que = f"le enviaría la bienvenida SIN gratuita ({motivo}) y le aceptaría"
         else:
-            que = "le enviaría la bienvenida CON gratuita y le aceptaría"
+            que = "le enviaría la bienvenida CON gratuita y el mensaje de dudas, y le aceptaría"
         with self.con:
             db.registrar_evento(self.con, ahora, "solicitud_simulada", uid,
                                 tipo_mensaje=mensajes.TIPO_BIENVENIDA_RECURRENTE if recurrente else
@@ -345,6 +345,15 @@ class BotCaptacion:
                 db.marcar_bienvenida(self.con, uid, ahora, tipo)
             db.registrar_evento(self.con, ahora, "bienvenida_enviada", uid, tipo_mensaje=tipo)
         log.info("Bienvenida%s enviada a %s", " sin gratuita" if recurrente else "", uid)
+        if not recurrente:
+            # Detrás, el menú de dudas (la sin gratuita ya lleva su botón).
+            # Si falla, no pasa nada: la bienvenida ya llegó.
+            try:
+                self.api.llamar("sendMessage", chat_id=sol.get("user_chat_id", uid),
+                                text=textos.actual(self.con, "dudas_tras_bienvenida"),
+                                reply_markup=mensajes.teclado_menu_faq())
+            except (ErrorTelegram, ErrorRed) as e:
+                log.info("No se pudo enviar el mensaje de dudas a %s: %s", uid, e)
 
     def _aceptar(self, chat_id, usuario):
         uid = usuario["id"]
@@ -526,6 +535,10 @@ class BotCaptacion:
             # Desde la respuesta del bot: el menú va en un mensaje nuevo (la
             # respuesta, con sus botones, se queda donde está).
             hecho = self._responder(uid, texto, teclado)
+            if not hecho:
+                # Quien nunca escribió al bot y ya está aceptado no puede
+                # recibir mensajes nuevos: el menú va en el mismo mensaje.
+                hecho = self._editar(cq.get("message"), uid, texto, teclado)
         else:
             hecho = self._editar(cq.get("message"), uid, texto, teclado)
         if hecho and uid != self.cfg.propietario_id:

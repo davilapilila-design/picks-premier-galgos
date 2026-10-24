@@ -41,12 +41,15 @@ class TestSolicitudes(Base):
     def test_primera_vez_envia_bienvenida_y_despues_acepta(self):
         self.bot.procesar(update_solicitud(1, uid=500))
 
-        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        self.assertEqual(self.api.metodos(), ["sendMessage", "sendMessage", "approveChatJoinRequest"])
         envio = self.api.llamadas[0][1]
         self.assertEqual(envio["chat_id"], 500)
         self.assertEqual(envio["text"], mensajes.TEXTO_BIENVENIDA)
         self.assertEqual(envio["reply_markup"], mensajes.teclado_respuesta(PERFIL))
-        self.assertEqual(self.api.llamadas[1][1], {"chat_id": CANAL, "user_id": 500})
+        dudas = self.api.llamadas[1][1]
+        self.assertEqual(dudas["text"], mensajes.TEXTO_DUDAS_TRAS_BIENVENIDA)
+        self.assertEqual(dudas["reply_markup"], mensajes.teclado_menu_faq())
+        self.assertEqual(self.api.llamadas[2][1], {"chat_id": CANAL, "user_id": 500})
 
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual(fila["bienvenida_tipo"], mensajes.TIPO_BIENVENIDA_BOT)
@@ -231,7 +234,7 @@ class TestPausa(Base):
         self.assertIn("llegaron 2 solicitudes", self.orden(5, "/arrancar"))
         self.api.llamadas.clear()
         self.bot.procesar(update_solicitud(6, uid=502))
-        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        self.assertEqual(self.api.metodos(), ["sendMessage", "sendMessage", "approveChatJoinRequest"])
 
     def test_sigue_en_pausa_aunque_se_reinicie(self):
         self.orden(1, "/pausar")
@@ -258,7 +261,7 @@ class TestPausa(Base):
         self.assertIn("Arrancado", self.api.envios_a(PROPIETARIO)[-1]["text"])
         self.api.llamadas.clear()
         self.crear_bot(simular=True).procesar(update_solicitud(3, uid=501))  # y sigue así tras reiniciar
-        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        self.assertEqual(self.api.metodos(), ["sendMessage", "sendMessage", "approveChatJoinRequest"])
         bot.procesar(update_mensaje(4, uid=PROPIETARIO, texto="/pausar"))
         self.api.llamadas.clear()
         bot.procesar(update_solicitud(5, uid=502))
@@ -309,6 +312,26 @@ class TestDudas(Base):
         self.bot.procesar(update_boton(5, "faq:menu"))
         self.assertEqual(self.ediciones()[-1]["text"], mensajes.FAQ_TITULO)
         self.assertEqual(self.temas_vistos(), ["menu", "casas", "otras_casas", "unidades", "menu"])
+
+    def test_si_no_puede_enviarle_el_menu_lo_pone_en_el_mismo_mensaje(self):
+        # Ya aceptado y sin haber escrito nunca al bot: no admite mensajes nuevos.
+        self.api.fallos["sendMessage"] = [ErrorTelegram("sendMessage", 403, "Forbidden: bot can't initiate conversation")]
+        self.bot.procesar(update_boton(1, "faq"))
+        menu = self.ediciones()[-1]
+        self.assertEqual((menu["message_id"], menu["text"]), (77, mensajes.FAQ_TITULO))
+        self.assertEqual(self.temas_vistos(), ["menu"])
+
+    def test_el_mensaje_de_dudas_que_falla_no_impide_aceptar(self):
+        self.api.fallos["sendMessage"] = [None, ErrorTelegram("sendMessage", 403, "Forbidden")]
+        self.bot.procesar(update_solicitud(1, uid=500))
+        self.assertEqual(self.api.metodos()[-1], "approveChatJoinRequest")
+        self.assertEqual(tipos_eventos(self.con), ["solicitud", "bienvenida_enviada", "aceptada"])
+
+    def test_la_bienvenida_sin_gratuita_no_lleva_el_mensaje_de_dudas(self):
+        with self.con:
+            db.guardar_miembros(self.con, [500], 1)
+        self.bot.procesar(update_solicitud(1, uid=500))
+        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
 
     def test_con_la_gratuita_el_final_es_escribeme_sobre_ese_tema(self):
         self.con_gratuita(500)
@@ -492,7 +515,7 @@ class TestArranqueYBucle(Base):
 
     def test_si_cae_la_red_a_mitad_no_avanza_el_offset(self):
         self.api.respuestas["getUpdates"] = [update_solicitud(50, uid=500), update_solicitud(51, uid=501)]
-        self.api.fallos["sendMessage"] = [None, ErrorRed("x")]
+        self.api.fallos["sendMessage"] = [None, None, ErrorRed("x")]
         vueltas = iter([True, False])
         self.bot.bucle(seguir=lambda: next(vueltas))
         self.assertEqual(db.leer_estado(self.con, "offset"), "51")
