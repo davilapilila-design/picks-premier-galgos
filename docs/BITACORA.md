@@ -3,6 +3,39 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Picks repetidos: 2 copias contadas doble desde el 19/08, corregidas; el bot las detecta
+El dueño preguntó si el bot se daría cuenta de un pick reenviado dos veces. No:
+solo descartaba el mismo mensaje de Telegram llegando dos veces (`message_id`),
+y la columna `posible_duplicado_de` (prevista en `PLAN.md` como aviso, no
+bloqueo) nunca se rellenaba.
+- **Ya había pasado**: los msgs 27 y 28 eran copias exactas de 19 y 20 (carga
+  del histórico del 19/08): mismo texto, mismo `foto_file_id` carácter a
+  carácter y misma fecha de publicación del tipster al segundo (28/07 18:31:01
+  y 18:31:42). Ambas copias eran derrotas: el panel y `/stats` llevaban 2 picks
+  perdidos y **-9 unidades de más** (-2.250 € en el panel). Ningún otro caso en
+  el histórico (mismo día+canódromo+hora+trampa o texto idéntico).
+- **Corregido** con `ocultarCopiaDuplicada(copia, original)` (Main.gs): solo
+  actúa si `buscarDuplicadoDePick_` confirma copia SEGURA (se negó con 20/19 y
+  19/27); deja `oculto = TRUE` y `posible_duplicado_de` = original. Reversible
+  respondiendo "mostrar". Panel verificado tras el cambio contra un recálculo
+  propio de la hoja: 277 picks, +390,10 u, stake 1.212 u, ROI 32,2 %, acierto
+  40,8 % (con las copias serían 381,10 u).
+- **Prevención** (`registrarPickExtraido_`, usado por pick nuevo y reintento):
+  `buscarDuplicadoDePick_` compara con los picks anteriores ya registrados.
+  "Copia segura" = mismo texto y además misma foto o misma publicación original
+  (`fecha_forward` al segundo) → se registra OCULTA, con `posible_duplicado_de`,
+  y la confirmación lo avisa ("responde mostrar si es nueva"). "Posible" = otro
+  pick con una pata a la misma carrera (día+canódromo+hora) y trampa → se
+  registra visible (CLAUDE.md: puede repetirse legítimamente), con
+  `posible_duplicado_de`, y aviso de "responde ocultar si es un reenvío".
+  Gemelas/tríos: solo aviso (`apuestas_exoticas` no tiene esa columna y la VM
+  la lee por posición: no se toca su esquema). Test
+  `test_buscarDuplicadoDePick` OK en el Apps Script real (el primer intento
+  falló por un error del propio test: ponía la segunda publicación otro día).
+  Desplegado v39.
+
+Commits: (este commit)
+
 ## 2026-10-23 (cont.) — El bot reconoce los mensajes que no son picks antes de llamar a la IA
 El dueño escribió "/stas 10" (errata de /stats) el 10/10 y el bot lo trató
 como un pick: lo mandó a Gemini (gastando cuota), contestó "Pick guardado pero

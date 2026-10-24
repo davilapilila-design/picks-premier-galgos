@@ -123,13 +123,20 @@ function manejarPickNuevo_(msg, texto, fotoFileId, fechaRecibido, fechaForward) 
  * al pick. Separada para poder reutilizarla en reprocesarMensaje.
  */
 function registrarPickExtraido_(msg, texto, resultado, fechaPick) {
+  // Picks repetidos (bug real: msgs 27 y 28 eran copias exactas de 19 y 20,
+  // contadas doble desde el 19/08). Con la regla de CLAUDE.md (dedup real por
+  // message_id): nunca se bloquea, solo se oculta la copia segura y se avisa.
+  const duplicado = buscarDuplicadoDePick_(msg.message_id, resultado, leerMensajesParaDuplicados_(),
+    resultado.esExotica ? [] : leerPatasParaDuplicados_());
+  const avisoDuplicado = textoAvisoDuplicado_(duplicado, resultado.esExotica);
+
   if (resultado.esExotica) {
     appendApuestaExotica(msg.message_id, fechaPick, resultado.tipoApuesta, resultado.hipodromo,
       resultado.horaCarrera, resultado.combinaciones, resultado.stakeTotal,
       resultado.stakePorCombinacion, texto);
     actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
 
-    const textoConfirmacionExotica = construirTextoConfirmacionExotica_(resultado);
+    const textoConfirmacionExotica = construirTextoConfirmacionExotica_(resultado) + avisoDuplicado;
     const confirmMessageIdExotica = sendTelegramMessage(msg.chat.id, textoConfirmacionExotica, msg.message_id);
     if (confirmMessageIdExotica) {
       const filaExotica = findApuestaExoticaByMessageIdRecienCreada_(msg.message_id);
@@ -140,16 +147,159 @@ function registrarPickExtraido_(msg, texto, resultado, fechaPick) {
 
   appendApuestaConPatas(msg.message_id, fechaPick, resultado.tipoApuesta, resultado.cuota, resultado.stake, resultado.patas);
   actualizarEstadoMensajeCrudo_(msg.message_id, ESTADO_PROCESADO);
+  const filaNueva = findApuestaByMessageIdRecienCreada_(msg.message_id);
+  if (duplicado && filaNueva) {
+    setApuestaField(filaNueva, 'posible_duplicado_de', duplicado.original);
+    if (duplicado.tipo === 'seguro') setApuestaField(filaNueva, 'oculto', true);
+  }
 
-  const textoConfirmacion = construirTextoConfirmacion_(resultado);
+  const textoConfirmacion = construirTextoConfirmacion_(resultado) + avisoDuplicado;
   const confirmMessageId = sendTelegramMessage(msg.chat.id, textoConfirmacion, msg.message_id);
 
-  if (confirmMessageId) {
-    const fila = findApuestaByMessageIdRecienCreada_(msg.message_id);
-    if (fila) {
-      setApuestaConfirmMessageId(fila.row, confirmMessageId);
-    }
+  if (confirmMessageId && filaNueva) {
+    setApuestaConfirmMessageId(filaNueva.row, confirmMessageId);
   }
+}
+
+/**
+ * Busca si un pick ya registrado es el mismo que `messageId`. Solo mira picks
+ * ANTERIORES (message_id menor) que ya tienen apuesta (estado procesado).
+ * - 'seguro': mismo texto y además misma foto o misma publicación original
+ *   del tipster (fecha_forward al segundo) - es el mismo mensaje reenviado.
+ * - 'posible': otro pick con una pata a la misma carrera (día + canódromo +
+ *   hora) y trampa. Puede ser legítimo (CLAUDE.md), así que solo se avisa.
+ * `mensajes`: [{messageId, estado, contenido, foto, fechaForward}];
+ * `patas`: [{messageId, fechaPick, hipodromo, horaCarrera, trampa}].
+ * Devuelve {tipo, original} o null.
+ */
+function buscarDuplicadoDePick_(messageId, resultado, mensajes, patas) {
+  const id = Number(messageId);
+  const propio = mensajes.filter(function (m) { return Number(m.messageId) === id; })[0];
+  const anteriores = mensajes.filter(function (m) {
+    return Number(m.messageId) < id && m.estado === ESTADO_PROCESADO;
+  });
+  const instante = function (v) { return v instanceof Date ? v.getTime() : String(v || ''); };
+
+  if (propio && String(propio.contenido || '').trim()) {
+    const seguro = anteriores.filter(function (m) {
+      if (String(m.contenido || '').trim() !== String(propio.contenido).trim()) return false;
+      const mismaFoto = !!propio.foto && m.foto === propio.foto;
+      const mismaPublicacion = !!instante(propio.fechaForward) && instante(m.fechaForward) === instante(propio.fechaForward);
+      return mismaFoto || mismaPublicacion;
+    })[0];
+    if (seguro) return { tipo: 'seguro', original: String(seguro.messageId) };
+  }
+
+  if (resultado.esExotica || !propio) return null;
+  const conApuesta = {};
+  anteriores.forEach(function (m) { conApuesta[Number(m.messageId)] = true; });
+  const dia = normalizarFechaISO_(propio.fechaForward || propio.fechaRecibido);
+  const clave = function (diaPata, hipodromo, hora, trampa) {
+    return diaPata + '|' + normalizarTexto_(hipodromo) + '|' + normalizarHoraSegundos_(hora) + '|' + claveComparable_(trampa);
+  };
+  const nuevas = {};
+  resultado.patas.forEach(function (p) { nuevas[clave(dia, p.hipodromo, p.horaCarrera, p.trampa)] = true; });
+  const posible = patas.filter(function (p) {
+    return conApuesta[Number(p.messageId)] &&
+      nuevas[clave(normalizarFechaISO_(p.fechaPick), p.hipodromo, p.horaCarrera, p.trampa)];
+  })[0];
+  return posible ? { tipo: 'posible', original: String(posible.messageId) } : null;
+}
+
+function textoAvisoDuplicado_(duplicado, esExotica) {
+  if (!duplicado) return '';
+  if (duplicado.tipo === 'seguro' && !esExotica) {
+    return '\n\n⚠️ Este pick ya estaba registrado (msg ' + duplicado.original + '): lo guardo OCULTO para que no ' +
+      'cuente doble. Si es una apuesta nueva, responde "mostrar" a este mensaje.';
+  }
+  if (duplicado.tipo === 'seguro') {
+    return '\n\n⚠️ Este pick parece una copia del msg ' + duplicado.original + '. Revísalo: si es un reenvío, ' +
+      'cuenta doble.';
+  }
+  return '\n\n⚠️ Ya hay otro pick a esta misma carrera y trampa (msg ' + duplicado.original + '). Si es un ' +
+    'reenvío, responde "ocultar" a este mensaje para que no cuente doble.';
+}
+
+function leerMensajesParaDuplicados_() {
+  const sheet = getSheet_(SHEET_MENSAJES_CRUDOS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues().map(function (f) {
+    return {
+      messageId: f[index['message_id']], estado: f[index['estado']], contenido: f[index['contenido']],
+      foto: f[index['foto_file_id']], fechaForward: f[index['fecha_forward']], fechaRecibido: f[index['fecha_recibido']],
+    };
+  }).filter(function (m) { return m.messageId !== ''; });
+}
+
+function leerPatasParaDuplicados_() {
+  const sheet = getSheet_(SHEET_APUESTAS_PATAS);
+  const index = getHeaderIndex_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues().map(function (f) {
+    return {
+      messageId: f[index['message_id']], fechaPick: f[index['fecha_pick']], hipodromo: f[index['hipodromo']],
+      horaCarrera: f[index['hora_carrera']], trampa: f[index['trampa']],
+    };
+  }).filter(function (p) { return p.messageId !== ''; });
+}
+
+function test_buscarDuplicadoDePick() {
+  const texto = '22:04 Central Park\n\nGalgo T5 Swift Michael\n\nCuota 2.62🔥\n\n⚠️Stake 4⚠️';
+  const fwd = new Date('2026-07-28T16:31:01Z');
+  const pick = { esExotica: false, patas: [{ hipodromo: 'Central Park', horaCarrera: '22:04', trampa: '5' }] };
+  const mensajes = [
+    { messageId: 19, estado: ESTADO_PROCESADO, contenido: texto, foto: 'FOTO_A', fechaForward: fwd },
+    { messageId: 27, estado: ESTADO_PENDIENTE, contenido: texto, foto: 'FOTO_A', fechaForward: new Date(fwd.getTime()) },
+  ];
+  const patas = [{ messageId: 19, fechaPick: fwd, hipodromo: 'Central Park', horaCarrera: '22:04', trampa: 5 }];
+  const r = buscarDuplicadoDePick_(27, pick, mensajes, patas);
+  assertIguales_(r && r.tipo + ' ' + r.original, 'seguro 19', 'caso real 19/27: mismo texto y misma foto -> copia segura');
+
+  mensajes[1].foto = 'FOTO_B';
+  const r2 = buscarDuplicadoDePick_(27, pick, mensajes, patas);
+  assertIguales_(r2 && r2.tipo, 'seguro', 'mismo texto y misma publicacion original (sin la misma foto) -> copia segura');
+
+  mensajes[1].fechaForward = new Date('2026-07-28T19:00:00Z'); // otra publicación, mismo día de carrera
+  mensajes[1].contenido = '22:04 Central Park\nT5 Swift Michael\nCuota 3.00\nStake 2';
+  const r3 = buscarDuplicadoDePick_(27, pick, mensajes, patas);
+  assertIguales_(r3 && r3.tipo + ' ' + r3.original, 'posible 19', 'otro mensaje, misma carrera y trampa -> posible (solo aviso)');
+
+  const otraTrampa = { esExotica: false, patas: [{ hipodromo: 'Central Park', horaCarrera: '22:04', trampa: '2' }] };
+  assertIguales_(buscarDuplicadoDePick_(27, otraTrampa, mensajes, patas), null, 'misma carrera, otra trampa -> no es duplicado');
+
+  assertIguales_(buscarDuplicadoDePick_(19, pick, mensajes, patas), null, 'solo mira picks anteriores');
+  mensajes[0].estado = ESTADO_REVISION_MANUAL;
+  assertIguales_(buscarDuplicadoDePick_(27, pick, mensajes, patas), null, 'un mensaje sin apuesta no cuenta como original');
+
+  assertIguales_(textoAvisoDuplicado_(null, false), '', 'sin duplicado no hay aviso');
+  Logger.log('test_buscarDuplicadoDePick: OK, todas las comprobaciones pasaron.');
+  return 'OK';
+}
+
+/**
+ * Oculta una copia ya registrada de un pick y apunta de cuál es copia
+ * (posible_duplicado_de). Solo actúa si buscarDuplicadoDePick_ confirma que
+ * es una copia SEGURA de `original`. Reversible respondiendo "mostrar".
+ * `clasp run-function ocultarCopiaDuplicada --params '["27","19"]'`.
+ */
+function ocultarCopiaDuplicada(copia, original) {
+  const fila = findApuestaByMessageIdRecienCreada_(copia);
+  if (!fila) return 'msg ' + copia + ': no tiene apuesta';
+  const patasCopia = leerPatasParaDuplicados_().filter(function (p) { return String(p.messageId) === String(copia); });
+  const resultado = { esExotica: false, patas: patasCopia.map(function (p) {
+    return { hipodromo: p.hipodromo, horaCarrera: p.horaCarrera, trampa: p.trampa };
+  }) };
+  const duplicado = buscarDuplicadoDePick_(copia, resultado, leerMensajesParaDuplicados_(), []);
+  if (!duplicado || duplicado.tipo !== 'seguro' || String(duplicado.original) !== String(original)) {
+    return 'msg ' + copia + ': no es una copia segura de ' + original + ' (' + JSON.stringify(duplicado) + '), no se toca';
+  }
+  setApuestaField(fila, 'posible_duplicado_de', original);
+  setApuestaField(fila, 'oculto', true);
+  invalidarCachePanel_();
+  return 'msg ' + copia + ': oculto, copia segura del msg ' + original;
 }
 
 /**
