@@ -12,7 +12,7 @@ Entradas más recientes arriba.
 - A esas cuentas el bot les contesta en simulación como si estuviera
   funcionando (respuesta, botones y dudas). Sus solicitudes de entrada siguen
   simuladas: ni bienvenida ni aceptación. A nadie más le contesta.
-- Commits: (este commit)
+- Commits: b67c8ad
 
 ## 2026-10-24 — Captación: en cada duda, primero los botones para pedir la gratuita
 
