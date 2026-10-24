@@ -33,7 +33,14 @@ Entradas más recientes arriba.
   el mismo texto, o con las mismas horas y trampas (también las de
   «3/4 4/3»), y la pestaña añade lo que había en el grupo a esa hora para
   revisarlo a mano. Nueva opción `analisis <Sheet> canales` (sin releer los
-  chats).
+  chats). Tras la corrección quedan 5, todas descartadas por el dueño o
+  avisos que no son apuestas.
+- **Todas las apuestas** (pedido del dueño): pestaña «Análisis · Todas las
+  apuestas» con cada apuesta de los canales desde el 22/07 desglosada según
+  el formato de sus mensajes (tipo, carrera/s «HH:MM Canódromo», galgo/s
+  «T5 Nombre» o combinaciones de gemela, cuota, stake), si el mensaje
+  exacto está en el grupo de picks (reenviado o mismo texto; «parecido» si
+  solo coinciden hora y galgo) y el enlace a cada mensaje.
 
 ## 2026-10-24 — Captación: análisis puntual de canales de venta y chats con clientes
 - **Qué**: el dueño pide (1) saber qué apuestas de los canales de venta

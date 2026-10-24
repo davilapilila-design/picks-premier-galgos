@@ -167,3 +167,36 @@ class TestLeerCanales(unittest.TestCase):
                                    {"canal": "Jueves Central Park", "id": 12, "apuestas": 0, "solo_foto": 0}])
         # La 1 estaba reenviada en el grupo; la 4 (de un grupo de venta) no.
         self.assertEqual([a["msg_id"] for a in analisis.emparejar(apuestas, picks)], [4])
+
+
+class TestDatosApuesta(unittest.TestCase):
+    def test_formatos_de_los_canales(self):
+        self.assertEqual(analisis.datos_apuesta("14:37 Harlow\n\nGalgo T5 Blundel Croia\n\nCuota 4.33🔥\n\n⚠️Stake 3⚠️"),
+                         {"tipo": "simple", "carreras": "14:37 Harlow", "galgos": "T5 Blundel Croia",
+                          "cuota": "4.33", "stake": "3"})
+        doble = analisis.datos_apuesta("Apuesta Doble\n\n20:46 Hove T2 Droopys Flare\n20:50 Central Park T5 Zari Aki"
+                                       "\n\nCuota 2.59🔥\n\n⚠️Stake 6⚠️")
+        self.assertEqual((doble["tipo"], doble["carreras"], doble["galgos"]),
+                         ("doble", "20:46 Hove | 20:50 Central Park", "T2 Droopys Flare | T5 Zari Aki"))
+        gemela = analisis.datos_apuesta("22:31 Star Pelaw\n\nGemela reversible 3/4 4/3\n\nTotal Stake 4")
+        self.assertEqual((gemela["tipo"], gemela["galgos"], gemela["cuota"], gemela["stake"]),
+                         ("gemela", "3-4 | 4-3", "", "4"))
+        self.assertEqual(analisis.datos_apuesta("Sheffield 17:59 T1 Jacktavern Turbo Ciota 2.75")["carreras"],
+                         "17:59 Sheffield")
+
+
+class TestTodas(unittest.TestCase):
+    def test_estado_en_el_grupo_de_cada_apuesta(self):
+        base = {"canal": "Debut", "canal_id": 7, "fecha": date(2026, 10, 20), "hora": 1_792_500_000}
+        apuestas = [dict(base, msg_id=1, texto=PICK, enlace="https://t.me/c/7/1"),
+                    dict(base, msg_id=2, texto="Hove 14:07 T5 X Cuota 2 Stake 1"),
+                    dict(base, msg_id=3, texto="Romford 11:20 T2 Y Cuota 4 Stake 1")]
+        picks = [{"fecha": date(2026, 10, 20), "texto": PICK, "reenvio": (7, 1), "enlace": "https://t.me/c/8/50"},
+                 {"fecha": date(2026, 10, 20), "texto": "Hove 14:07 trap 5", "reenvio": None, "enlace": "https://t.me/c/8/51"}]
+        filas = analisis.filas_todas(apuestas, picks, MADRID)
+        self.assertEqual([(f[8], f[9], f[10]) for f in filas], [
+            ("sí", "reenviado", "https://t.me/c/8/50"),
+            ("parecido", "misma hora y galgo", "https://t.me/c/8/51"),
+            ("no", "no", ""),
+        ])
+        self.assertEqual(filas[0][2:8], ["https://t.me/c/7/1", "simple", "19:41 Central Park", "T3 Rapid Lad", "3.50", "2"])
