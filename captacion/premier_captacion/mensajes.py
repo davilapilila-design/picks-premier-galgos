@@ -302,8 +302,10 @@ FAQ = {
         "titulo": f"⏰ {negrita('¿Cuándo llegan las apuestas?')}",
         "duda": "los horarios",
         "texto": (
-            f"Por las {negrita('mañanas')} y por las {negrita('tardes')}, con {negrita('más de 45 min')} "
-            "de margen para hacer la apuesta."
+            f"🌅 {negrita('Mañanas:')} sobre las 11:00\n"
+            f"🌇 {negrita('Tardes:')} entre las 15:00 y las 18:45\n"
+            "\n"
+            f"Siempre con {negrita('más de 45 min')} de margen para hacer la apuesta."
         ),
     },
     "packs": {
