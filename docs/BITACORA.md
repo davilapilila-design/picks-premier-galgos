@@ -2864,3 +2864,14 @@ patas que vayan quedando fuera de podio en el futuro:
 - Repo creado como proyecto independiente (no vive dentro de Proyecto
   Galgos, stack y despliegue distintos).
 - Commits: (primer commit)
+
+## 2026-10-24 — Captación: instancia real configurada y prueba apagada
+
+- Bot real en simulación con propietario, Sheet propio y la memoria ya cargada
+  (suscriptores del canal, gratuitas e históricos de bienvenidas).
+- Instancia `prueba` apagada (servicios y temporizadores desactivados) y
+  borrada su sesión de Telethon de la cuenta del dueño; se conservan su
+  configuración y su base de datos por si hay que reactivarla
+  (`instalar.sh prueba`). Mientras tanto, los cambios se prueban en el bot real
+  con `/pausar` (simulación). Decisión del dueño.
+- Commits: (solo documentación)
