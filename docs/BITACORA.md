@@ -11,7 +11,7 @@ Entradas más recientes arriba.
   gratuita); debajo, los de moverse por las dudas y «Otras dudas».
 - Final sin gratuita más directo: «¿Aún no tienes tu apuesta de regalo? Dime
   si ya has apostado o es tu primera vez 👇 y te regalo una apuesta de pago…».
-- Commits: (este commit)
+- Commits: af46886
 
 ## 2026-10-24 — Captación: mensaje de dudas justo después de la bienvenida con gratuita
 
