@@ -21,7 +21,8 @@ Entradas más recientes arriba.
   apuesta a ganador va en el paso 3. Datos del dueño: bank 400-500 € y 10 €
   por unidad; precios 1 galgo 15-25 €, 2 galgos 25-35 €, 3 galgos 35-45 €;
   Bizum en el enlace de pago; «todas son de pago»; horarios sin canódromos;
-  consejos sobre límites sacados de sus propios mensajes.
+  consejos sobre límites sacados de sus propios mensajes. Horarios, a
+  petición suya, sin horas: «por las mañanas y por las tardes».
 - Pruebas: 198, pasan en Python 3.9, 3.12 y 3.13.
 - Commits: `f220990`, `2d259e4`, `0de0024`, `9ba0127`, `3d8b857`, `2b0c9b3`
 
