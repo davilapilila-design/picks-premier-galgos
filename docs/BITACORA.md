@@ -3,6 +3,27 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 (cont.) — Web: nuevo enlace de invitación al canal de Telegram (desplegado, v41)
+- Pedido del dueño: el botón para unirse al canal de Telegram de la web de
+  Premier Galgos pasa de `https://t.me/+VtCh-VrBHPpiMzg0` a
+  `https://t.me/+VWnYe42vHLg4YTA8`. **Por qué**: el enlace nuevo pide
+  aprobación, así que la solicitud de entrada pasa por el bot de bienvenida.
+- Cambiado en las 3 apariciones de `src/PanelCuerpo.html` (botón de la
+  cabecera y los dos botones grandes), que es la única fuente del panel: la
+  usan tanto el enlace directo como el bloque de WordPress (no hay que tocar
+  WordPress). Ningún otro archivo del repo tenía el enlace viejo; nada más
+  cambiado.
+- `clasp push` + nuevo deployment sobre el mismo ID (v41). Verificado bajando
+  con `clasp pull --versionNumber 41` el código publicado: 3 veces el enlace
+  nuevo, 0 el viejo.
+- Ojo, fuera de `main`: la rama `captacion-bienvenida` tiene una versión
+  antigua del panel con el enlace viejo y su `captacion/PLAN.md` usa
+  `+VtCh-VrBHPpiMzg0` como "enlace de entrada" para atribuir de dónde viene
+  cada persona; si esa captación se fusiona o se usa, hay que contar también
+  el enlace nuevo.
+
+Commits: (este commit)
+
 ## 2026-10-24 — Picks repetidos: 2 copias contadas doble desde el 19/08, corregidas; el bot las detecta
 El dueño preguntó si el bot se daría cuenta de un pick reenviado dos veces. No:
 solo descartaba el mismo mensaje de Telegram llegando dos veces (`message_id`),
