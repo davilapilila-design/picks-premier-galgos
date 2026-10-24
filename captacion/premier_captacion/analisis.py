@@ -166,6 +166,14 @@ async def chats_de_carpeta(client, carpeta):
     return list(chats.values())
 
 
+def _enlace(chat, msg_id):
+    """Enlace al mensaje (abre en Telegram a quien está en el canal). Los
+    grupos básicos no tienen."""
+    from telethon.tl import types
+
+    return f"https://t.me/c/{chat.id}/{msg_id}" if isinstance(chat, types.Channel) else ""
+
+
 async def leer_canales(client, cfg, tz):
     """(apuestas de los canales de venta, mensajes del grupo de picks, resumen por canal)."""
     from telethon.tl import types
@@ -208,7 +216,7 @@ async def leer_canales(client, cfg, tz):
                 n += 1
                 apuestas.append({"canal": canal.title, "canal_id": canal.id, "msg_id": m.id,
                                  "fecha": m.date.astimezone(tz).date(), "hora": m.date.timestamp(),
-                                 "texto": texto})
+                                 "texto": texto, "enlace": _enlace(canal, m.id)})
             elif m.photo and not texto.strip():
                 solo_foto += 1
         resumen.append({"canal": canal.title, "id": canal.id, "apuestas": n, "solo_foto": solo_foto})
@@ -256,7 +264,7 @@ def _escribir(libro, nombre, cabecera, filas):
 
 def filas_informe(apuestas, faltan, resumen, tz):
     faltan_ids = {(a["canal_id"], a["msg_id"]) for a in faltan}
-    sin_picks = [[_fecha_hora(a["hora"], tz), a["canal"], a["msg_id"], _texto(a["texto"]),
+    sin_picks = [[_fecha_hora(a["hora"], tz), a["canal"], a.get("enlace") or a["msg_id"], _texto(a["texto"]),
                   _texto(a.get("parecido", ""))] for a in faltan]
     canales = [[r["canal"], r["apuestas"],
                 sum(1 for a in apuestas if a["canal_id"] == r["id"] and (a["canal_id"], a["msg_id"]) not in faltan_ids),
@@ -288,7 +296,7 @@ async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api, solo
         await client.disconnect()
         con.close()
     sin_picks, canales = filas_informe(apuestas, faltan, resumen, cfg.tz)
-    _escribir(libro, TAB_SIN_PICKS, ["Fecha y hora", "Canal", "Id del mensaje", "Mensaje",
+    _escribir(libro, TAB_SIN_PICKS, ["Fecha y hora", "Canal", "Enlace al mensaje", "Mensaje",
                                      "En el grupo esos días a la misma hora (para revisar)"], sin_picks)
     _escribir(libro, TAB_CANALES, ["Canal", "Apuestas detectadas", "En el grupo de picks", "No están",
                                    "Fotos sin texto (revisar a mano)"], canales)
