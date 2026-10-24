@@ -94,3 +94,16 @@ class TestOrdenGratuita(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFichaQueYaEstaba(unittest.TestCase):
+    def test_dice_si_estaba_en_el_canal_y_si_volvio(self):
+        con = conexion()
+        self.addCleanup(con.close)
+        persona(con, 9, "Leo")
+        with con:
+            db.guardar_miembros(con, [9], T)
+            db.actualizar_campos(con, 9, T, recurrente_ts=T + 86400)
+        texto = consulta.ficha(con, db.obtener_usuario(con, 9), TZ)
+        self.assertIn("📋 Ya estaba en el canal (lista de suscriptores del 09/10/2025)", texto)
+        self.assertIn("🔁 Volvió a pedir entrar: 10/10/2025", texto)

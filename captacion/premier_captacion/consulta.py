@@ -51,6 +51,11 @@ def ficha(con, fila, tz):
                       f"({textos.descripcion_tipo(con, fila['bienvenida_tipo'], tz)})")
     else:
         lineas.append("👋 Sin bienvenida apuntada")
+    miembro = con.execute("SELECT visto_ts FROM miembros_canal WHERE user_id = ?", (fila["user_id"],)).fetchone()
+    if miembro is not None:
+        lineas.append(f"📋 Ya estaba en el canal (lista de suscriptores del {fecha(miembro['visto_ts'])[:10]})")
+    if fila["recurrente_ts"] is not None:
+        lineas.append(f"🔁 Volvió a pedir entrar: {fecha(fila['recurrente_ts'])} (bienvenida sin gratuita)")
     if fila["primer_mensaje_ts"] is not None:
         boton = _BOTONES.get(fila["boton"])
         lineas.append(f"💬 Te escribió por primera vez: {fecha(fila['primer_mensaje_ts'])}"
