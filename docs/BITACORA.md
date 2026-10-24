@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: el aviso de gratuita repetida también salta cuando la piden con sus palabras
+- **Qué**: hasta ahora solo saltaba con la frase exacta de los botones. Con
+  lo visto en los chats de clientes, ahora también con «gratis / gratuita /
+  regalo / free» junto a «apuesta / me das / me pasas / dame / sigue /
+  vigente» («¿me darás una gratis?», «¿lo de la apuesta gratis sigue
+  vigente?»), salvo si el mensaje habla de compensación, garantía, packs o
+  recuperar (las compensaciones las da el dueño por los canales). Mismas
+  reglas: solo si ya tuvo la gratuita o ya estaba en el canal, una vez al
+  día por persona, solo al dueño. Aprobado por el dueño.
+- Comprobado contra los chats reales: tras la gratuita habría avisado de 16
+  clientes (22 mensajes), casi todos pidiéndola de nuevo o preguntando por
+  apuestas gratis.
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: dudas frecuentes rehechas a partir de los chats con clientes
 - **Análisis de los chats** (CSV de la pestaña «Análisis · Chats clientes»,
   procesado en local, sin subir nada al repo): desde el 22/07 escribieron

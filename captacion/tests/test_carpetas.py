@@ -408,3 +408,18 @@ class TestAyudas(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPideGratuita(unittest.TestCase):
+    def test_con_sus_palabras_y_no_las_compensaciones(self):
+        from premier_captacion.carpetas import pide_gratuita
+        for si in ("¡Hola! Acabo de entrar en el canal. Es mi primera vez con los galgos 🐕",
+                   "Me darás una gratis de novata?", "Lo de la apuesta gratis sigue vigente ?",
+                   "Buenos dias. Si te acuerdas dame las de esta mañana gratis por favor",
+                   "Mi apuesta regalo?"):
+            self.assertTrue(pide_gratuita(si), si)
+        for no in ("Va a haber compensación hoy por la compensación de ayer?",
+                   "Bro si algún mega pack se pierde das garantía ?",
+                   "Si se pierden las dos hay algún regalo para recuperar?",
+                   "Gracias crack", "El regalo es por ser nuevo"):
+            self.assertFalse(pide_gratuita(no), no)

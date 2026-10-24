@@ -114,6 +114,24 @@ def detectar_boton(texto):
     return None
 
 
+# Pedir la gratuita con sus palabras (sacado de los chats con clientes,
+# 2026-10-24): «¿me darás una gratis?», «¿lo de la apuesta gratis sigue
+# vigente?». Sin confundirlo con las compensaciones de los packs.
+_RE_GRATIS = re.compile(r"\b(gratis|gratuit[oa]s?|regalo|free)\b")
+_RE_PIDE = re.compile(r"\b(apuestas?|me das|me daras|me pasas|pasame|dame|sigue|vigente)\b")
+_RE_NO_ES_GRATUITA = re.compile(r"compens|garantia|pack|recuper")
+
+
+def pide_gratuita(texto):
+    """¿El mensaje pide la apuesta gratuita? La frase de los botones, o
+    «gratis/regalo…» junto a «apuesta/me das/sigue…», si no habla de
+    compensaciones, garantía, packs o recuperar."""
+    if detectar_boton(texto) is not None:
+        return True
+    t = normalizar(texto)
+    return bool(_RE_GRATIS.search(t) and _RE_PIDE.search(t) and not _RE_NO_ES_GRATUITA.search(t))
+
+
 class Organizador:
     def __init__(self, con, tg, tz, ajustes, avisar=None, reloj=time.time):
         self.con = con
@@ -201,7 +219,7 @@ class Organizador:
         en el canal, le escribe la frase de los botones de la gratuita (p. ej.
         copiada tras salir y volver a entrar). Una vez al día por persona, y
         solo por mensajes recientes (no al recuperar lo antiguo)."""
-        if detectar_boton(texto) is None or self.reloj() - ts > AVISO_GRATUITA_S:
+        if not pide_gratuita(texto) or self.reloj() - ts > AVISO_GRATUITA_S:
             return
         estado = db.estado_oferta(self.con, user_id, fila)
         if estado == "nueva":
