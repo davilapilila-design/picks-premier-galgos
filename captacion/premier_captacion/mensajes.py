@@ -332,7 +332,7 @@ FAQ = {
         "texto": (
             f"🔒 {negrita('Me limitan la cuenta')}\n"
             "Es normal cuando se acierta. Sigue con otra de tus casas: por eso conviene tener "
-            "varias. En Bet365 hay un límite semanal de ingreso que puedes cambiar en tu cuenta.\n"
+            "varias.\n"
             "\n"
             f"📉 {negrita('La cuota ha bajado')}\n"
             "Es buena señal: el 80% de nuestras apuestas acaban a cuota más baja. Si ha bajado "
