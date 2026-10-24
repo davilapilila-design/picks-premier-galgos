@@ -43,6 +43,9 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
 - El bot tiene **modo simulación** (`CAPTACION_BOT_SIMULAR=1`, por defecto en la
   instancia real): ni escribe a clientes ni acepta solicitudes; solo avisa al
   dueño. Cualquier cambio que haga hablar o aceptar al bot tiene que respetarlo.
+  Única excepción: las cuentas de prueba que apunta el dueño con `/probador`
+  reciben respuesta si escriben al bot o pulsan las dudas (sus solicitudes
+  siguen simuladas).
 - El bot tiene **freno de emergencia** (`/pausar` = simulación / `/arrancar`, solo el
   dueño; estado `pausa_desde` en la base de datos): cualquier cambio en la
   gestión de solicitudes tiene que respetarlo.

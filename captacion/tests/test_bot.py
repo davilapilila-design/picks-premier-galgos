@@ -209,6 +209,47 @@ class TestMensajesAlBot(Base):
         self.assertEqual(self.api.llamadas, [])
 
 
+class TestProbadores(Base):
+    """/probador: en simulación el bot contesta solo a las cuentas de prueba."""
+
+    def setUp(self):
+        super().setUp()
+        self.bot = self.crear_bot(simular=True)
+
+    def orden(self, update_id, texto):
+        self.bot.procesar(update_mensaje(update_id, uid=PROPIETARIO, texto=texto))
+        return self.api.envios_a(PROPIETARIO)[-1]["text"]
+
+    def test_contesta_al_probador_y_a_nadie_mas(self):
+        self.assertIn("Añadida @pepe", self.orden(1, "/probador @Pepe"))
+        self.bot.procesar(update_mensaje(2, uid=500))  # @pepe
+        self.assertEqual(self.api.envios_a(500)[0]["text"], mensajes.TEXTO_REDIRECCION)
+        self.bot.procesar(update_boton(3, "faq:casas", uid=500))
+        self.assertIn("editMessageText", self.api.metodos())
+        upd = update_mensaje(4, uid=501)
+        upd["message"]["from"]["username"] = "cliente"
+        self.bot.procesar(upd)
+        self.assertEqual(self.api.envios_a(501), [])
+
+    def test_por_id_y_quitar(self):
+        self.orden(1, "/probador 600")
+        self.assertIn("600", self.orden(2, "/probador"))
+        self.bot.procesar(update_mensaje(3, uid=600))
+        self.assertEqual(len(self.api.envios_a(600)), 1)
+        self.assertIn("Quitada", self.orden(4, "/probador quitar 600"))
+        self.bot.procesar(update_mensaje(5, uid=600))
+        self.assertEqual(len(self.api.envios_a(600)), 1)
+        self.assertIn("no estaba", self.orden(6, "/probador quitar 600"))
+
+    def test_sus_solicitudes_siguen_simuladas(self):
+        self.orden(1, "/probador @pepe")
+        self.api.llamadas.clear()
+        self.bot.procesar(update_solicitud(2, uid=500))
+        self.assertNotIn("approveChatJoinRequest", self.api.metodos())
+        self.assertEqual(self.api.envios_a(500), [])
+        self.assertIn("@pepe", self.orden(3, "/estado"))
+
+
 class TestPausa(Base):
     """Freno de emergencia: /pausar y /reanudar (solo el dueño)."""
 

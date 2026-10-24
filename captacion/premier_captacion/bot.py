@@ -33,6 +33,7 @@ en la base de datos al terminarla; si se cae la red a mitad, se repite.
 Arranque (en la VM lo hace systemd, ver deploy/):
     python3 -m premier_captacion.bot
 """
+import json
 import logging
 import os
 import signal
@@ -60,6 +61,8 @@ AYUDA_PROPIETARIO = (
     "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
     "/dudas – ver las dudas frecuentes como las ve un cliente\n"
     "/gratuita @usuario (o parte del nombre) – si se le dio la gratuita, cuándo y a qué canal\n"
+    "/probador @cuenta – en simulación, el bot le contesta a esa cuenta (para probar); "
+    "/probador quitar @cuenta; /probador solo – ver la lista\n"
     "/miid – tu id de Telegram"
 )
 
@@ -414,8 +417,8 @@ class BotCaptacion:
             db.actualizar_datos_usuario(self.con, ahora, usuario)
             db.registrar_evento(self.con, ahora, "mensaje_al_bot", uid)
             fila = db.obtener_usuario(self.con, uid)
-        if self.simulando():
-            return  # en simulación el bot no habla con nadie
+        if self.simulando() and not self._es_probador(usuario):
+            return  # en simulación el bot solo habla con las cuentas de prueba
         ultima = fila["ultima_redireccion_ts"]
         if ultima is not None and ahora - ultima < self.cfg.pausa_redireccion_s:
             return
@@ -465,6 +468,8 @@ class BotCaptacion:
             texto, teclado = consulta.respuesta(self.con, dato, tz)
             self._responder(self.cfg.propietario_id, texto, teclado)
             return
+        elif comando == "/probador":
+            texto = self._orden_probador(texto_orden.split()[1:])
         elif comando == "/pausar":
             texto = self._pausar(ahora)
         elif comando in ("/reanudar", "/arrancar"):
@@ -483,6 +488,7 @@ class BotCaptacion:
             texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
                      f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
                      f"En la lista de suscriptores del canal (sin gratuita si vuelven): {en_lista}\n"
+                     f"Cuentas de prueba (les contesto en simulación): {self._lista_probadores()}\n"
                      f"Versión: {version_instalada()}")
         elif comando == "/start":
             texto = "✅ Bot de captación activo. Aquí te llegarán los avisos y los resúmenes.\n\n" + AYUDA_PROPIETARIO
@@ -502,7 +508,7 @@ class BotCaptacion:
         uid = (cq.get("from") or {}).get("id")
         if uid is None:
             return
-        if self.simulando() and uid != self.cfg.propietario_id:
+        if self.simulando() and uid != self.cfg.propietario_id and not self._es_probador(cq.get("from")):
             return
         if datos == mensajes.CALLBACK_DUDAS or datos.startswith("faq:"):
             self._boton_dudas(cq, uid, datos)
@@ -513,6 +519,50 @@ class BotCaptacion:
             fila = db.obtener_usuario(self.con, int(uid_buscado)) if uid_buscado.isdigit() else None
             if fila is not None:
                 self._responder(uid, consulta.ficha(self.con, fila, self.cfg.tz))
+
+    # --- Cuentas de prueba (/probador, solo el dueño) ---------------------------
+    # En simulación el bot no habla con nadie salvo con estas cuentas: así se
+    # prueban las respuestas y las dudas en el bot real sin que lo vea ningún
+    # cliente. Las solicitudes no cambian: ni bienvenida ni aceptación.
+
+    def _probadores(self):
+        return json.loads(db.leer_estado(self.con, "probadores", "[]"))
+
+    def _es_probador(self, usuario):
+        if not usuario:
+            return False
+        lista = self._probadores()
+        return (str(usuario.get("id")) in lista
+                or (usuario.get("username") or "").lower() in lista)
+
+    def _lista_probadores(self):
+        return ", ".join(c if c.isdigit() else f"@{c}" for c in self._probadores()) or "ninguna"
+
+    def _orden_probador(self, argumentos):
+        lista = self._probadores()
+        quitar = bool(argumentos) and argumentos[0].lower() == "quitar"
+        cuenta = (argumentos[1:] if quitar else argumentos)[:1]
+        if not cuenta:
+            if quitar:
+                return "Dime cuál: /probador quitar @cuenta"
+            return ("🧪 Cuentas de prueba: " + self._lista_probadores() +
+                    "\nEn simulación les contesto como si estuviera funcionando (a nadie más).\n"
+                    "Añadir: /probador @cuenta · Quitar: /probador quitar @cuenta")
+        clave = cuenta[0].lstrip("@").lower()
+        if quitar:
+            if clave not in lista:
+                return f"@{clave} no estaba en las cuentas de prueba."
+            lista.remove(clave)
+            texto = f"✅ Quitada @{clave}: en simulación ya no le contesto."
+        else:
+            if clave in lista:
+                return f"@{clave} ya estaba en las cuentas de prueba."
+            lista.append(clave)
+            texto = (f"✅ Añadida @{clave}: en simulación le contesto cuando escriba al bot o pulse las dudas. "
+                     "Las solicitudes siguen igual (ni bienvenida ni aceptación).")
+        with self.con:
+            db.guardar_estado(self.con, "probadores", json.dumps(lista))
+        return texto
 
     def _pantalla_dudas(self, tema, con_gratuita, recurrente=False):
         """(texto, teclado) del menú de dudas (tema None) o de un tema."""

@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: cuentas de prueba (/probador) que reciben respuesta en simulación
+
+- El dueño quiere probar en el bot real, en simulación, cómo responde y las
+  dudas, con una cuenta secundaria. Opción elegida por él: solo cuentas que
+  apunte él (`/probador @cuenta`, `/probador quitar @cuenta`, `/probador` para
+  ver la lista; también por id), no cualquiera que escriba al bot.
+- A esas cuentas el bot les contesta en simulación como si estuviera
+  funcionando (respuesta, botones y dudas). Sus solicitudes de entrada siguen
+  simuladas: ni bienvenida ni aceptación. A nadie más le contesta.
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: en cada duda, primero los botones para pedir la gratuita
 
 - El dueño vio confuso que en las pantallas de dudas se mezclaran los
