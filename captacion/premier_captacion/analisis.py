@@ -54,29 +54,45 @@ def es_apuesta(texto):
     return bool(horas(texto)) and bool(_RE_APUESTA.search(carpetas.normalizar(texto)))
 
 
+_RE_TRAP = re.compile(r"(?:(?<![\w.,])t|trap|galgo\s*t?)\s*([1-8])(?![\d.,])")
+_RE_COMBINACION = re.compile(r"(?<![\d.,])([1-8])\s*[-/]\s*([1-8])(?![\d.,])")
+
+
+def trampas(texto):
+    """Números de trampa del texto («T5», «trap 5», o los de «3-4»/«3/4»)."""
+    t = carpetas.normalizar(texto)
+    numeros = set(_RE_TRAP.findall(t))
+    for a, b in _RE_COMBINACION.findall(t):
+        numeros |= {a, b}
+    return frozenset(numeros)
+
+
+def _texto_igual(texto):
+    return " ".join(carpetas.normalizar(texto).split())
+
+
 def emparejar(apuestas, picks, margen_dias=1):
     """Qué apuestas de los canales no están en el grupo de picks.
 
     `apuestas`: [{"canal_id", "msg_id", "fecha" (date), "texto"}];
     `picks`: [{"fecha", "texto", "reenvio": (canal_id, msg_id) o None}].
-    Está si el grupo tiene ese mismo mensaje reenviado, o un mensaje de un
-    día cercano con las mismas horas de carrera. Cada mensaje del grupo
-    solo cuenta una vez.
+    Está si el grupo tiene ese mismo mensaje reenviado o, en un día cercano,
+    un mensaje con el mismo texto o con las mismas horas de carrera y las
+    mismas trampas. Un mismo mensaje del grupo vale para varias copias (el
+    dueño a veces publica la misma apuesta en dos canales y reenvía una).
     """
     reenviados = {p["reenvio"] for p in picks if p.get("reenvio")}
-    libres = [p for p in picks if not p.get("reenvio")]
-    usados = set()
     faltan = []
     for a in apuestas:
         if (a["canal_id"], a["msg_id"]) in reenviados:
             continue
-        clave = horas(a["texto"])
-        hueco = next((i for i, p in enumerate(libres) if i not in usados and horas(p["texto"]) == clave
-                      and abs((p["fecha"] - a["fecha"]).days) <= margen_dias), None)
-        if hueco is None:
-            faltan.append(a)
-        else:
-            usados.add(hueco)
+        igual, clave = _texto_igual(a["texto"]), (horas(a["texto"]), trampas(a["texto"]))
+        cerca = [p for p in picks if abs((p["fecha"] - a["fecha"]).days) <= margen_dias]
+        if not any(_texto_igual(p["texto"]) == igual or (horas(p["texto"]), trampas(p["texto"])) == clave
+                   for p in cerca):
+            # Para revisarla a mano: lo del grupo de esos días a la misma hora, si hay algo.
+            parecido = next((p["texto"] for p in cerca if horas(p["texto"]) & clave[0]), "")
+            faltan.append(dict(a, parecido=parecido))
     return faltan
 
 
@@ -240,14 +256,15 @@ def _escribir(libro, nombre, cabecera, filas):
 
 def filas_informe(apuestas, faltan, resumen, tz):
     faltan_ids = {(a["canal_id"], a["msg_id"]) for a in faltan}
-    sin_picks = [[_fecha_hora(a["hora"], tz), a["canal"], a["msg_id"], _texto(a["texto"])] for a in faltan]
+    sin_picks = [[_fecha_hora(a["hora"], tz), a["canal"], a["msg_id"], _texto(a["texto"]),
+                  _texto(a.get("parecido", ""))] for a in faltan]
     canales = [[r["canal"], r["apuestas"],
                 sum(1 for a in apuestas if a["canal_id"] == r["id"] and (a["canal_id"], a["msg_id"]) not in faltan_ids),
                 sum(1 for a in faltan if a["canal_id"] == r["id"]), r["solo_foto"]] for r in resumen]
     return sin_picks, canales
 
 
-async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api):
+async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api, solo_canales=False):
     api_id, api_hash, sesion = credenciales_api(entorno)
     credencial = sheet.ruta_credencial()
     if credencial is None:
@@ -266,18 +283,21 @@ async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api):
         inicio = time.time()
         apuestas, picks, resumen = await leer_canales(client, cfg, cfg.tz)
         faltan = emparejar(apuestas, picks)
-        chats = await leer_chats(client, con, cfg.tz)
+        chats = None if solo_canales else await leer_chats(client, con, cfg.tz)
     finally:
         await client.disconnect()
         con.close()
     sin_picks, canales = filas_informe(apuestas, faltan, resumen, cfg.tz)
-    _escribir(libro, TAB_SIN_PICKS, ["Fecha y hora", "Canal", "Id del mensaje", "Mensaje"], sin_picks)
+    _escribir(libro, TAB_SIN_PICKS, ["Fecha y hora", "Canal", "Id del mensaje", "Mensaje",
+                                     "En el grupo esos días a la misma hora (para revisar)"], sin_picks)
     _escribir(libro, TAB_CANALES, ["Canal", "Apuestas detectadas", "En el grupo de picks", "No están",
                                    "Fotos sin texto (revisar a mano)"], canales)
-    _escribir(libro, TAB_CHATS, ["Cliente", "Etapa", "Estaba en el canal o volvió", "Fecha y hora", "Quién",
-                                 "Mensaje"], chats)
+    if chats is not None:
+        _escribir(libro, TAB_CHATS, ["Cliente", "Etapa", "Estaba en el canal o volvió", "Fecha y hora", "Quién",
+                                     "Mensaje"], chats)
     print(f"✓ Análisis hecho en {int(time.time() - inicio) // 60} min: {len(apuestas)} apuestas en "
-          f"{len(canales)} canales, {len(faltan)} no están en el grupo de picks; {len(chats)} mensajes "
-          f"de chats con clientes. Está en las pestañas «Análisis · …» del Sheet.")
+          f"{len(canales)} canales, {len(faltan)} no están en el grupo de picks"
+          + ("" if chats is None else f"; {len(chats)} mensajes de chats con clientes")
+          + ". Está en las pestañas «Análisis · …» del Sheet.")
     return 0
 

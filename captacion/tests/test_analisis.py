@@ -37,10 +37,21 @@ class TestEmparejar(unittest.TestCase):
                  {"fecha": date(2026, 10, 21), "texto": "Hove 14:07 trap 5", "reenvio": None}]
         self.assertEqual([a["msg_id"] for a in analisis.emparejar(apuestas, picks)], [3])
 
-    def test_cada_mensaje_del_grupo_cuenta_una_vez_y_el_dia_importa(self):
-        apuestas = [self.apuesta(1), self.apuesta(2), self.apuesta(3, dia=10)]
-        picks = [{"fecha": date(2026, 10, 20), "texto": PICK, "reenvio": None}]
-        self.assertEqual([a["msg_id"] for a in analisis.emparejar(apuestas, picks)], [2, 3])
+    def test_la_misma_apuesta_en_dos_canales_vale_con_un_reenvio_y_el_dia_importa(self):
+        otra = {"canal_id": 8, "msg_id": 9, "fecha": date(2026, 10, 20), "texto": PICK}
+        apuestas = [self.apuesta(1), otra, self.apuesta(3, dia=10)]
+        picks = [{"fecha": date(2026, 10, 20), "texto": PICK, "reenvio": (8, 9)}]  # reenviada desde el otro canal
+        self.assertEqual([a["msg_id"] for a in analisis.emparejar(apuestas, picks)], [3])
+
+    def test_misma_hora_pero_otro_galgo_no_cuenta(self):
+        apuestas = [self.apuesta(1, "Harlow 13:12 Galgo T2 X Cuota 1.90 Stake 6")]
+        picks = [{"fecha": date(2026, 10, 20), "texto": "Harlow 13:12 Galgo T4 Y Cuota 3", "reenvio": None}]
+        self.assertEqual(len(analisis.emparejar(apuestas, picks)), 1)
+
+    def test_trampas(self):
+        self.assertEqual(analisis.trampas("Galgo T5 Blundel Croia"), {"5"})
+        self.assertEqual(analisis.trampas("Gemela reversible 3/4 4/3 Total Stake 4"), {"3", "4"})
+        self.assertEqual(analisis.trampas("Galgo 3 Rapid Lad Cuota 3.50"), {"3"})
 
 
 class TestInforme(unittest.TestCase):

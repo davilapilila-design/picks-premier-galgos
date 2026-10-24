@@ -25,6 +25,15 @@ Entradas más recientes arriba.
   franjas: mañanas sobre las 11:00, tardes entre las 15:00 y las 18:45.
 - Pruebas: 198, pasan en Python 3.9, 3.12 y 3.13.
 - Commits: `f220990`, `2d259e4`, `0de0024`, `9ba0127`, `3d8b857`, `2b0c9b3`
+- **Corrección (2026-10-24)**: el dueño dice que la gemela de Star Pelaw del
+  05/09 sí estaba en el grupo (reenvía tal cual). Fallo del emparejado: un
+  mensaje reenviado al grupo solo contaba para el mensaje exacto del que
+  venía, y si la misma apuesta estaba en dos canales la otra copia salía
+  como «falta». Ahora vale cualquier mensaje del grupo de un día cercano con
+  el mismo texto, o con las mismas horas y trampas (también las de
+  «3/4 4/3»), y la pestaña añade lo que había en el grupo a esa hora para
+  revisarlo a mano. Nueva opción `analisis <Sheet> canales` (sin releer los
+  chats).
 
 ## 2026-10-24 — Captación: análisis puntual de canales de venta y chats con clientes
 - **Qué**: el dueño pide (1) saber qué apuestas de los canales de venta

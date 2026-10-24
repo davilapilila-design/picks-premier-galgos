@@ -582,7 +582,8 @@ def main(argv=None):
             if not args.dato:
                 parser.error("analisis necesita el id (o el enlace) del Google Sheet donde escribirlo")
             from . import analisis
-            return asyncio.run(analisis.ejecutar(cfg, entorno, _id_sheet(args.dato), crear_cliente, credenciales_api))
+            return asyncio.run(analisis.ejecutar(cfg, entorno, _id_sheet(args.dato), crear_cliente, credenciales_api,
+                                                 solo_canales="canales" in args.mas))
         if args.modo == "suscriptores":
             return asyncio.run(leer_suscriptores(cfg, entorno))
         if args.modo == "apuntar-gratuita":
