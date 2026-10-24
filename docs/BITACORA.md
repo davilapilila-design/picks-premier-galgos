@@ -16,6 +16,11 @@ Entradas más recientes arriba.
 - Nombre acordado: «PREMIER GALGOS» (@PremierGalgosBienvenida_bot o
   similar), logo del canal en colores invertidos; creado por el dueño en
   BotFather. Mismos textos que el de prueba (se copian los de /textos).
+- **Órdenes en el propio bot** (pedido del dueño): `/pausar` ahora pasa a
+  simulación (antes solo paraba en silencio) y `/arrancar` (o `/reanudar`)
+  lo pone a actuar. La instancia real empieza en simulación hasta el primer
+  `/arrancar` (se guarda en la base de datos y sobrevive a reinicios).
+  `/estado` dice también cuántos hay en la lista de suscriptores (`e7788f3`).
 - También: la ficha de /gratuita dice si estaba en el canal y si volvió a
   pedir entrar (`182158f`).
 - Commits: (este commit)

@@ -87,7 +87,7 @@ ETIQUETAS_EVENTO = {
     "bienvenida_manual": "Bienvenida manual",
     "bienvenida_prueba": "Marcado del embudo (prueba)",
     "pausa": "Bot en pausa (/pausar)",
-    "reanudacion": "Bot reanudado (/reanudar)",
+    "reanudacion": "Bot arrancado (/arrancar o /reanudar)",
     "solicitud_en_pausa": "Solicitud sin atender (bot en pausa)",
     "faq": "Miró las dudas frecuentes",
     "texto_cambiado": "Texto cambiado desde el bot (/textos)",

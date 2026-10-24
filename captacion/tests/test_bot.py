@@ -213,20 +213,22 @@ class TestPausa(Base):
         self.bot.procesar(update_mensaje(update_id, uid=PROPIETARIO, texto=texto))
         return self.api.envios_a(PROPIETARIO)[-1]["text"]
 
-    def test_en_pausa_no_da_la_bienvenida_ni_acepta_y_al_reanudar_vuelve(self):
-        self.assertTrue(self.orden(1, "/pausar").startswith("⏸️ En pausa"))
+    def test_en_pausa_simula_y_al_arrancar_vuelve(self):
+        self.assertTrue(self.orden(1, "/pausar").startswith("⏸️ En pausa: paso a SIMULACIÓN"))
         self.api.llamadas.clear()
         self.bot.procesar(update_solicitud(2, uid=500))
         self.bot.procesar(update_solicitud(3, uid=501))
         self.assertNotIn("approveChatJoinRequest", self.api.metodos())
         self.assertEqual(self.api.envios_a(500), [])  # ni bienvenida
         avisos = [e["text"] for e in self.api.envios_a(PROPIETARIO)]
-        self.assertEqual(len(avisos), 1)  # solo avisa de la primera
-        self.assertIn("pendiente", avisos[0])
-        self.assertEqual(tipos_eventos(self.con, 500), ["solicitud", "solicitud_en_pausa"])
+        self.assertEqual(len(avisos), 2)  # le cuenta lo que haría con cada una
+        self.assertIn("le enviaría la bienvenida CON gratuita", avisos[0])
+        self.assertEqual(tipos_eventos(self.con, 500), ["solicitud", "solicitud_en_pausa", "solicitud_simulada"])
         self.assertIsNone(db.obtener_usuario(self.con, 500)["bienvenida_ts"])  # podrá recibirla luego
-        self.assertIn("EN PAUSA", self.orden(4, "/estado"))
-        self.assertIn("llegaron 2 solicitudes", self.orden(5, "/reanudar"))
+        self.bot.procesar(update_mensaje(9, uid=500, texto="hola"))
+        self.assertEqual(self.api.envios_a(500), [])  # en pausa tampoco contesta
+        self.assertIn("SIMULACIÓN", self.orden(4, "/estado"))
+        self.assertIn("llegaron 2 solicitudes", self.orden(5, "/arrancar"))
         self.api.llamadas.clear()
         self.bot.procesar(update_solicitud(6, uid=502))
         self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
@@ -237,24 +239,30 @@ class TestPausa(Base):
         self.api.llamadas.clear()
         self.api.respuestas["getChatMember"] = {"status": "administrator", "can_invite_users": True}
         otro.comprobar_arranque()
-        self.assertIn("Arranco EN PAUSA", self.api.envios_a(PROPIETARIO)[0]["text"])
+        self.assertIn("Arranco en SIMULACIÓN", self.api.envios_a(PROPIETARIO)[0]["text"])
         otro.procesar(update_solicitud(2, uid=500))
         self.assertNotIn("approveChatJoinRequest", self.api.metodos())
 
-    def test_pausar_dos_veces_y_reanudar_sin_pausa(self):
+    def test_pausar_dos_veces_y_arrancar_sin_pausa(self):
         self.orden(1, "/pausar")
         self.assertIn("Ya estaba en pausa", self.orden(2, "/pausar"))
-        self.assertEqual(self.orden(3, "/reanudar"), "▶️ Vuelvo a aceptar solicitudes con la bienvenida.")
-        self.assertIn("No estaba en pausa", self.orden(4, "/reanudar"))
+        self.assertTrue(self.orden(3, "/reanudar").startswith("▶️ Vuelvo a aceptar"))
+        self.assertIn("Ya estaba funcionando", self.orden(4, "/arrancar"))
         self.assertEqual(tipos_eventos(self.con), ["pausa", "reanudacion"])
 
-    def test_solo_el_dueno_puede_pausar(self):
-        self.bot.procesar(update_mensaje(1, uid=500, texto="/pausar"))
-        self.assertIsNone(db.pausa_desde(self.con))
-        self.assertEqual(self.api.envios_a(500)[0]["text"], mensajes.TEXTO_REDIRECCION)
-
-    def test_la_ayuda_lo_explica(self):
-        self.assertIn("/pausar", self.orden(1, "hola"))
+    def test_instancia_en_simulacion_hasta_arrancar(self):
+        bot = self.crear_bot(simular=True)
+        bot.procesar(update_solicitud(1, uid=500))
+        self.assertNotIn("approveChatJoinRequest", self.api.metodos())
+        bot.procesar(update_mensaje(2, uid=PROPIETARIO, texto="/arrancar"))
+        self.assertIn("Arrancado", self.api.envios_a(PROPIETARIO)[-1]["text"])
+        self.api.llamadas.clear()
+        self.crear_bot(simular=True).procesar(update_solicitud(3, uid=501))  # y sigue así tras reiniciar
+        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        bot.procesar(update_mensaje(4, uid=PROPIETARIO, texto="/pausar"))
+        self.api.llamadas.clear()
+        bot.procesar(update_solicitud(5, uid=502))
+        self.assertNotIn("approveChatJoinRequest", self.api.metodos())
 
 
 class TestDudas(Base):

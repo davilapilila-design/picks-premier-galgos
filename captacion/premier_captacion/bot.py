@@ -55,8 +55,8 @@ AYUDA_PROPIETARIO = (
     "/resumen – lo que va de hoy\n"
     "/semana – lo que va de semana\n"
     "/estado – comprobar que el bot funciona\n"
-    "/pausar – dejar de aceptar solicitudes al momento (por si algo falla)\n"
-    "/reanudar – volver a aceptarlas\n"
+    "/pausar – pasar a simulación al momento: no acepto ni escribo, solo te cuento lo que haría\n"
+    "/arrancar – que actúe: bienvenida y aceptar (también /reanudar)\n"
     "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
     "/dudas – ver las dudas frecuentes como las ve un cliente\n"
     "/gratuita @usuario (o parte del nombre) – si se le dio la gratuita, cuándo y a qué canal\n"
@@ -107,6 +107,14 @@ class BotCaptacion:
         # que se repite en cada solicitud), para no inundar al dueño.
         self._avisos_dados = set()
 
+    def simulando(self):
+        """En simulación (no acepta ni escribe a clientes, solo cuenta lo que
+        haría): tras /pausar, o en una instancia que arranca en simulación
+        (CAPTACION_BOT_SIMULAR=1) hasta que el dueño mande /arrancar."""
+        if db.pausa_desde(self.con) is not None:
+            return True
+        return self.cfg.simular and db.leer_estado(self.con, "arrancado") != "1"
+
     # --- Avisos al dueño ------------------------------------------------------
 
     def avisar(self, texto, clave=None, teclado=None):
@@ -142,13 +150,10 @@ class BotCaptacion:
         log.info("Bot @%s (id %s) arrancando, versión %s", yo.get("username"), self.bot_id, version_instalada())
         # Con un webhook activo getUpdates no funciona; este bot no usa webhook.
         self.api.llamar("deleteWebhook")
-        if self.cfg.simular:
+        if self.simulando():
             self.avisar("🧪 Arranco en SIMULACIÓN: no escribo a nadie ni acepto solicitudes; solo te "
-                        "cuento lo que haría. Las solicitudes las sigues aceptando tú.", clave="simulacion")
-        pausa = db.pausa_desde(self.con)
-        if pausa is not None:
-            self.avisar(f"⏸️ Arranco EN PAUSA (desde las {self._hora(pausa)}): no acepto a nadie "
-                        "hasta que escribas /reanudar.", clave="pausa_arranque")
+                        "cuento lo que haría. Las solicitudes las sigues aceptando tú.\n"
+                        "Para que empiece a actuar: /arrancar", clave="simulacion")
         if self.cfg.propietario_id is None:
             log.warning("CAPTACION_PROPIETARIO_ID vacío: los avisos solo irán al log. "
                         "Escribe /miid al bot desde tu cuenta para saber tu id.")
@@ -263,20 +268,13 @@ class BotCaptacion:
                 db.guardar_estado(self.con, "solicitud_registrada", self._update_id)
             fila = db.obtener_usuario(self.con, uid)
 
-        pausa = db.pausa_desde(self.con)
-        if pausa is not None:
-            # El dueño lo ha parado con /pausar: ni bienvenida ni aceptación.
-            # La solicitud se queda pendiente para que la acepte él a mano.
-            log.info("Solicitud de %s: bot en pausa, se queda pendiente", uid)
-            with self.con:
-                db.registrar_evento(self.con, ahora, "solicitud_en_pausa", uid)
-            self.avisar("⏸️ Ha llegado una solicitud y estoy en pausa: la dejo pendiente en el canal "
-                        "para que la aceptes tú. De las siguientes no te aviso (salen en el "
-                        "resumen). Para volver a aceptar: /reanudar", clave=f"pausa:{pausa}")
-            return
-
         recurrente = db.ya_conocido(self.con, uid, fila)
-        if self.cfg.simular:
+        if self.simulando():
+            # En simulación (o tras /pausar): ni bienvenida ni aceptación. La
+            # solicitud se queda pendiente para que la acepte el dueño a mano.
+            if db.pausa_desde(self.con) is not None:
+                with self.con:
+                    db.registrar_evento(self.con, ahora, "solicitud_en_pausa", uid)
             self._simular_solicitud(usuario, recurrente, retraso, ahora)
             return
         if recurrente:
@@ -407,7 +405,7 @@ class BotCaptacion:
             db.actualizar_datos_usuario(self.con, ahora, usuario)
             db.registrar_evento(self.con, ahora, "mensaje_al_bot", uid)
             fila = db.obtener_usuario(self.con, uid)
-        if self.cfg.simular:
+        if self.simulando():
             return  # en simulación el bot no habla con nadie
         ultima = fila["ultima_redireccion_ts"]
         if ultima is not None and ahora - ultima < self.cfg.pausa_redireccion_s:
@@ -460,17 +458,18 @@ class BotCaptacion:
             return
         elif comando == "/pausar":
             texto = self._pausar(ahora)
-        elif comando == "/reanudar":
+        elif comando in ("/reanudar", "/arrancar"):
             texto = self._reanudar(ahora)
         elif comando == "/estado":
             con_bienvenida = self.con.execute(
                 "SELECT COUNT(*) FROM usuarios WHERE bienvenida_ts IS NOT NULL").fetchone()[0]
             canal = self.cfg.canal_id if self.cfg.canal_id is not None else "sin configurar (no acepto a nadie)"
             pausa = db.pausa_desde(self.con)
-            cabecera = ("🧪 Funcionando en SIMULACIÓN: no escribo a nadie ni acepto solicitudes." if self.cfg.simular else
-                        "✅ Funcionando." if pausa is None else
-                        f"⏸️ Funcionando, pero EN PAUSA desde las {self._hora(pausa)}: no acepto a "
-                        "nadie. Para volver: /reanudar")
+            cabecera = ("✅ Funcionando." if not self.simulando() else
+                        f"🧪 En SIMULACIÓN (pausa desde las {self._hora(pausa)}): no escribo a nadie ni acepto "
+                        "solicitudes. Para que actúe: /arrancar" if pausa is not None else
+                        "🧪 Funcionando en SIMULACIÓN: no escribo a nadie ni acepto solicitudes. "
+                        "Para que actúe: /arrancar")
             en_lista = self.con.execute("SELECT COUNT(*) FROM miembros_canal").fetchone()[0]
             texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
                      f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
@@ -494,7 +493,7 @@ class BotCaptacion:
         uid = (cq.get("from") or {}).get("id")
         if uid is None:
             return
-        if self.cfg.simular and uid != self.cfg.propietario_id:
+        if self.simulando() and uid != self.cfg.propietario_id:
             return
         if datos == mensajes.CALLBACK_DUDAS or datos.startswith("faq:"):
             self._boton_dudas(cq, uid, datos)
@@ -665,24 +664,32 @@ class BotCaptacion:
     def _pausar(self, ahora):
         pausa = db.pausa_desde(self.con)
         if pausa is not None:
-            return f"⏸️ Ya estaba en pausa desde las {self._hora(pausa)}. Para volver a aceptar: /reanudar"
+            return f"⏸️ Ya estaba en pausa (simulación) desde las {self._hora(pausa)}. Para que actúe: /arrancar"
         with self.con:
             db.guardar_estado(self.con, "pausa_desde", int(ahora))
             db.registrar_evento(self.con, ahora, "pausa", None)
-        log.warning("Bot EN PAUSA por orden del dueño")
-        return ("⏸️ En pausa: ya no acepto solicitudes ni envío bienvenidas. Las que lleguen se "
-                "quedan pendientes en el canal para que las aceptes tú a mano.\n"
-                "Para volver a aceptar: /reanudar")
+        log.warning("Bot EN PAUSA (simulación) por orden del dueño")
+        return ("⏸️ En pausa: paso a SIMULACIÓN. Ya no acepto solicitudes ni escribo a nadie; te "
+                "cuento lo que haría con cada una y se quedan pendientes en el canal para que las "
+                "aceptes tú a mano.\nPara que vuelva a actuar: /arrancar")
 
     def _reanudar(self, ahora):
         pausa = db.pausa_desde(self.con)
+        if pausa is None and self.simulando():  # arranca en simulación: primer /arrancar
+            with self.con:
+                db.guardar_estado(self.con, "arrancado", "1")
+                db.registrar_evento(self.con, ahora, "reanudacion", None)
+            log.warning("Bot ARRANCADO (deja la simulación) por orden del dueño")
+            return ("▶️ Arrancado: desde ahora doy la bienvenida y acepto las solicitudes nuevas.\n"
+                    "Las que estaban pendientes de antes, acéptalas tú a mano. Para parar: /pausar")
         if pausa is None:
-            return "▶️ No estaba en pausa: sigo aceptando solicitudes."
+            return "▶️ Ya estaba funcionando: sigo aceptando solicitudes."
         pendientes = self.con.execute(
             "SELECT COUNT(DISTINCT user_id) FROM eventos WHERE tipo = 'solicitud_en_pausa' AND ts >= ?",
             (pausa,)).fetchone()[0]
         with self.con:
             db.guardar_estado(self.con, "pausa_desde", "")
+            db.guardar_estado(self.con, "arrancado", "1")
             db.registrar_evento(self.con, ahora, "reanudacion", None)
         log.warning("Bot REANUDADO por orden del dueño")
         texto = "▶️ Vuelvo a aceptar solicitudes con la bienvenida."

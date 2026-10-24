@@ -159,7 +159,7 @@ def _recordatorio_pausa(con, tz):
     if pausa is None:
         return []
     return ["", f"⏸️ El bot sigue EN PAUSA desde las {datetime.fromtimestamp(pausa, tz):%H:%M del %d.%m}: "
-                "no acepta a nadie. Escríbele /reanudar para volver."]
+                "no acepta a nadie (simulación). Escríbele /arrancar para que actúe."]
 
 
 def _marcar_lector(con, *estadisticas):

@@ -65,7 +65,7 @@ class TestDiario(Base):
         for texto in (resumen.texto_diario(self.con, MADRID, date(2026, 10, 14)),
                       resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12))):
             self.assertTrue(texto.endswith("⏸️ El bot sigue EN PAUSA desde las 12:30 del 14.10: "
-                                           "no acepta a nadie. Escríbele /reanudar para volver."), texto)
+                                           "no acepta a nadie (simulación). Escríbele /arrancar para que actúe."), texto)
 
     def test_dudas_y_versiones_de_la_bienvenida(self):
         from premier_captacion import textos
