@@ -220,8 +220,8 @@ FAQ_TITULO = f"📚 {negrita('Dudas frecuentes')}\n\nElige tu tema y te lo expli
 TEXTO_DUDAS_TRAS_BIENVENIDA = "¿Tienes alguna duda? Aquí tienes las más frecuentes 📚👇"
 
 PIE_SIN_GRATUITA = (
-    "👉 ¿Aún no tienes tu apuesta de regalo? Pulsa abajo y escríbeme: "
-    f"{negrita('te regalo una apuesta de pago')} para que veas cómo trabajo 💙"
+    "👉 ¿Aún no tienes tu apuesta de regalo? Dime si ya has apostado o es tu primera vez 👇 "
+    f"y {negrita('te regalo una apuesta de pago')} para que veas cómo trabajo 💙"
 )
 PIE_CON_GRATUITA = "¿Te queda alguna duda? Escríbeme y lo vemos 👇"
 
@@ -358,11 +358,13 @@ def mensaje_tema(tema, texto, pie):
 
 
 def teclado_tema(tema, usuario, con_gratuita, recurrente=False):
-    filas = [[{"text": texto, "callback_data": f"faq:{destino}"}] for destino, texto in FAQ[tema].get("enlaces", ())]
+    # Primero lo que hace escribir al dueño (sin la gratuita, los dos botones
+    # de la bienvenida en una fila); debajo, moverse por las dudas.
     if con_gratuita:
-        filas.append([boton_escribeme(usuario, FAQ[tema]["duda"], recurrente=recurrente)])
+        filas = [[boton_escribeme(usuario, FAQ[tema]["duda"], recurrente=recurrente)]]
     else:
-        filas += _filas_botones(usuario)
+        filas = [[boton for fila in _filas_botones(usuario) for boton in fila]]
+    filas += [[{"text": texto, "callback_data": f"faq:{destino}"}] for destino, texto in FAQ[tema].get("enlaces", ())]
     filas.append([{"text": "⬅️ Otras dudas", "callback_data": CALLBACK_MENU}])
     return {"inline_keyboard": filas}
 

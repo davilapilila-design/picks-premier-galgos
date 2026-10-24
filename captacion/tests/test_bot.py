@@ -303,8 +303,9 @@ class TestDudas(Base):
         self.assertIn(mensajes.negrita("Betway"), tema["text"])
         self.assertTrue(tema["text"].endswith(mensajes.PIE_SIN_GRATUITA))
         datos = [b.get("callback_data") for fila in tema["reply_markup"]["inline_keyboard"] for b in fila]
-        # Otras casas, el paso siguiente, los dos botones de la bienvenida (enlaces) y volver.
-        self.assertEqual(datos, ["faq:otras_casas", "faq:unidades", None, None, "faq:menu"])
+        # Los dos botones de la bienvenida (enlaces, en una fila), otras casas, el paso siguiente y volver.
+        self.assertEqual(datos, [None, None, "faq:otras_casas", "faq:unidades", "faq:menu"])
+        self.assertEqual(len(tema["reply_markup"]["inline_keyboard"][0]), 2)
         self.bot.procesar(update_boton(3, "faq:otras_casas"))
         self.assertIn(mensajes.negrita("Codere"), self.ediciones()[-1]["text"])
         self.bot.procesar(update_boton(4, "faq:unidades"))  # «Siguiente paso ➡️» desde el paso 1

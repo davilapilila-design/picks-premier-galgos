@@ -88,15 +88,15 @@ class TestDudasFrecuentes(unittest.TestCase):
     def test_sin_la_gratuita_llevan_los_botones_de_la_bienvenida(self):
         bienvenida = [fila[0]["url"] for fila in mensajes.teclado_respuesta("Dronwhite")["inline_keyboard"]]
         tema = mensajes.teclado_tema("horarios", "Dronwhite", False)["inline_keyboard"]
-        self.assertEqual([fila[0].get("url") for fila in tema[:2]], bienvenida)
+        self.assertEqual([b["url"] for b in tema[0]], bienvenida)  # en una fila, los primeros
         redireccion = mensajes.teclado_redireccion("Dronwhite", False)["inline_keyboard"]
         self.assertEqual([fila[0].get("url") for fila in redireccion[:2]], bienvenida)
         self.assertEqual(redireccion[2][0]["callback_data"], mensajes.CALLBACK_DUDAS)
 
     def test_con_la_gratuita_escribeme_con_el_tema(self):
         filas = mensajes.teclado_tema("gemelas", "Dronwhite", True)["inline_keyboard"]
-        self.assertEqual(filas[0][0]["callback_data"], "faq:ganador")  # vuelve al paso 3
-        borrador = parse_qs(urlparse(filas[1][0]["url"]).query)["text"][0]
+        borrador = parse_qs(urlparse(filas[0][0]["url"]).query)["text"][0]
+        self.assertEqual(filas[1][0]["callback_data"], "faq:ganador")  # vuelve al paso 3
         self.assertEqual(borrador, "Hola, tengo una duda sobre las gemelas y los tríos")
         self.assertEqual(filas[-1][0]["callback_data"], mensajes.CALLBACK_MENU)
 

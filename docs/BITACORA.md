@@ -3,6 +3,16 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: en cada duda, primero los botones para pedir la gratuita
+
+- El dueño vio confuso que en las pantallas de dudas se mezclaran los
+  botones de navegar con «Ya he apostado» / «Es mi primera vez». Ahora esos
+  dos van los primeros y en una sola fila (o «Escríbeme» si ya tiene la
+  gratuita); debajo, los de moverse por las dudas y «Otras dudas».
+- Final sin gratuita más directo: «¿Aún no tienes tu apuesta de regalo? Dime
+  si ya has apostado o es tu primera vez 👇 y te regalo una apuesta de pago…».
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: mensaje de dudas justo después de la bienvenida con gratuita
 
 - Tras la bienvenida con gratuita, el bot envía un segundo mensaje («¿Tienes
