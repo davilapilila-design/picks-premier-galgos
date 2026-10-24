@@ -55,3 +55,11 @@ class TestConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSimulacionBot(unittest.TestCase):
+    def test_por_defecto_no_y_con_1_si(self):
+        from premier_captacion.config import cargar_config
+        base = {"CAPTACION_BOT_TOKEN": "123456:" + "A" * 35, "CAPTACION_PERFIL": "Perfil", "CAPTACION_DB": "/tmp/x.db"}
+        self.assertFalse(cargar_config(base).simular)
+        self.assertTrue(cargar_config({**base, "CAPTACION_BOT_SIMULAR": "1"}).simular)

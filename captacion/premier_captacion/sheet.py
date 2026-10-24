@@ -92,6 +92,7 @@ ETIQUETAS_EVENTO = {
     "faq": "Miró las dudas frecuentes",
     "texto_cambiado": "Texto cambiado desde el bot (/textos)",
     "aviso_gratuita_repetida": "Pidió la gratuita y ya la tuvo o ya estaba",
+    "solicitud_simulada": "Solicitud en simulación (el bot no hizo nada)",
 }
 
 MOTIVOS = {

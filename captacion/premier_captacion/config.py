@@ -44,6 +44,9 @@ class Config:
     pausa_redireccion_s: int = 60
     # Google Sheet al que se copia todo (fase 2). None = sin Sheet.
     sheet_id: Optional[str] = None
+    # Simulación (CAPTACION_BOT_SIMULAR=1): el bot no escribe a nadie ni
+    # acepta solicitudes; solo le cuenta al dueño lo que haría.
+    simular: bool = False
 
     @property
     def tz(self):
@@ -111,4 +114,5 @@ def cargar_config(entorno=None, requiere_bot=True) -> Config:
         propietario_id=_entero_opcional(entorno, "CAPTACION_PROPIETARIO_ID"),
         zona_horaria=zona,
         sheet_id=sheet_id,
+        simular=entorno.get("CAPTACION_BOT_SIMULAR", "").strip() == "1",
     )

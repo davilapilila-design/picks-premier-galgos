@@ -11,6 +11,8 @@
 #   bash /opt/premier-captacion/configurar.sh real api-de prueba       (copia el api_id y el api_hash de la otra instancia)
 #   bash /opt/premier-captacion/configurar.sh prueba lector simulacion (el lector de carpetas solo avisa)
 #   bash /opt/premier-captacion/configurar.sh prueba lector real       (el lector de carpetas actúa)
+#   bash /opt/premier-captacion/configurar.sh real bot simulacion      (el bot no escribe ni acepta: solo cuenta lo que haría)
+#   bash /opt/premier-captacion/configurar.sh real bot real            (el bot da la bienvenida y acepta)
 #   bash /opt/premier-captacion/configurar.sh real bienvenidas-manuales si  (el lector apunta las bienvenidas que das a mano; solo real)
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
 #
@@ -158,6 +160,19 @@ case "$DATO" in
         if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
             systemctl restart "captacion-lector@$INSTANCIA"
             echo "✓ lector reiniciado"
+        fi
+        exit 0
+        ;;
+    bot)
+        case "$VALOR" in
+            simulacion) poner "$ENV" CAPTACION_BOT_SIMULAR 1 ;;
+            real) poner "$ENV" CAPTACION_BOT_SIMULAR 0 ;;
+            *) fallo "Uso: bash $0 $INSTANCIA bot <simulacion|real>" ;;
+        esac
+        echo "✓ bot en modo $VALOR"
+        if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-bot@$INSTANCIA" 2>/dev/null; then
+            systemctl restart "captacion-bot@$INSTANCIA"
+            echo "✓ bot reiniciado"
         fi
         exit 0
         ;;

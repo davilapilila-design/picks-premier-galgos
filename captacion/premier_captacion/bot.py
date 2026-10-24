@@ -109,7 +109,7 @@ class BotCaptacion:
 
     # --- Avisos al dueño ------------------------------------------------------
 
-    def avisar(self, texto, clave=None):
+    def avisar(self, texto, clave=None, teclado=None):
         if clave is not None:
             if clave in self._avisos_dados:
                 return
@@ -118,7 +118,8 @@ class BotCaptacion:
         if self.cfg.propietario_id is None:
             return
         try:
-            self.api.llamar("sendMessage", chat_id=self.cfg.propietario_id, text=texto)
+            extra = {"reply_markup": teclado} if teclado else {}
+            self.api.llamar("sendMessage", chat_id=self.cfg.propietario_id, text=texto, **extra)
         except (ErrorTelegram, ErrorRed) as e:
             log.error("No se pudo enviar el aviso al propietario: %s", e)
 
@@ -141,6 +142,9 @@ class BotCaptacion:
         log.info("Bot @%s (id %s) arrancando, versión %s", yo.get("username"), self.bot_id, version_instalada())
         # Con un webhook activo getUpdates no funciona; este bot no usa webhook.
         self.api.llamar("deleteWebhook")
+        if self.cfg.simular:
+            self.avisar("🧪 Arranco en SIMULACIÓN: no escribo a nadie ni acepto solicitudes; solo te "
+                        "cuento lo que haría. Las solicitudes las sigues aceptando tú.", clave="simulacion")
         pausa = db.pausa_desde(self.con)
         if pausa is not None:
             self.avisar(f"⏸️ Arranco EN PAUSA (desde las {self._hora(pausa)}): no acepto a nadie "
@@ -272,6 +276,9 @@ class BotCaptacion:
             return
 
         recurrente = db.ya_conocido(self.con, uid, fila)
+        if self.cfg.simular:
+            self._simular_solicitud(usuario, recurrente, retraso, ahora)
+            return
         if recurrente:
             # Ya estaba en el canal o ya pasó por aquí (p. ej. salió y vuelve):
             # bienvenida sin la gratuita.
@@ -286,6 +293,26 @@ class BotCaptacion:
             self._enviar_bienvenida(sol, usuario, recurrente)
 
         self._aceptar(chat["id"], usuario)
+
+    def _simular_solicitud(self, usuario, recurrente, retraso, ahora):
+        """Simulación: ni bienvenida ni aceptación; se cuenta al dueño."""
+        uid = usuario["id"]
+        if retraso > self.cfg.ventana_bienvenida_s:
+            que = "no le podría escribir (llevaba más de 5 min esperando); le aceptaría sin bienvenida"
+        elif recurrente:
+            fila = db.obtener_usuario(self.con, uid)
+            motivo = ("ya tuvo la gratuita" if fila["enlace_venta_ts"] is not None else
+                      "ya estaba en el canal" if db.es_miembro(self.con, uid) else "ya había pasado por aquí")
+            que = f"le enviaría la bienvenida SIN gratuita ({motivo}) y le aceptaría"
+        else:
+            que = "le enviaría la bienvenida CON gratuita y le aceptaría"
+        with self.con:
+            db.registrar_evento(self.con, ahora, "solicitud_simulada", uid,
+                                tipo_mensaje=mensajes.TIPO_BIENVENIDA_RECURRENTE if recurrente else
+                                textos.tipo_bienvenida(self.con))
+        self.avisar(f"🧪 Simulación (no he hecho nada): a {describir(usuario)} {que}.",
+                    teclado={"inline_keyboard": [[{"text": "🔎 Ver más info",
+                                                   "callback_data": f"{consulta.CALLBACK}{uid}"}]]})
 
     def _enviar_bienvenida(self, sol, usuario, recurrente=False):
         uid = usuario["id"]
@@ -380,6 +407,8 @@ class BotCaptacion:
             db.actualizar_datos_usuario(self.con, ahora, usuario)
             db.registrar_evento(self.con, ahora, "mensaje_al_bot", uid)
             fila = db.obtener_usuario(self.con, uid)
+        if self.cfg.simular:
+            return  # en simulación el bot no habla con nadie
         ultima = fila["ultima_redireccion_ts"]
         if ultima is not None and ahora - ultima < self.cfg.pausa_redireccion_s:
             return
@@ -438,7 +467,8 @@ class BotCaptacion:
                 "SELECT COUNT(*) FROM usuarios WHERE bienvenida_ts IS NOT NULL").fetchone()[0]
             canal = self.cfg.canal_id if self.cfg.canal_id is not None else "sin configurar (no acepto a nadie)"
             pausa = db.pausa_desde(self.con)
-            cabecera = ("✅ Funcionando." if pausa is None else
+            cabecera = ("🧪 Funcionando en SIMULACIÓN: no escribo a nadie ni acepto solicitudes." if self.cfg.simular else
+                        "✅ Funcionando." if pausa is None else
                         f"⏸️ Funcionando, pero EN PAUSA desde las {self._hora(pausa)}: no acepto a "
                         "nadie. Para volver: /reanudar")
             texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
@@ -461,6 +491,8 @@ class BotCaptacion:
         datos = cq.get("data") or ""
         uid = (cq.get("from") or {}).get("id")
         if uid is None:
+            return
+        if self.cfg.simular and uid != self.cfg.propietario_id:
             return
         if datos == mensajes.CALLBACK_DUDAS or datos.startswith("faq:"):
             self._boton_dudas(cq, uid, datos)

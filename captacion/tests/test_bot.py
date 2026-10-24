@@ -554,3 +554,32 @@ class TestRecurrentes(Base):
         self.bot.procesar(update_solicitud(2, uid=504))
         self.assertEqual(self.api.envios_a(504), [])
         self.assertNotIn("approveChatJoinRequest", self.api.metodos())
+
+
+class TestSimulacion(Base):
+    """CAPTACION_BOT_SIMULAR=1: el bot no escribe a nadie ni acepta; solo avisa al dueño."""
+
+    def setUp(self):
+        super().setUp()
+        self.bot = self.crear_bot(simular=True)
+
+    def test_solicitud_nueva_y_de_quien_ya_estaba(self):
+        with self.con:
+            db.guardar_miembros(self.con, [501], 1)
+        self.bot.procesar(update_solicitud(1, uid=500))
+        self.bot.procesar(update_solicitud(2, uid=501))
+        self.assertNotIn("approveChatJoinRequest", self.api.metodos())
+        self.assertEqual(self.api.envios_a(500) + self.api.envios_a(501), [])
+        avisos = self.api.envios_a(PROPIETARIO)
+        self.assertIn("bienvenida CON gratuita", avisos[0]["text"])
+        self.assertIn("SIN gratuita (ya estaba en el canal)", avisos[1]["text"])
+        self.assertEqual(avisos[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "gra:501")
+        self.assertIsNone(db.obtener_usuario(self.con, 500)["bienvenida_ts"])  # no se le dio nada
+        self.assertEqual(tipos_eventos(self.con, 500), ["solicitud", "solicitud_simulada"])
+
+    def test_no_contesta_a_clientes_pero_si_al_dueno(self):
+        self.bot.procesar(update_mensaje(1, uid=500, texto="hola"))
+        self.bot.procesar(update_boton(2, "faq", uid=500))
+        self.assertEqual(self.api.envios_a(500), [])
+        self.bot.procesar(update_mensaje(3, uid=PROPIETARIO, texto="/estado"))
+        self.assertIn("SIMULACIÓN", self.api.envios_a(PROPIETARIO)[-1]["text"])

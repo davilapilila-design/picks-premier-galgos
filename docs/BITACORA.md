@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-24 — Captación: modo simulación del bot para ponerlo en el canal real sin que actúe
+- **Qué**: el dueño quiere tener ya el bot definitivo en PREMIER GALGOS
+  pero solo mirando: que le cuente lo que haría (bienvenida con o sin
+  gratuita, carpetas, avisos de gratuita repetida) sin escribir a nadie ni
+  aceptar. Nuevo `CAPTACION_BOT_SIMULAR=1`: en las solicitudes no hay
+  bienvenida ni aceptación (evento `solicitud_simulada`) y el dueño recibe
+  «🧪 Simulación (no he hecho nada): a X le enviaría la bienvenida CON/SIN
+  gratuita (motivo) y le aceptaría» con «🔎 Ver más info»; no contesta a
+  clientes; las órdenes del dueño funcionan. `instalar.sh real` lo deja en
+  simulación si no está puesto; `configurar.sh real bot real|simulacion`.
+- Nombre acordado: «PREMIER GALGOS» (@PremierGalgosBienvenida_bot o
+  similar), logo del canal en colores invertidos; creado por el dueño en
+  BotFather. Mismos textos que el de prueba (se copian los de /textos).
+- También: la ficha de /gratuita dice si estaba en el canal y si volvió a
+  pedir entrar (`182158f`).
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: el aviso de gratuita repetida también salta cuando la piden con sus palabras
 - **Qué**: hasta ahora solo saltaba con la frase exacta de los botones. Con
   lo visto en los chats de clientes, ahora también con «gratis / gratuita /

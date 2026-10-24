@@ -153,6 +153,12 @@ hay_terminal() {
     [ -z "${CAPTACION_SIN_TERMINAL:-}" ] && { [ -t 0 ] || { : < /dev/tty; } 2>/dev/null; }
 }
 
+# El bot real arranca SIEMPRE en simulación (no escribe ni acepta) hasta que
+# el dueño diga lo contrario: configurar.sh real bot real.
+if [ "$INSTANCIA" = real ] && [ -z "$(valor_de CAPTACION_BOT_SIMULAR)" ]; then
+    CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" bot simulacion >/dev/null
+    echo "   bot en SIMULACIÓN (no escribe ni acepta) ✓"
+fi
 if [ -z "$(valor_de CAPTACION_PERFIL)" ]; then
     CAPTACION_NO_REINICIAR=1 bash "$DESTINO/configurar.sh" "$INSTANCIA" perfil Dronwhite >/dev/null
     echo "   perfil de los botones: @Dronwhite ✓"

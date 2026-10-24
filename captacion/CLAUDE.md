@@ -40,6 +40,9 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   técnico: darle siempre comandos completos para copiar y pegar.
 - La bienvenida se envía **siempre antes** de aceptar la solicitud (después
   Telegram ya no deja escribir a esa persona).
+- El bot tiene **modo simulación** (`CAPTACION_BOT_SIMULAR=1`, por defecto en la
+  instancia real): ni escribe a clientes ni acepta solicitudes; solo avisa al
+  dueño. Cualquier cambio que haga hablar o aceptar al bot tiene que respetarlo.
 - El bot tiene **freno de emergencia** (`/pausar` / `/reanudar`, solo el
   dueño; estado `pausa_desde` en la base de datos): cualquier cambio en la
   gestión de solicitudes tiene que respetarlo.
