@@ -15,7 +15,7 @@ Entradas más recientes arriba.
 - Al pasar a real, el lector hace de verdad lo que avisaba en simulación,
   incluido borrar carpetas de días antiguos (los chats no se borran).
   Decisión del dueño (fase 6) tomada aquí.
-- Commits: (este commit)
+- Commits: 54174fb
 
 ## 2026-10-24 — Captación: cuentas de prueba (/probador) que reciben respuesta en simulación
 
