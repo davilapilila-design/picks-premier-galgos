@@ -758,7 +758,10 @@ class BotCaptacion:
         texto = "▶️ Vuelvo a aceptar solicitudes con la bienvenida."
         if pendientes:
             llegaron = "llegó 1 solicitud" if pendientes == 1 else f"llegaron {pendientes} solicitudes"
-            texto += f"\nDurante la pausa {llegaron}: siguen pendientes en el canal, acéptalas tú a mano."
+            # El bot no se entera de las que acepta el dueño a mano: solo
+            # sabe cuántas llegaron, no cuántas quedan.
+            texto += (f"\nDurante la pausa {llegaron}. Esas no las toco: si queda alguna "
+                      "pendiente en el canal, acéptala tú a mano.")
         return texto
 
     # --- Cambios en los permisos del bot --------------------------------------
