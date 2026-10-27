@@ -302,3 +302,30 @@ class TestLeerSuscriptores(unittest.TestCase):
         self.addCleanup(con.close)
         self.assertTrue(all(db.es_miembro(con, i) for i in range(1, 6)))
         self.assertFalse(db.es_miembro(con, 6))
+
+
+class TestModoPedido(unittest.TestCase):
+    """El lector sigue a /arrancar (real) y /pausar (simulación) del bot."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+
+    def modo(self, ruta="/var/lib/premier-captacion/real.db"):
+        return lector.modo_pedido(self.con, SimpleNamespace(db_path=ruta))
+
+    def test_sin_orden_manda_la_configuracion(self):
+        self.assertIsNone(self.modo())
+
+    def test_arrancar_y_pausar(self):
+        with self.con:
+            db.guardar_estado(self.con, "lector_modo", "real")
+        self.assertIs(self.modo(), False)
+        with self.con:
+            db.guardar_estado(self.con, "lector_modo", "simulacion")
+        self.assertIs(self.modo(), True)
+
+    def test_en_prueba_nunca_pasa_a_real(self):
+        with self.con:
+            db.guardar_estado(self.con, "lector_modo", "real")
+        self.assertIsNone(self.modo("/var/lib/premier-captacion/prueba.db"))

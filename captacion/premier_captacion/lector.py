@@ -36,6 +36,7 @@ import re
 import signal
 import sys
 import time
+from dataclasses import replace
 
 from . import carpetas, consulta, db, guardia, historico
 from .enlaces import hashes_invitacion, textos_de
@@ -45,6 +46,7 @@ from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
 log = logging.getLogger("captacion.lector")
 
 REVISION_CADA_S = 600
+MODO_CADA_S = 60  # cada cuánto mira si el dueño cambió el modo desde el bot
 # Al arrancar se repasa lo que llegó mientras el lector estaba parado; la
 # primera vez, solo el último día (lo anterior es cosa de la fase 4).
 HORIZONTE_INICIAL_S = 24 * 3600
@@ -301,9 +303,12 @@ async def servicio(cfg, entorno):
     from telethon import events
 
     api_id, api_hash, sesion = credenciales_api(entorno)
-    aj = ajustes_desde(entorno, cfg)
     avisar = crear_avisador(cfg)
     con = db.abrir(cfg.db_path)
+    aj = ajustes_desde(entorno, cfg)
+    deseado = modo_pedido(con, cfg)
+    if deseado is not None:
+        aj = replace(aj, simular=deseado)
     # En simulación el candado ni siquiera deja pedir cambios de carpetas.
     client = crear_cliente(sesion, api_id, api_hash, "simulacion" if aj.simular else "lector")
     await client.connect()
@@ -351,7 +356,26 @@ async def servicio(cfg, entorno):
                 except Exception:
                     log.exception("Error en la revisión periódica")
 
+        cambio = asyncio.Event()
+
+        async def vigilar_modo():
+            # /arrancar y /pausar del bot: si piden otro modo, se sale y
+            # systemd lo vuelve a arrancar (en 30 s) ya con el modo nuevo.
+            while True:
+                await asyncio.sleep(MODO_CADA_S)
+                try:
+                    pedido = modo_pedido(con, cfg)
+                except Exception:
+                    log.exception("No pude leer el modo pedido")
+                    continue
+                if pedido is not None and pedido != aj.simular:
+                    log.warning("El dueño cambió el modo del lector desde el bot: reinicio")
+                    cambio.set()
+                    await client.disconnect()
+                    return
+
         tarea = asyncio.ensure_future(revisar())
+        tarea_modo = asyncio.ensure_future(vigilar_modo())
         parada = asyncio.Event()
 
         def parar():  # systemctl stop: salir limpio, sin dejar la unidad en "failed"
@@ -363,10 +387,28 @@ async def servicio(cfg, entorno):
             await client.run_until_disconnected()
         finally:
             tarea.cancel()
+            tarea_modo.cancel()
+        if cambio.is_set():
+            return 1  # systemd lo rearranca con el modo nuevo
         return 0 if parada.is_set() else 1  # desconexión inesperada: systemd lo rearranca
     finally:
         await client.disconnect()
         con.close()
+
+
+def modo_pedido(con, cfg):
+    """Modo que pidió el dueño con /arrancar (real) o /pausar (simulación):
+    True = simular, False = real, None = no ha dicho nada (vale el .env).
+    En la instancia de prueba se ignora: allí el lector nunca pasa a real
+    (va con la cuenta principal del dueño, ver CLAUDE.md)."""
+    if os.path.basename(cfg.db_path).startswith("prueba"):
+        return None
+    modo = db.leer_estado(con, "lector_modo")
+    if modo == "real":
+        return False
+    if modo == "simulacion":
+        return True
+    return None
 
 
 def client_status_offline():

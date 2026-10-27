@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-27 — Captación: /arrancar y /pausar mueven también el lector de carpetas
+
+- El dueño quiere parar y arrancar todo desde el bot. `/arrancar` pone el bot
+  en marcha y el lector de carpetas en REAL; `/pausar` pasa los dos a
+  simulación. `/estado` dice el modo del lector.
+- Cómo: el bot guarda `lector_modo` en la base de datos (compartida); el
+  lector lo mira cada minuto y, si cambia, se reinicia (systemd, 30 s) con el
+  modo nuevo. Si nunca se ha usado, manda `CAPTACION_LECTOR_SIMULAR` del .env.
+  En la instancia `prueba` se ignora (allí el lector nunca pasa a real).
+- Al pasar a real, el lector hace de verdad lo que avisaba en simulación,
+  incluido borrar carpetas de días antiguos (los chats no se borran).
+  Decisión del dueño (fase 6) tomada aquí.
+- Commits: (este commit)
+
 ## 2026-10-24 — Captación: cuentas de prueba (/probador) que reciben respuesta en simulación
 
 - El dueño quiere probar en el bot real, en simulación, cómo responde y las

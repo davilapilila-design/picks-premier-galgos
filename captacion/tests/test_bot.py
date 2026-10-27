@@ -277,6 +277,13 @@ class TestPausa(Base):
         self.bot.procesar(update_solicitud(6, uid=502))
         self.assertEqual(self.api.metodos(), ["sendMessage", "sendMessage", "approveChatJoinRequest"])
 
+    def test_arrancar_y_pausar_mueven_tambien_el_lector(self):
+        self.assertIn("Lector de carpetas: REAL", self.orden(1, "/arrancar"))  # aunque ya funcionara
+        self.assertEqual(db.leer_estado(self.con, "lector_modo"), "real")
+        self.assertIn("Lector de carpetas: REAL", self.orden(2, "/estado"))
+        self.assertIn("Lector de carpetas: SIMULACIÓN", self.orden(3, "/pausar"))
+        self.assertEqual(db.leer_estado(self.con, "lector_modo"), "simulacion")
+
     def test_sigue_en_pausa_aunque_se_reinicie(self):
         self.orden(1, "/pausar")
         otro = self.crear_bot()  # misma base de datos, como tras un reinicio

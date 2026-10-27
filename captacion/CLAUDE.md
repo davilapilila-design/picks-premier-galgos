@@ -17,7 +17,10 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   sin el visto bueno explícito del dueño, y nunca con nada que envíe,
   marque como leído, se una o salga de chats.
 - El lector arranca siempre en **simulación**; pasarlo a real
-  (`configurar.sh <instancia> lector real`) es decisión del dueño. En
+  (`configurar.sh <instancia> lector real`, o `/arrancar` en el bot, que
+  también lo pasa a real; `/pausar` lo vuelve a simulación: estado
+  `lector_modo`, que manda sobre el .env) es decisión del dueño. En la
+  instancia `prueba` el lector ignora `lector_modo`. En
   simulación el candado usa el modo `simulacion`, que no deja pedir cambios
   de carpetas.
 - La fase 3 se prueba con la **cuenta principal del dueño conectada a la

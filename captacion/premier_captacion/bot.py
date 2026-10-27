@@ -56,8 +56,9 @@ AYUDA_PROPIETARIO = (
     "/resumen – lo que va de hoy\n"
     "/semana – lo que va de semana\n"
     "/estado – comprobar que el bot funciona\n"
-    "/pausar – pasar a simulación al momento: no acepto ni escribo, solo te cuento lo que haría\n"
-    "/arrancar – que actúe: bienvenida y aceptar (también /reanudar)\n"
+    "/pausar – pasar a simulación al momento: no acepto ni escribo, solo te cuento lo que haría "
+    "(y el lector de carpetas tampoco toca nada)\n"
+    "/arrancar – que actúe: bienvenida y aceptar, y el lector ordena tus carpetas de verdad (también /reanudar)\n"
     "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
     "/dudas – ver las dudas frecuentes como las ve un cliente\n"
     "/gratuita @usuario (o parte del nombre) – si se le dio la gratuita, cuándo y a qué canal\n"
@@ -471,9 +472,9 @@ class BotCaptacion:
         elif comando == "/probador":
             texto = self._orden_probador(texto_orden.split()[1:])
         elif comando == "/pausar":
-            texto = self._pausar(ahora)
+            texto = self._pausar(ahora) + self._modo_lector("simulacion")
         elif comando in ("/reanudar", "/arrancar"):
-            texto = self._reanudar(ahora)
+            texto = self._reanudar(ahora) + self._modo_lector("real")
         elif comando == "/estado":
             con_bienvenida = self.con.execute(
                 "SELECT COUNT(*) FROM usuarios WHERE bienvenida_ts IS NOT NULL").fetchone()[0]
@@ -488,6 +489,7 @@ class BotCaptacion:
             texto = (f"{cabecera}\nCanal: {canal}\nBotones apuntan a: @{self.cfg.perfil}\n"
                      f"Personas que ya tienen bienvenida: {con_bienvenida}\n"
                      f"En la lista de suscriptores del canal (sin gratuita si vuelven): {en_lista}\n"
+                     f"Lector de carpetas: {self._texto_modo_lector()}\n"
                      f"Cuentas de prueba (les contesto en simulación): {self._lista_probadores()}\n"
                      f"Versión: {version_instalada()}")
         elif comando == "/start":
@@ -723,6 +725,28 @@ class BotCaptacion:
 
     def _hora(self, ts):
         return f"{datetime.fromtimestamp(ts, self.cfg.tz):%H:%M del %d.%m}"
+
+    # El lector de carpetas (otro programa, con la cuenta del dueño) sigue a
+    # /pausar y /arrancar: lee este estado y en 1-2 min cambia de modo (ver
+    # lector.vigilar_modo). Mientras nadie lo ha tocado, manda su .env.
+    def _modo_lector(self, modo):
+        anterior = db.leer_estado(self.con, "lector_modo")
+        if anterior != modo:
+            with self.con:
+                db.guardar_estado(self.con, "lector_modo", modo)
+        if modo == "real":
+            return ("\n📁 Lector de carpetas: REAL (ordena tus carpetas de verdad)" +
+                    (" — cambia en 1-2 min." if anterior != modo else "."))
+        return ("\n📁 Lector de carpetas: SIMULACIÓN (no toca tus carpetas)" +
+                (" — cambia en 1-2 min." if anterior != modo else "."))
+
+    def _texto_modo_lector(self):
+        modo = db.leer_estado(self.con, "lector_modo")
+        if modo == "real":
+            return "REAL (lo pusiste con /arrancar)"
+        if modo == "simulacion":
+            return "SIMULACIÓN (lo pusiste con /pausar)"
+        return "el de su configuración (aún no lo has cambiado con /arrancar o /pausar)"
 
     def _pausar(self, ahora):
         pausa = db.pausa_desde(self.con)
