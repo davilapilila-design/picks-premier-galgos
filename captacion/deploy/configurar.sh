@@ -14,6 +14,7 @@
 #   bash /opt/premier-captacion/configurar.sh real bot simulacion      (el bot no escribe ni acepta: solo cuenta lo que haría)
 #   bash /opt/premier-captacion/configurar.sh real bot real            (el bot da la bienvenida y acepta)
 #   bash /opt/premier-captacion/configurar.sh real bienvenidas-manuales si  (el lector apunta las bienvenidas que das a mano; solo real)
+#   bash /opt/premier-captacion/configurar.sh real excluir-ventas "@uno,@dos"  (no cuentan en «Canales de venta»: los del equipo)
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
 #
 # Por seguridad el token y el api_hash NUNCA se escriben en la línea de
@@ -93,6 +94,13 @@ case "$DATO" in
         CLAVE=CAPTACION_BOT_TOKEN
         PATRON='^[0-9]+:[A-Za-z0-9_-]{30,}$'
         [ -z "$VALOR" ] || fallo "Por seguridad el token no se escribe en el comando. Ejecuta: bash $0 $INSTANCIA token  (y pégalo cuando lo pida)"
+        ;;
+    excluir-ventas)
+        # Los del equipo, que no cuentan en las estadísticas de los canales
+        # de venta (no van al repositorio: es público).
+        CLAVE=CAPTACION_EXCLUIR_VENTAS
+        VALOR=${VALOR//[[:space:]]/}
+        PATRON='^(@?[A-Za-z0-9_]{4,32}(,@?[A-Za-z0-9_]{4,32})*)?$'
         ;;
     perfil)
         CLAVE=CAPTACION_PERFIL

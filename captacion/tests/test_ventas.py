@@ -62,7 +62,7 @@ class TestPersonas(unittest.TestCase):
                                                      (11, 500, "sale", TS + 3 * 86400, None)])
             ventas.guardar_persona(self.con, 600, "Luis", None)
             ventas.guardar_miembros(self.con, 1, [(600, TS)], TS)
-        filas = ventas.filas_personas(self.con, MADRID)
+        filas = ventas.filas_personas(self.con, MADRID, set())
         ana = filas[0]
         self.assertEqual(ana[:5], ["Ana", "@ana", 500, 3, 2])
         self.assertIn("Stakazo 9 (entró 22/10) (salió 23/10)", ana[5])
@@ -71,11 +71,22 @@ class TestPersonas(unittest.TestCase):
         luis = filas[1]
         self.assertEqual((luis[0], luis[6], luis[7], luis[8]), ("Luis", "", "Lunes Tarde", 1))
 
+    def test_los_del_equipo_no_cuentan(self):
+        self.assertEqual(ventas.excluidos({"CAPTACION_EXCLUIR_VENTAS": "@Pepe, 700"}), {"pepe", "700"})
+        with self.con:
+            ventas.guardar_persona(self.con, 500, "Pepe", "pepe")
+            ventas.guardar_persona(self.con, 600, "Ana", "ana")
+            ventas.guardar_miembros(self.con, 1, [(500, TS), (600, TS), (700, TS)], TS)
+            ventas.guardar_movimientos(self.con, 1, [(1, 500, "entra", TS, None), (2, 600, "entra", TS, None)])
+        fuera = {"pepe", "700"}
+        self.assertEqual([f[2] for f in ventas.filas_personas(self.con, MADRID, fuera)], [600])
+        self.assertEqual([f[4] for f in ventas.filas_movimientos(self.con, MADRID, fuera)], [600])
+
     def test_movimientos_sin_repetir(self):
         with self.con:
             self.assertEqual(ventas.guardar_movimientos(self.con, 1, [(1, 500, "entra", TS, None)]), 1)
             self.assertEqual(ventas.guardar_movimientos(self.con, 1, [(1, 500, "entra", TS, None)]), 0)
-        filas = ventas.filas_movimientos(self.con, MADRID)
+        filas = ventas.filas_movimientos(self.con, MADRID, set())
         self.assertEqual(len(filas), 1)
         self.assertEqual(filas[0][1:], ["Lunes Tarde", "", "", 500, "Entra", ""])
         self.assertTrue(ventas.hay_datos(self.con))

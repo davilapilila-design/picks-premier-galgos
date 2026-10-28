@@ -21,6 +21,7 @@ periódica al Sheet (sheet.py) las mantiene al día.
 """
 import asyncio
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -244,7 +245,16 @@ def _dia(ts, tz):
     return datetime.fromtimestamp(ts, tz).strftime("%d/%m")
 
 
-def filas_personas(con, tz):
+def excluidos(entorno=None):
+    """@usuarios o ids del equipo (CAPTACION_EXCLUIR_VENTAS, separados por
+    comas): están en los canales pero no cuentan para las estadísticas. Se
+    guardan en la configuración de la VM, no aquí (el repositorio es público)."""
+    valor = (entorno if entorno is not None else os.environ).get("CAPTACION_EXCLUIR_VENTAS", "")
+    return {x.strip().lstrip("@").lower() for x in valor.split(",") if x.strip()}
+
+
+def filas_personas(con, tz, fuera=None):
+    fuera = excluidos() if fuera is None else fuera
     canales = {f["canal_id"]: f["titulo"] for f in con.execute("SELECT canal_id, titulo FROM ventas_canales")}
     por_persona = {}  # user_id -> {canal_id: {"entra": ts, "dentro": bool, "sale": ts}}
 
@@ -267,6 +277,8 @@ def filas_personas(con, tz):
         usuario = db.obtener_usuario(con, uid)
         nombre = (persona and persona["nombre"]) or (usuario and usuario["nombre"]) or ""
         username = (persona and persona["username"]) or (usuario and usuario["username"]) or ""
+        if str(uid) in fuera or (username and username.lower() in fuera):
+            continue
         gratuita = (usuario["canal_venta"] if usuario is not None and usuario["enlace_venta_ts"] is not None
                     else None)
         orden = sorted(por_canal.items(), key=lambda kv: kv[1]["entra"] or 0)
@@ -286,12 +298,15 @@ def filas_personas(con, tz):
     return filas
 
 
-def filas_movimientos(con, tz):
+def filas_movimientos(con, tz, fuera=None):
+    fuera = excluidos() if fuera is None else fuera
     filas = []
     for f in con.execute(
             "SELECT m.ts, m.user_id, m.tipo, m.enlace, c.titulo, p.nombre, p.username FROM ventas_movimientos m "
             "LEFT JOIN ventas_canales c USING (canal_id) LEFT JOIN ventas_personas p USING (user_id) "
             "ORDER BY m.ts DESC"):
+        if str(f["user_id"]) in fuera or (f["username"] or "").lower() in fuera:
+            continue
         filas.append([sheet.serie_fecha_hora(f["ts"], tz), f["titulo"] or "", f["nombre"] or "",
                       f"@{f['username']}" if f["username"] else "", f["user_id"],
                       "Entra" if f["tipo"] == "entra" else "Sale", f["enlace"] or ""])
