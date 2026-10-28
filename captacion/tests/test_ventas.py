@@ -99,7 +99,8 @@ class TestCanales(unittest.TestCase):
 
         def canal(titulo, dia):
             return SimpleNamespace(title=titulo, date=datetime(2026, 7, dia, 10, tzinfo=timezone.utc))
-        todos = [canal("Viejo", 10), canal("Premier Galgos Debut", 22), canal("Lunes", 30)]
+        todos = [canal("Viejo", 10), canal("Premier Galgos Debut", 22), canal("Lunes", 30),
+                 canal("Prueba canal captación con bot", 30)]
 
         async def falsos(client, cfg):
             return todos, None
@@ -112,7 +113,9 @@ class TestLeerMiembros(unittest.TestCase):
     def test_fecha_de_entrada_y_sin_bots(self):
         bot = usuario(9, "Bot")
         bot.bot = True
-        cliente = FalsoCliente([usuario(500, "Ana", desde=TS), bot, usuario(600, "Luis")])
+        admin = usuario(7, "Socio", desde=TS)
+        admin.participant = type("ChannelParticipantAdmin", (), {"date": None})()
+        cliente = FalsoCliente([usuario(500, "Ana", desde=TS), bot, admin, usuario(600, "Luis")])
         leidos = asyncio.run(ventas.leer_miembros(cliente, "canal"))
         self.assertEqual([(u.id, d) for u, d in leidos], [(500, TS), (600, None)])
         self.assertEqual(cliente.busquedas, [])  # pocos: no hace falta buscar

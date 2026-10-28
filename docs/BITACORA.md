@@ -21,6 +21,11 @@ Entradas más recientes arriba.
   salidas»; la copia periódica al Sheet las mantiene al día.
 - Solo los canales desde «Premier Galgos Debut» (22/07), por fecha de
   creación; los nuevos que se añadan a la carpeta entran solos.
+- Revisión de la primera lectura (126 canales, 198 personas, 106
+  movimientos en 48 h): salía el propio dueño (en los 126) y el canal de
+  pruebas del bot. Se quitan los administradores de cada canal y el canal de
+  pruebas; la lista de miembros de cada canal se sustituye entera en cada
+  lectura completa, y se borra lo de canales que ya no cuentan.
 - Commits: 4d3df42
 
 ## 2026-10-28 — Captación: aviso cuando alguien vuelve a entrar (en vez del de cada gratuita)

@@ -81,7 +81,9 @@ async def canales(client, cfg):
     carpeta, así que los canales nuevos entran solos."""
     todos, _ = await analisis.canales_de_venta(client, cfg)
     desde = datetime.combine(analisis.DESDE, datetime.min.time(), tzinfo=cfg.tz).timestamp()
-    return [c for c in todos if getattr(c, "date", None) is None or c.date.timestamp() >= desde]
+    return [c for c in todos
+            if (getattr(c, "date", None) is None or c.date.timestamp() >= desde)
+            and "prueba" not in carpetas.normalizar(c.title)]  # el canal de pruebas del bot
 
 
 def _nombre(u):
@@ -95,7 +97,11 @@ async def leer_miembros(client, canal):
 
     async def leer(**kw):
         async for u in client.iter_participants(canal, **kw):
-            if not getattr(u, "bot", False) and not getattr(u, "deleted", False):
+            # Fuera bots, cuentas borradas y los administradores (el dueño y
+            # sus socios están en todos: no son clientes).
+            tipo = type(getattr(u, "participant", None)).__name__
+            if (not getattr(u, "bot", False) and not getattr(u, "deleted", False)
+                    and "Admin" not in tipo and "Creator" not in tipo):
                 fecha = getattr(getattr(u, "participant", None), "date", None)
                 vistos[u.id] = (u, fecha.timestamp() if fecha else None)
 
@@ -151,6 +157,9 @@ async def leer_canal(client, con, canal, con_miembros):
         for u, _ in miembros:
             guardar_persona(con, u.id, _nombre(u), getattr(u, "username", None))
         if con_miembros:
+            # La lista es una foto de quién está ahora: la anterior se cambia
+            # entera (quien salió sigue en los movimientos).
+            con.execute("DELETE FROM ventas_miembros WHERE canal_id = ?", (canal.id,))
             guardar_miembros(con, canal.id, [(u.id, desde) for u, desde in miembros], ahora)
         nuevos = 0
         if registro:
@@ -185,6 +194,10 @@ async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api):
             log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
             return 2
         lista = await canales(client, cfg)
+        with con:  # los que ya no cuentan (anteriores al debut, el de pruebas)
+            ids = ",".join(str(c.id) for c in lista) or "0"
+            for tabla in ("ventas_miembros", "ventas_movimientos", "ventas_canales"):
+                con.execute(f"DELETE FROM {tabla} WHERE canal_id NOT IN ({ids})")
         for canal in lista:
             n, registro, nuevos = await leer_canal(client, con, canal, con_miembros=True)
             sin_registro += registro is None
