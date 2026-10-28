@@ -19,7 +19,7 @@ Entradas más recientes arriba.
 - Pestañas del Sheet «Canales de venta · Personas» (una fila por persona:
   canales, fechas, canal de su gratuita, otros canales) y «… · Entradas y
   salidas»; la copia periódica al Sheet las mantiene al día.
-- Commits: (este commit)
+- Commits: 4d3df42
 
 ## 2026-10-28 — Captación: aviso cuando alguien vuelve a entrar (en vez del de cada gratuita)
 
