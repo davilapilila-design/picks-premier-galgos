@@ -53,17 +53,24 @@ INICIO_SESION = frozenset({
     "account.GetPasswordRequest",
 })
 
+# Registro de acciones de un canal (entradas y salidas de los canales de
+# venta): solo lectura, autorizado por el dueño el 2026-10-28.
+REGISTRO = frozenset({"channels.GetAdminLogRequest"})
+
 MODOS = {
     "iniciar-sesion": LECTURA | INICIO_SESION,
     "historico": LECTURA,
     # El lector en simulación no puede ni pedir cambios de carpetas: aunque
     # hubiera un fallo en el código, Telegram no recibiría nada que escriba.
-    "simulacion": LECTURA | {"account.UpdateStatusRequest"},
-    "lector": LECTURA | CARPETAS | {"account.UpdateStatusRequest"},
+    "simulacion": LECTURA | REGISTRO | {"account.UpdateStatusRequest"},
+    "lector": LECTURA | REGISTRO | CARPETAS | {"account.UpdateStatusRequest"},
     # Leer la lista de suscriptores del canal principal (solo lectura;
     # autorizado por el dueño el 2026-10-23), para no ofrecer la gratuita a
     # quien ya estaba dentro.
     "suscriptores": LECTURA | {"channels.GetParticipantsRequest"},
+    # Miembros y registro de los canales de venta (ventas.py; solo lectura,
+    # autorizado por el dueño el 2026-10-28).
+    "ventas": LECTURA | REGISTRO | {"channels.GetParticipantsRequest"},
 }
 
 

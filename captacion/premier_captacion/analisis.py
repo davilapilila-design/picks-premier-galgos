@@ -227,8 +227,8 @@ def _enlace(chat, msg_id):
     return f"https://t.me/c/{chat.id}/{msg_id}" if isinstance(chat, types.Channel) else ""
 
 
-async def leer_canales(client, cfg, tz):
-    """(apuestas de los canales de venta, mensajes del grupo de picks, resumen por canal)."""
+async def canales_de_venta(client, cfg):
+    """(canales/grupos de venta de la carpeta «CH Venta», grupo de picks o None)."""
     from telethon.tl import types
 
     carpeta, titulos = await _carpeta(client, CARPETA)
@@ -236,8 +236,7 @@ async def leer_canales(client, cfg, tz):
         raise RuntimeError(f"No encuentro la carpeta «{CARPETA}». Tus carpetas: "
                            + ", ".join(f"«{t}»" for t in titulos))
     principal = carpetas.id_canal_puro(cfg.canal_id)
-    desde = datetime(DESDE.year, DESDE.month, DESDE.day, tzinfo=tz)
-    apuestas, picks, canales, grupo = [], [], [], None
+    canales, grupo = [], None
     peers = await chats_de_carpeta(client, carpeta)
     for ent in peers:
         if not isinstance(ent, (types.Channel, types.Chat)) or ent.id == principal:
@@ -247,10 +246,17 @@ async def leer_canales(client, cfg, tz):
         else:
             # Los «canales» de venta pueden ser canales o grupos de Telegram.
             canales.append(ent)
+    log.info("Carpeta «%s» (%s chats): %s canales/grupos de venta", CARPETA, len(peers), len(canales))
+    return canales, grupo
+
+
+async def leer_canales(client, cfg, tz):
+    """(apuestas de los canales de venta, mensajes del grupo de picks, resumen por canal)."""
+    desde = datetime(DESDE.year, DESDE.month, DESDE.day, tzinfo=tz)
+    apuestas, picks = [], []
+    canales, grupo = await canales_de_venta(client, cfg)
     if grupo is None:
         raise RuntimeError(f"No encuentro el grupo de picks en la carpeta «{CARPETA}»")
-    log.info("Carpeta «%s» (%s chats): %s canales/grupos de venta y el grupo «%s»",
-             CARPETA, len(peers), len(canales), grupo.title)
 
     async for m in client.iter_messages(grupo, offset_date=desde, reverse=True):
         reenvio = None

@@ -3,6 +3,24 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-28 — Captación: quién entra y sale de los canales de venta
+
+- El dueño quiere saber a cuántos canales de venta ha entrado cada persona.
+  El enlace de un canal es el mismo para la venta (payoption lo manda por
+  correo al pagar), la gratuita y las compensaciones: Telegram no dice quién
+  pagó, pero restando la gratuita (ya apuntada) quedan compras o
+  compensaciones; luego se podrá cruzar con un CSV de payoption.
+- `ventas.py` (solo lectura, autorizado por el dueño: `GetParticipants` y
+  `GetAdminLog`): lee la lista de miembros de cada canal de «CH Venta» con su
+  fecha de entrada (solo quien sigue dentro) y el registro de entradas y
+  salidas, que Telegram guarda 48 h. El lector lo vuelve a leer cada 4 h y lo
+  va guardando (migración 5: `ventas_*`). Modo a mano
+  `lector.sh real ventas [Sheet]` para la primera lectura completa.
+- Pestañas del Sheet «Canales de venta · Personas» (una fila por persona:
+  canales, fechas, canal de su gratuita, otros canales) y «… · Entradas y
+  salidas»; la copia periódica al Sheet las mantiene al día.
+- Commits: (este commit)
+
 ## 2026-10-28 — Captación: aviso cuando alguien vuelve a entrar (en vez del de cada gratuita)
 
 - El dueño prefiere no recibir un aviso por cada gratuita (se llena el chat)

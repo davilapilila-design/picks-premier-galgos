@@ -374,8 +374,11 @@ async def servicio(cfg, entorno):
                     await client.disconnect()
                     return
 
+        from . import ventas  # (importa analisis, que importa este módulo)
+
         tarea = asyncio.ensure_future(revisar())
         tarea_modo = asyncio.ensure_future(vigilar_modo())
+        tarea_ventas = asyncio.ensure_future(ventas.registro_periodico(client, con, cfg))
         parada = asyncio.Event()
 
         def parar():  # systemctl stop: salir limpio, sin dejar la unidad en "failed"
@@ -388,6 +391,7 @@ async def servicio(cfg, entorno):
         finally:
             tarea.cancel()
             tarea_modo.cancel()
+            tarea_ventas.cancel()
         if cambio.is_set():
             return 1  # systemd lo rearranca con el modo nuevo
         return 0 if parada.is_set() else 1  # desconexión inesperada: systemd lo rearranca
@@ -596,7 +600,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
                         choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace",
-                                 "apuntar-gratuita", "suscriptores", "analisis"])
+                                 "apuntar-gratuita", "suscriptores", "analisis", "ventas"])
     parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace) "
                                                 "o @usuario (apuntar-gratuita)")
     parser.add_argument("mas", nargs="*", help="apuntar-gratuita: «AAAA-MM-DD HH:MM» de la bienvenida y de la "
@@ -628,6 +632,10 @@ def main(argv=None):
                                                  solo_canales="canales" in args.mas))
         if args.modo == "suscriptores":
             return asyncio.run(leer_suscriptores(cfg, entorno))
+        if args.modo == "ventas":
+            from . import ventas
+            hoja = _id_sheet(args.dato) if args.dato else cfg.sheet_id
+            return asyncio.run(ventas.ejecutar(cfg, entorno, hoja, crear_cliente, credenciales_api))
         if args.modo == "apuntar-gratuita":
             if not args.dato or len(args.mas) != 3:
                 parser.error('apuntar-gratuita @usuario "AAAA-MM-DD HH:MM" "AAAA-MM-DD HH:MM" <enlace de venta>')

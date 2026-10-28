@@ -15,7 +15,10 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   debe tener ninguna función de enviar, y no marca chats como leídos. Lo
   garantiza la lista blanca de `premier_captacion/guardia.py`: no se amplía
   sin el visto bueno explícito del dueño, y nunca con nada que envíe,
-  marque como leído, se una o salga de chats.
+  marque como leído, se una o salga de chats. Ampliaciones autorizadas por
+  él (solo lectura): `channels.GetParticipantsRequest` (modos `suscriptores`
+  y `ventas`) y `channels.GetAdminLogRequest` (registro de entradas y salidas
+  de los canales de venta, ver `ventas.py`).
 - El lector arranca siempre en **simulación**; pasarlo a real
   (`configurar.sh <instancia> lector real`, o `/arrancar` en el bot, que
   también lo pasa a real; `/pausar` lo vuelve a simulación: estado

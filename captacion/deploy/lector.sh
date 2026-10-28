@@ -37,8 +37,8 @@ export CAPTACION_SESION="/var/lib/premier-captacion/$INSTANCIA-cuenta"
 export PYTHONDONTWRITEBYTECODE=1
 cd /opt/premier-captacion
 umask 077
-if [ "${1:-}" = analisis ]; then
-    # El análisis escribe en un Google Sheet: la credencial solo la lee root,
+if [ "${1:-}" = analisis ] || [ "${1:-}" = ventas ]; then
+    # El análisis (y «ventas») escribe en un Google Sheet: la credencial solo la lee root,
     # así que se le deja una copia privada mientras dura y luego se borra.
     [ -f /etc/premier-captacion/google.json ] || fallo "Falta la credencial de Google: ejecuta antes instalar.sh."
     CREDENCIAL=$(mktemp)

@@ -331,6 +331,10 @@ def sincronizar(con, tz, libro):
     p = libro.pestana(TAB_TIPOS, [CABECERA_TIPOS])
     p.reemplazar(filas_tipos(con, tz), desde_fila=2)
 
+    from . import ventas  # (ventas importa este módulo)
+    if ventas.hay_datos(con):
+        ventas.escribir_pestanas(con, tz, libro)
+
     return {"usuarios": len(usuarios), "eventos_nuevos": len(nuevos), "dias": len(dias)}
 
 

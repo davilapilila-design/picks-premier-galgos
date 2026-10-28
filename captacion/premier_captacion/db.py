@@ -91,6 +91,37 @@ MIGRACIONES = [
     );
     ALTER TABLE usuarios ADD COLUMN recurrente_ts INTEGER;
     """,
+    # 5 (quién entra y sale de los canales de venta; pedido por el dueño el
+    # 2026-10-28; ver ventas.py)
+    """
+    CREATE TABLE ventas_canales (
+        canal_id INTEGER PRIMARY KEY,
+        titulo TEXT,
+        leido_ts INTEGER
+    );
+    CREATE TABLE ventas_personas (
+        user_id INTEGER PRIMARY KEY,
+        nombre TEXT,
+        username TEXT
+    );
+    CREATE TABLE ventas_miembros (
+        canal_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        desde_ts INTEGER,
+        visto_ts INTEGER NOT NULL,
+        PRIMARY KEY (canal_id, user_id)
+    );
+    CREATE TABLE ventas_movimientos (
+        canal_id INTEGER NOT NULL,
+        log_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        ts INTEGER NOT NULL,
+        enlace TEXT,
+        PRIMARY KEY (canal_id, log_id)
+    );
+    CREATE INDEX ventas_movimientos_usuario ON ventas_movimientos (user_id);
+    """,
 ]
 
 
