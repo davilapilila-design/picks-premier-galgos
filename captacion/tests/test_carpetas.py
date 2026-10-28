@@ -215,6 +215,50 @@ class TestCarpetaDelDia(Base):
         self.assertEqual(db.obtener_usuario(self.con, 500)["carpeta"], "5.11")
 
 
+class TestSinGratuitaAFreeSend(Base):
+    """Quien ya no puede recibir la gratuita va a «free send», no al día."""
+
+    def test_si_borro_el_chat_vuelve_a_free_send_al_escribir(self):
+        self.del_embudo(500)
+        self.envia(500, 1, "t.me/+VENTA0000000001")
+        self.assertIn(500, self.usuarios_de("free send"))
+        fs = self.tg.por_titulo("free send")
+        self.correr(self.tg.cambiar(fs.id, quitar={500}))  # Telegram lo saca al borrar el chat
+        self.recibe(500, 2)
+        self.assertIn(500, self.usuarios_de("free send"))
+        self.assertIsNone(self.usuarios_de("15.10"))
+
+    def test_ya_estaba_en_el_canal_va_a_free_send(self):
+        self.del_embudo(500, bienvenida_tipo="manual_a")
+        with self.con:
+            db.guardar_miembros(self.con, [500, 600], 1)
+        self.recibe(500, 1)
+        self.assertEqual(self.usuarios_de("free send"), {500})
+        # Del canal pero sin bienvenida apuntada: también.
+        self.correr(self.org.al_recibir(600, 1, self.ahora, "hola", usuario(600, "Luis", "luis")))
+        self.assertEqual(self.usuarios_de("free send"), {500, 600})
+
+    def test_nuevo_del_bot_sigue_yendo_al_dia(self):
+        self.del_embudo(500)
+        with self.con:
+            db.guardar_miembros(self.con, [500], 1)  # la lista se leyó después de entrar
+        self.recibe(500, 1)
+        self.assertEqual(self.usuarios_de("15.10"), {500})
+
+    def test_desconocido_no_se_toca(self):
+        antes = list(self.tg.cambios)
+        self.recibe(999, 1)
+        self.assertEqual(self.tg.cambios, antes)
+
+    def test_aviso_de_gratuita_solo_la_primera_vez(self):
+        self.del_embudo(500)
+        self.envia(500, 1, "t.me/+VENTA0000000001")
+        self.envia(500, 2, "t.me/+VENTA0000000001")
+        regalos = [a for a in self.avisos if a.startswith("🎁")]
+        self.assertEqual(len(regalos), 1)
+        self.assertIn("Ana (@ana)", regalos[0])
+
+
 class TestFreeSend(Base):
     def test_enlace_de_venta_pasa_a_free_send(self):
         self.del_embudo(500)
@@ -280,7 +324,8 @@ class TestFreeSend(Base):
         self.org = self.organizador()
         self.del_embudo(500)
         self.envia(500, 1, "t.me/+VENTA0000000001")
-        self.assertIn("está llena", self.avisos[0])
+        self.assertTrue(self.avisos[0].startswith("🎁 Gratuita a"))
+        self.assertIn("está llena", self.avisos[1])
         self.assertNotIn(500, self.usuarios_de("free send"))
 
     def test_cada_enlace_se_consulta_una_sola_vez(self):

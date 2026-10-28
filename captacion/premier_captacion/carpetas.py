@@ -170,9 +170,12 @@ class Organizador:
     def _es_free_send(self, carpeta):
         return carpeta.gestionable and carpeta.titulo.strip().casefold() == self.aj.nombre_free_send.casefold()
 
-    def _nombre(self, user_id):
+    def _nombre(self, user_id, usuario=None):
         fila = db.obtener_usuario(self.con, user_id)
         if fila is None:
+            if usuario:
+                nombre = db.nombre_completo(usuario) or "sin nombre"
+                return f"{nombre} (@{usuario['username']})" if usuario.get("username") else nombre
             return str(user_id)
         if fila["nombre"] and fila["username"]:
             return f"{fila['nombre']} (@{fila['username']})"
@@ -251,7 +254,17 @@ class Organizador:
         async with self._candado:
             fila = db.obtener_usuario(self.con, user_id)
             self._vigilar_gratuita(user_id, ts, texto, fila, usuario)
-            if not db.es_del_embudo(fila) or self._ya_visto(fila, msg_id):
+            # Quien ya no puede recibir la gratuita (ya la tuvo, o ya estaba
+            # en el canal) va a «free send» y no a la carpeta del día
+            # (2026-10-28, decisión del dueño). También los que estaban en el
+            # canal sin haber pasado por la bienvenida.
+            sin_gratuita = db.estado_oferta(self.con, user_id, fila) != "nueva"
+            reciente = self._dia(ts) >= self._hoy() - timedelta(days=self.aj.dias - 1)
+            if not db.es_del_embudo(fila):
+                if sin_gratuita and reciente:
+                    await self._a_free_send(user_id, usuario)
+                return
+            if self._ya_visto(fila, msg_id):
                 return
             dia = self._dia(ts)
             nuevo_dia = fila["ultimo_mensaje_ts"] is None or self._dia(fila["ultimo_mensaje_ts"]) != dia
@@ -272,11 +285,14 @@ class Organizador:
                 if nuevo_dia:
                     db.registrar_evento(self.con, ts, "te_escribe", user_id, **detalle)
 
-            if fila["enlace_venta_ts"] is not None:
-                return  # ya tiene enlace de venta: se queda en «free send»
-            if dia < self._hoy() - timedelta(days=self.aj.dias - 1):
+            if not reciente:
                 return  # mensaje antiguo (p. ej. al recuperar lo perdido): no se mueve
-            await self._a_carpeta_del_dia(user_id, dia)
+            if sin_gratuita:
+                # Si ya está, no hace nada; si no (p. ej. borró el chat y
+                # Telegram lo sacó de la carpeta), vuelve a entrar.
+                await self._a_free_send(user_id, usuario)
+            else:
+                await self._a_carpeta_del_dia(user_id, dia)
 
     async def al_enviar(self, user_id, msg_id, ts, textos):
         """Un mensaje que el dueño ha enviado a alguien por privado."""
@@ -302,9 +318,14 @@ class Organizador:
                                         enlace=enlaces.enlace(h), canal=titulo or "desconocido")
                 h, titulo = venta[-1]
                 campos = {"enlace_venta": enlaces.enlace(h), "canal_venta": titulo or "desconocido"}
-                if fila["enlace_venta_ts"] is None:
+                primera = fila["enlace_venta_ts"] is None
+                if primera:
                     campos["enlace_venta_ts"] = int(ts)
                 db.actualizar_campos(self.con, user_id, ts, **campos)
+            if primera and self.reloj() - ts < AVISO_GRATUITA_S:  # no al recuperar lo antiguo
+                from .consulta import CALLBACK  # (consulta importa este módulo)
+                self.avisar(f"🎁 Gratuita a {self._nombre(user_id)} («{titulo or 'canal desconocido'}»).",
+                            {"inline_keyboard": [[{"text": "🔎 Ver más info", "callback_data": f"{CALLBACK}{user_id}"}]]})
             await self._a_free_send(user_id)
 
     def es_principal(self, chat_id):
@@ -377,7 +398,7 @@ class Organizador:
         self._apuntar_carpeta(user_id, titulo, "entra")
         await self._rotar_sin_candado()
 
-    async def _a_free_send(self, user_id):
+    async def _a_free_send(self, user_id, usuario=None):
         await self._al_dia()
         await self._quitar_de_dias(user_id)
         carpetas = await self.tg.carpetas()
@@ -387,7 +408,7 @@ class Organizador:
             if not await self._hueco(carpetas, nombre):
                 return
             await self.tg.crear_carpeta(nombre, {user_id})
-            self._informar(f"creo la carpeta «{nombre}» y meto a {self._nombre(user_id)}")
+            self._informar(f"creo la carpeta «{nombre}» y meto a {self._nombre(user_id, usuario)}")
         elif user_id in fs.usuarios:
             return
         else:
@@ -404,10 +425,10 @@ class Organizador:
                 quitar = [f["user_id"] for f in del_embudo if f["user_id"] != user_id][:sobran]
             if fs.total + 1 - len(quitar) > self.aj.max_chats:
                 self.avisar(f"⚠️ «{nombre}» está llena ({fs.total} chats, casi todos puestos a mano): "
-                            f"no puedo meter a {self._nombre(user_id)}.")
+                            f"no puedo meter a {self._nombre(user_id, usuario)}.")
                 return
             await self.tg.cambiar(fs.id, anadir={user_id}, quitar=set(quitar))
-            self._informar(f"meto a {self._nombre(user_id)} en «{nombre}»"
+            self._informar(f"meto a {self._nombre(user_id, usuario)} en «{nombre}»"
                            + (f" y saco a los {len(quitar)} más antiguos para no pasar de {self.aj.max_free_send}"
                               if quitar else ""))
             for antiguo in quitar:

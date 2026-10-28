@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-28 — Captación: quien ya no puede tener la gratuita va a «free send», y aviso de cada gratuita
+
+- Un cliente (ya con la gratuita) borró el chat: Telegram lo sacó de «free
+  send» y el lector, al volver a escribir, no lo devolvía (daba por hecho que
+  seguía dentro). Decisión del dueño: cuando escribe alguien que ya no puede
+  recibir la gratuita (ya la tuvo, o ya estaba en el canal / volvió), va a
+  «free send» si no está, en vez de a la carpeta del día. Incluye a los del
+  canal sin bienvenida apuntada. Los nuevos siguen yendo al día; los
+  desconocidos no se tocan. Mismo límite de 90 (salen los más antiguos).
+- Aviso al dueño en el bot cada vez que se da una gratuita por primera vez
+  («🎁 Gratuita a X («canal»)» con «Ver más info»), también con el lector en
+  real (antes solo quedaba en el registro y en el resumen).
+- Commits: (este commit)
+
 ## 2026-10-27 — Captación: /arrancar y /pausar mueven también el lector de carpetas
 
 - El dueño quiere parar y arrancar todo desde el bot. `/arrancar` pone el bot
