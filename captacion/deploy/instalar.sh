@@ -230,6 +230,16 @@ if [ "$SHEET_OK" = 1 ]; then
 else
     echo "   ⚠️  La copia al Google Sheet queda sin activar; el bot funciona igual."
 fi
+# Ventas de overoption (solo lectura): solo si están las credenciales (las pone
+# el dueño con: configurar.sh <instancia> overoption). Sin ellas, el timer
+# fallaría al arrancar, así que se deja sin activar.
+if [ "$VENV_OK" = 1 ] && [ -f "$DIR_CONFIG/overoption.env" ]; then
+    systemctl enable --quiet --now "captacion-pagos@$INSTANCIA.timer"
+    echo "   ventas de overoption: activadas (3 veces al día) ✓"
+else
+    echo "   ℹ️  Ventas de overoption sin activar (faltan las credenciales:"
+    echo "       bash $DESTINO/configurar.sh $INSTANCIA overoption)."
+fi
 if [ "$VENV_OK" = 1 ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
     systemctl restart "captacion-lector@$INSTANCIA"
     echo "   lector de carpetas reiniciado con el código nuevo ✓"

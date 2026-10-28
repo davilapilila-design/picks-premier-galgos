@@ -15,6 +15,7 @@
 #   bash /opt/premier-captacion/configurar.sh real bot real            (el bot da la bienvenida y acepta)
 #   bash /opt/premier-captacion/configurar.sh real bienvenidas-manuales si  (el lector apunta las bienvenidas que das a mano; solo real)
 #   bash /opt/premier-captacion/configurar.sh real equipo "@uno,@dos"  (los del equipo: salen marcados en «Canales de venta»)
+#   bash /opt/premier-captacion/configurar.sh real overoption          (correo y contraseña de overoption; los pide, no se ven)
 #   bash /opt/premier-captacion/configurar.sh prueba ver               (muestra todo menos los secretos)
 #
 # Por seguridad el token y el api_hash NUNCA se escriben en la línea de
@@ -195,6 +196,38 @@ case "$DATO" in
         if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
             systemctl restart "captacion-lector@$INSTANCIA"
             echo "✓ lector reiniciado"
+        fi
+        exit 0
+        ;;
+    overoption)
+        # Credenciales de overoption (overoption.io), para bajar las ventas y
+        # cruzarlas con las entradas a los canales (ver pagos.py). SOLO LECTURA.
+        # Se guardan en un archivo aparte, común a las dos instancias (es la
+        # misma cuenta), solo legible por root. La contraseña NO se escribe en
+        # el comando ni se ve al teclearla, y se conserva tal cual (con espacios
+        # si los tuviera), así que no se pasa por leer_oculto.
+        OO="$DIR_CONFIG/overoption.env"
+        [ -z "$VALOR" ] || fallo "No se escribe en el comando: ejecuta bash $0 $INSTANCIA overoption"
+        leer_oculto OO_EMAIL "Correo de overoption: " visible
+        [[ "$OO_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] || fallo "Eso no parece un correo."
+        if { : < /dev/tty; } 2>/dev/null; then
+            read -rsp "Contraseña de overoption (no se verá al teclearla): " OO_PASS < /dev/tty; echo
+        else
+            read -r OO_PASS || true
+        fi
+        [ -n "$OO_PASS" ] || fallo "Contraseña vacía."
+        install -d -m 700 "$DIR_CONFIG"
+        [ -f "$OO" ] || (umask 077 && : > "$OO")
+        chown root:root "$OO"; chmod 600 "$OO"
+        poner "$OO" OVEROPTION_EMAIL "$OO_EMAIL"
+        poner "$OO" OVEROPTION_PASSWORD "$OO_PASS"
+        echo "✓ credenciales de overoption guardadas en $OO (solo root)"
+        if [ -z "${CAPTACION_NO_REINICIAR:-}" ] && systemctl is-enabled --quiet "captacion-pagos@$INSTANCIA.timer" 2>/dev/null; then
+            echo "   Bajando las ventas ahora (puede tardar)..."
+            systemctl start "captacion-pagos@$INSTANCIA.service" \
+                && journalctl -u "captacion-pagos@$INSTANCIA" -n 1 --no-pager -o cat || true
+        else
+            echo "   (se activan con instalar.sh: timer captacion-pagos@$INSTANCIA)"
         fi
         exit 0
         ;;

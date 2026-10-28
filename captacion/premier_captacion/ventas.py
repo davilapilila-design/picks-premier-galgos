@@ -37,7 +37,7 @@ TAB_PERSONAS = "Canales de venta · Personas"
 TAB_MOVIMIENTOS = "Canales de venta · Entradas y salidas"
 CABECERA_PERSONAS = ["Equipo", "Nombre", "Usuario", "User ID", "Canales de venta (entró)", "Sigue dentro en",
                      "Canales", "Canal de su gratuita", "Otros canales (compras o compensaciones)",
-                     "Nº otros canales"]
+                     "Nº otros canales", "Canales que pagó", "€ pagado"]
 CABECERA_MOVIMIENTOS = ["Fecha y hora", "Canal", "Equipo", "Nombre", "Usuario", "User ID", "Movimiento", "Enlace usado"]
 
 
@@ -260,7 +260,9 @@ def _es_equipo(uid, username, admin, del_equipo):
 
 
 def filas_personas(con, tz, del_equipo=None):
+    from . import pagos  # cuántos canales pagó cada persona (ventas de overoption)
     del_equipo = equipo() if del_equipo is None else del_equipo
+    pagados = pagos.pagos_por_persona(con)
     canales = {f["canal_id"]: f["titulo"] for f in con.execute("SELECT canal_id, titulo FROM ventas_canales")}
     por_persona = {}  # user_id -> {canal_id: {"entra": ts, "dentro": bool, "sale": ts}}
 
@@ -297,9 +299,11 @@ def filas_personas(con, tz, del_equipo=None):
             textos.append(texto)
             if titulo != gratuita:
                 otros.append(titulo)
+        pago = pagados.get(uid)
         filas.append(["Equipo" if es_equipo else "", nombre, f"@{username}" if username else "", uid, len(por_canal),
                       sum(d["dentro"] for d in por_canal.values()), " · ".join(textos), gratuita or "",
-                      " · ".join(otros), len(otros)])
+                      " · ".join(otros), len(otros),
+                      pago["canales"] if pago else 0, pago["eur"] if pago else ""])
     # Primero los clientes con más canales aparte de su gratuita; el equipo, al final.
     filas.sort(key=lambda f: (f[0] != "", -f[9], -f[4], f[1].lower()))
     return filas

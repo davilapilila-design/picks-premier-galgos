@@ -126,6 +126,38 @@ MIGRACIONES = [
     """
     ALTER TABLE ventas_personas ADD COLUMN admin INTEGER;
     """,
+    # 7 (ventas de overoption, solo lectura, para cruzarlas con las entradas a
+    # los canales; pedido por el dueño el 2026-10-29; ver pagos.py)
+    """
+    CREATE TABLE pagos_overoption (
+        id TEXT PRIMARY KEY,
+        content_uid TEXT,
+        portal_uid TEXT,
+        producto TEXT,
+        enlace TEXT,
+        correo TEXT,
+        importe REAL,
+        moneda TEXT,
+        neto REAL,
+        comision REAL,
+        metodo TEXT,
+        estado TEXT,
+        es_propina INTEGER,
+        descuento_codigo TEXT,
+        descuento_importe REAL,
+        pago_ts INTEGER,
+        bajado_ts INTEGER
+    );
+    CREATE INDEX pagos_overoption_enlace ON pagos_overoption (enlace);
+    CREATE INDEX pagos_overoption_correo ON pagos_overoption (correo);
+    CREATE INDEX pagos_overoption_pago ON pagos_overoption (pago_ts);
+    CREATE TABLE pagos_contenidos (
+        content_uid TEXT PRIMARY KEY,
+        enlace TEXT,
+        titulo TEXT,
+        visto_ts INTEGER
+    );
+    """,
 ]
 
 

@@ -3,6 +3,35 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: ventas de overoption cruzadas con las entradas
+
+- El dueño quiere saber quién ha PAGADO cada canal. overoption (overoption.io)
+  no tiene exportar, pero su web usa una API JSON (`api.overoption.io`) que,
+  con su sesión, devuelve todas sus transacciones. Reconocimiento previo de la
+  parte pública (sin cuenta) + sondeo de solo lectura con su cuenta: login
+  correo+contraseña (sin 2FA ni captcha), `GET /transactions` devuelve todas
+  las ventas (correo, fecha/hora UTC, importe, moneda, neto, método, estado,
+  `content_uid`), y `GET /content/<uid>` da el enlace de Telegram del canal
+  (`final_content`), que coincide con el `enlace` que guarda `ventas_*`. Sus
+  condiciones no prohíben leer la propia cuenta por programa.
+- `pagos.py` (SOLO LECTURA: el único POST es el login; todo lo demás GET).
+  Baja las ventas, resuelve el enlace de cada producto (con caché en
+  `pagos_contenidos`) y lo guarda (migración 7: `pagos_overoption`). Cruce
+  venta↔persona por enlace (o por nombre de canal si es único) + hora de
+  entrada ±3 min: emparejada / dudosa (varios) / sin emparejar / canal no
+  identificado. El cruce se recalcula al copiar al Sheet, así mejora según
+  entran más movimientos de Telegram.
+- Pestañas nuevas del Sheet: «Canales de venta · Pagos» (una fila por venta,
+  con € recibido y la persona o el motivo), «Clientes (por correo)» (compras,
+  total pagado/recibido, nº de canales; no necesita Telegram) y dos columnas
+  en «… · Personas» (canales que pagó y € pagado). Aviso honesto al dueño: el
+  registro de entradas empezó el 28/10, así que las ventas viejas saldrán
+  mayormente «sin emparejar»; los importes y la vista por correo sí son 100%.
+- Credenciales de overoption solo en la VM (`/etc/premier-captacion/overoption.env`,
+  root), nunca en el repo (público) ni en el chat; systemd se las pasa al
+  servicio. Nuevo `captacion-pagos@<instancia>` (timer 3 veces al día) y
+  `configurar.sh <instancia> overoption`. Tests: `test_pagos.py`, `test_cruce.py`.
+
 ## 2026-10-28 — Captación: quién entra y sale de los canales de venta
 
 - El dueño quiere saber a cuántos canales de venta ha entrado cada persona.

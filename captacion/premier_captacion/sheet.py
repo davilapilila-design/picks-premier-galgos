@@ -335,6 +335,10 @@ def sincronizar(con, tz, libro):
     if ventas.hay_datos(con):
         ventas.escribir_pestanas(con, tz, libro)
 
+    from . import pagos  # ventas de overoption cruzadas con las entradas
+    if pagos.hay_datos(con):
+        pagos.escribir_pestanas(con, tz, libro)
+
     return {"usuarios": len(usuarios), "eventos_nuevos": len(nuevos), "dias": len(dias)}
 
 

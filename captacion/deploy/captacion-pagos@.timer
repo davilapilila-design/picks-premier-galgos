@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer: ventas de overoption (%i), tres veces al día
+
+[Timer]
+# Hora de Madrid (la de la VM). Las ventas crecen despacio: con 3 veces basta.
+OnCalendar=*-*-* 07,15,23:10
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

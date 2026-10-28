@@ -1,0 +1,30 @@
+# Baja las ventas de overoption (solo lectura) y las guarda en la base de
+# datos local para cruzarlas con las entradas a los canales. La lanza
+# captacion-pagos@<instancia>.timer tres veces al día.
+#   systemctl start captacion-pagos@real       (baja ahora mismo)
+#   journalctl -u captacion-pagos@real -n 30
+[Unit]
+Description=Premier Galgos captacion: ventas de overoption (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+# Credenciales de overoption (solo root puede leer el archivo; systemd se las
+# pasa al proceso por el entorno). Ver deploy/configurar.sh.
+EnvironmentFile=/etc/premier-captacion/overoption.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+ExecStart=/opt/premier-captacion/venv/bin/python -m premier_captacion.pagos
+TimeoutStartSec=10m
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
