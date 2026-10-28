@@ -122,6 +122,10 @@ MIGRACIONES = [
     );
     CREATE INDEX ventas_movimientos_usuario ON ventas_movimientos (user_id);
     """,
+    # 6 (administradores de los canales de venta: se marcan como del equipo)
+    """
+    ALTER TABLE ventas_personas ADD COLUMN admin INTEGER;
+    """,
 ]
 
 

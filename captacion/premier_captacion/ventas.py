@@ -35,10 +35,10 @@ _BUSQUEDAS = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 TAB_PERSONAS = "Canales de venta · Personas"
 TAB_MOVIMIENTOS = "Canales de venta · Entradas y salidas"
-CABECERA_PERSONAS = ["Nombre", "Usuario", "User ID", "Canales de venta (entró)", "Sigue dentro en",
+CABECERA_PERSONAS = ["Equipo", "Nombre", "Usuario", "User ID", "Canales de venta (entró)", "Sigue dentro en",
                      "Canales", "Canal de su gratuita", "Otros canales (compras o compensaciones)",
                      "Nº otros canales"]
-CABECERA_MOVIMIENTOS = ["Fecha y hora", "Canal", "Nombre", "Usuario", "User ID", "Movimiento", "Enlace usado"]
+CABECERA_MOVIMIENTOS = ["Fecha y hora", "Canal", "Equipo", "Nombre", "Usuario", "User ID", "Movimiento", "Enlace usado"]
 
 
 # --- Base de datos -------------------------------------------------------------
@@ -98,11 +98,9 @@ async def leer_miembros(client, canal):
 
     async def leer(**kw):
         async for u in client.iter_participants(canal, **kw):
-            # Fuera bots, cuentas borradas y los administradores (el dueño y
-            # sus socios están en todos: no son clientes).
-            tipo = type(getattr(u, "participant", None)).__name__
-            if (not getattr(u, "bot", False) and not getattr(u, "deleted", False)
-                    and "Admin" not in tipo and "Creator" not in tipo):
+            # Fuera bots y cuentas borradas. Los administradores se quedan,
+            # marcados como del equipo en el Sheet.
+            if not getattr(u, "bot", False) and not getattr(u, "deleted", False):
                 fecha = getattr(getattr(u, "participant", None), "date", None)
                 vistos[u.id] = (u, fecha.timestamp() if fecha else None)
 
@@ -157,6 +155,9 @@ async def leer_canal(client, con, canal, con_miembros):
         guardar_canal(con, canal.id, canal.title, ahora)
         for u, _ in miembros:
             guardar_persona(con, u.id, _nombre(u), getattr(u, "username", None))
+            tipo = type(getattr(u, "participant", None)).__name__
+            if "Admin" in tipo or "Creator" in tipo:
+                con.execute("UPDATE ventas_personas SET admin = 1 WHERE user_id = ?", (u.id,))
         if con_miembros:
             # La lista es una foto de quién está ahora: la anterior se cambia
             # entera (quien salió sigue en los movimientos).
@@ -245,16 +246,21 @@ def _dia(ts, tz):
     return datetime.fromtimestamp(ts, tz).strftime("%d/%m")
 
 
-def excluidos(entorno=None):
-    """@usuarios o ids del equipo (CAPTACION_EXCLUIR_VENTAS, separados por
-    comas): están en los canales pero no cuentan para las estadísticas. Se
-    guardan en la configuración de la VM, no aquí (el repositorio es público)."""
-    valor = (entorno if entorno is not None else os.environ).get("CAPTACION_EXCLUIR_VENTAS", "")
+def equipo(entorno=None):
+    """@usuarios o ids del equipo (CAPTACION_EQUIPO, separados por comas):
+    están en los canales pero no son clientes; en el Sheet salen marcados.
+    Se guardan en la configuración de la VM, no aquí (el repositorio es
+    público). Los administradores de los canales también cuentan como equipo."""
+    valor = (entorno if entorno is not None else os.environ).get("CAPTACION_EQUIPO", "")
     return {x.strip().lstrip("@").lower() for x in valor.split(",") if x.strip()}
 
 
-def filas_personas(con, tz, fuera=None):
-    fuera = excluidos() if fuera is None else fuera
+def _es_equipo(uid, username, admin, del_equipo):
+    return bool(admin) or str(uid) in del_equipo or bool(username and username.lower() in del_equipo)
+
+
+def filas_personas(con, tz, del_equipo=None):
+    del_equipo = equipo() if del_equipo is None else del_equipo
     canales = {f["canal_id"]: f["titulo"] for f in con.execute("SELECT canal_id, titulo FROM ventas_canales")}
     por_persona = {}  # user_id -> {canal_id: {"entra": ts, "dentro": bool, "sale": ts}}
 
@@ -273,12 +279,12 @@ def filas_personas(con, tz, fuera=None):
             d["sale"] = f["ts"]
     filas = []
     for uid, por_canal in por_persona.items():
-        persona = con.execute("SELECT nombre, username FROM ventas_personas WHERE user_id = ?", (uid,)).fetchone()
+        persona = con.execute("SELECT nombre, username, admin FROM ventas_personas WHERE user_id = ?",
+                              (uid,)).fetchone()
         usuario = db.obtener_usuario(con, uid)
         nombre = (persona and persona["nombre"]) or (usuario and usuario["nombre"]) or ""
         username = (persona and persona["username"]) or (usuario and usuario["username"]) or ""
-        if str(uid) in fuera or (username and username.lower() in fuera):
-            continue
+        es_equipo = _es_equipo(uid, username, persona and persona["admin"], del_equipo)
         gratuita = (usuario["canal_venta"] if usuario is not None and usuario["enlace_venta_ts"] is not None
                     else None)
         orden = sorted(por_canal.items(), key=lambda kv: kv[1]["entra"] or 0)
@@ -291,23 +297,24 @@ def filas_personas(con, tz, fuera=None):
             textos.append(texto)
             if titulo != gratuita:
                 otros.append(titulo)
-        filas.append([nombre, f"@{username}" if username else "", uid, len(por_canal),
+        filas.append(["Equipo" if es_equipo else "", nombre, f"@{username}" if username else "", uid, len(por_canal),
                       sum(d["dentro"] for d in por_canal.values()), " · ".join(textos), gratuita or "",
                       " · ".join(otros), len(otros)])
-    filas.sort(key=lambda f: (-f[8], -f[3], f[0].lower()))
+    # Primero los clientes con más canales aparte de su gratuita; el equipo, al final.
+    filas.sort(key=lambda f: (f[0] != "", -f[9], -f[4], f[1].lower()))
     return filas
 
 
-def filas_movimientos(con, tz, fuera=None):
-    fuera = excluidos() if fuera is None else fuera
+def filas_movimientos(con, tz, del_equipo=None):
+    del_equipo = equipo() if del_equipo is None else del_equipo
     filas = []
     for f in con.execute(
-            "SELECT m.ts, m.user_id, m.tipo, m.enlace, c.titulo, p.nombre, p.username FROM ventas_movimientos m "
+            "SELECT m.ts, m.user_id, m.tipo, m.enlace, c.titulo, p.nombre, p.username, p.admin FROM ventas_movimientos m "
             "LEFT JOIN ventas_canales c USING (canal_id) LEFT JOIN ventas_personas p USING (user_id) "
             "ORDER BY m.ts DESC"):
-        if str(f["user_id"]) in fuera or (f["username"] or "").lower() in fuera:
-            continue
-        filas.append([sheet.serie_fecha_hora(f["ts"], tz), f["titulo"] or "", f["nombre"] or "",
+        es_equipo = _es_equipo(f["user_id"], f["username"], f["admin"], del_equipo)
+        filas.append([sheet.serie_fecha_hora(f["ts"], tz), f["titulo"] or "", "Equipo" if es_equipo else "",
+                      f["nombre"] or "",
                       f"@{f['username']}" if f["username"] else "", f["user_id"],
                       "Entra" if f["tipo"] == "entra" else "Sale", f["enlace"] or ""])
     return filas

@@ -26,9 +26,11 @@ Entradas más recientes arriba.
   pruebas del bot. Se quitan los administradores de cada canal y el canal de
   pruebas; la lista de miembros de cada canal se sustituye entera en cada
   lectura completa, y se borra lo de canales que ya no cuentan.
-- Los del equipo (socios del dueño) están en los canales pero no cuentan:
-  `configurar.sh real excluir-ventas "@uno,@dos"` (CAPTACION_EXCLUIR_VENTAS,
-  solo en la VM, no en el repositorio). Se quitan de las dos pestañas.
+- El equipo (el dueño y sus socios) no se quita: el dueño prefiere que se
+  saque todo y que salgan marcados («Equipo», primera columna; al final de
+  la lista). Cuentan como equipo los administradores de cada canal y los que
+  se pongan con `configurar.sh real equipo "@uno,@dos"` (CAPTACION_EQUIPO,
+  solo en la VM, no en el repositorio). Migración 6: `ventas_personas.admin`.
 - Commits: 4d3df42
 
 ## 2026-10-28 — Captación: aviso cuando alguien vuelve a entrar (en vez del de cada gratuita)

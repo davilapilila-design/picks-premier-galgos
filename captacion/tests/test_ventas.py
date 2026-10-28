@@ -64,23 +64,27 @@ class TestPersonas(unittest.TestCase):
             ventas.guardar_miembros(self.con, 1, [(600, TS)], TS)
         filas = ventas.filas_personas(self.con, MADRID, set())
         ana = filas[0]
-        self.assertEqual(ana[:5], ["Ana", "@ana", 500, 3, 2])
-        self.assertIn("Stakazo 9 (entró 22/10) (salió 23/10)", ana[5])
-        self.assertEqual(ana[6], "Lunes Tarde")
-        self.assertEqual((ana[7], ana[8]), ("Martes Noche · Stakazo 9", 2))
+        self.assertEqual(ana[:6], ["", "Ana", "@ana", 500, 3, 2])
+        self.assertIn("Stakazo 9 (entró 22/10) (salió 23/10)", ana[6])
+        self.assertEqual(ana[7], "Lunes Tarde")
+        self.assertEqual((ana[8], ana[9]), ("Martes Noche · Stakazo 9", 2))
         luis = filas[1]
-        self.assertEqual((luis[0], luis[6], luis[7], luis[8]), ("Luis", "", "Lunes Tarde", 1))
+        self.assertEqual((luis[1], luis[7], luis[8], luis[9]), ("Luis", "", "Lunes Tarde", 1))
 
-    def test_los_del_equipo_no_cuentan(self):
-        self.assertEqual(ventas.excluidos({"CAPTACION_EXCLUIR_VENTAS": "@Pepe, 700"}), {"pepe", "700"})
+    def test_el_equipo_sale_marcado_y_al_final(self):
+        self.assertEqual(ventas.equipo({"CAPTACION_EQUIPO": "@Pepe, 700"}), {"pepe", "700"})
         with self.con:
             ventas.guardar_persona(self.con, 500, "Pepe", "pepe")
             ventas.guardar_persona(self.con, 600, "Ana", "ana")
-            ventas.guardar_miembros(self.con, 1, [(500, TS), (600, TS), (700, TS)], TS)
+            ventas.guardar_persona(self.con, 800, "Dueño", "dueno")
+            self.con.execute("UPDATE ventas_personas SET admin = 1 WHERE user_id = 800")  # administrador
+            ventas.guardar_miembros(self.con, 1, [(500, TS), (600, TS), (700, TS), (800, TS)], TS)
+            ventas.guardar_miembros(self.con, 2, [(500, TS), (800, TS)], TS)
             ventas.guardar_movimientos(self.con, 1, [(1, 500, "entra", TS, None), (2, 600, "entra", TS, None)])
-        fuera = {"pepe", "700"}
-        self.assertEqual([f[2] for f in ventas.filas_personas(self.con, MADRID, fuera)], [600])
-        self.assertEqual([f[4] for f in ventas.filas_movimientos(self.con, MADRID, fuera)], [600])
+        filas = ventas.filas_personas(self.con, MADRID, {"pepe", "700"})
+        self.assertEqual([(f[0], f[3]) for f in filas], [("", 600), ("Equipo", 800), ("Equipo", 500), ("Equipo", 700)])
+        movs = {f[5]: f[2] for f in ventas.filas_movimientos(self.con, MADRID, {"pepe", "700"})}
+        self.assertEqual(movs, {500: "Equipo", 600: ""})
 
     def test_movimientos_sin_repetir(self):
         with self.con:
@@ -88,7 +92,7 @@ class TestPersonas(unittest.TestCase):
             self.assertEqual(ventas.guardar_movimientos(self.con, 1, [(1, 500, "entra", TS, None)]), 0)
         filas = ventas.filas_movimientos(self.con, MADRID, set())
         self.assertEqual(len(filas), 1)
-        self.assertEqual(filas[0][1:], ["Lunes Tarde", "", "", 500, "Entra", ""])
+        self.assertEqual(filas[0][1:], ["Lunes Tarde", "", "", "", 500, "Entra", ""])
         self.assertTrue(ventas.hay_datos(self.con))
 
 
@@ -124,9 +128,7 @@ class TestLeerMiembros(unittest.TestCase):
     def test_fecha_de_entrada_y_sin_bots(self):
         bot = usuario(9, "Bot")
         bot.bot = True
-        admin = usuario(7, "Socio", desde=TS)
-        admin.participant = type("ChannelParticipantAdmin", (), {"date": None})()
-        cliente = FalsoCliente([usuario(500, "Ana", desde=TS), bot, admin, usuario(600, "Luis")])
+        cliente = FalsoCliente([usuario(500, "Ana", desde=TS), bot, usuario(600, "Luis")])
         leidos = asyncio.run(ventas.leer_miembros(cliente, "canal"))
         self.assertEqual([(u.id, d) for u, d in leidos], [(500, TS), (600, None)])
         self.assertEqual(cliente.busquedas, [])  # pocos: no hace falta buscar
