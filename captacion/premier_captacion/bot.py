@@ -283,7 +283,8 @@ class BotCaptacion:
             return
         if recurrente:
             # Ya estaba en el canal o ya pasó por aquí (p. ej. salió y vuelve):
-            # bienvenida sin la gratuita.
+            # bienvenida sin la gratuita. Se avisa al dueño: suelen ser los
+            # que vuelven a por otra gratuita (2026-10-28).
             with self.con:
                 db.registrar_evento(self.con, ahora, "ya_recibida", uid, tipo_mensaje=fila["bienvenida_tipo"])
         if retraso > self.cfg.ventana_bienvenida_s:
@@ -295,6 +296,18 @@ class BotCaptacion:
             self._enviar_bienvenida(sol, usuario, recurrente)
 
         self._aceptar(chat["id"], usuario)
+        if recurrente:  # después de aceptar, para no retrasar su bienvenida
+            self.avisar(f"🔁 {describir(usuario)} ha vuelto a entrar: {self._motivo_recurrente(uid)}. "
+                        "Le he dado la bienvenida sin gratuita.",
+                        teclado={"inline_keyboard": [[{"text": "🔎 Ver más info",
+                                                       "callback_data": f"{consulta.CALLBACK}{uid}"}]]})
+
+    def _motivo_recurrente(self, uid):
+        fila = db.obtener_usuario(self.con, uid)
+        if fila["enlace_venta_ts"] is not None:
+            return (f"ya tuvo la gratuita el {datetime.fromtimestamp(fila['enlace_venta_ts'], self.cfg.tz):%d/%m}"
+                    f" («{fila['canal_venta'] or 'canal desconocido'}»)")
+        return "ya estaba en el canal" if db.es_miembro(self.con, uid) else "ya había pasado por aquí"
 
     def _simular_solicitud(self, usuario, recurrente, retraso, ahora):
         """Simulación: ni bienvenida ni aceptación; se cuenta al dueño."""
@@ -302,10 +315,7 @@ class BotCaptacion:
         if retraso > self.cfg.ventana_bienvenida_s:
             que = "no le podría escribir (llevaba más de 5 min esperando); le aceptaría sin bienvenida"
         elif recurrente:
-            fila = db.obtener_usuario(self.con, uid)
-            motivo = ("ya tuvo la gratuita" if fila["enlace_venta_ts"] is not None else
-                      "ya estaba en el canal" if db.es_miembro(self.con, uid) else "ya había pasado por aquí")
-            que = f"le enviaría la bienvenida SIN gratuita ({motivo}) y le aceptaría"
+            que = f"le enviaría la bienvenida SIN gratuita ({self._motivo_recurrente(uid)}) y le aceptaría"
         else:
             que = "le enviaría la bienvenida CON gratuita y el mensaje de dudas, y le aceptaría"
         with self.con:

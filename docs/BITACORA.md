@@ -3,6 +3,16 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-28 — Captación: aviso cuando alguien vuelve a entrar (en vez del de cada gratuita)
+
+- El dueño prefiere no recibir un aviso por cada gratuita (se llena el chat)
+  y sí cuando alguien vuelve a pedir entrar al canal: suelen ser los que
+  intentan conseguir otra gratuita. Al aceptar a alguien que ya estaba en el
+  canal, ya tuvo la gratuita o ya había pasado por aquí, el bot le da la
+  bienvenida sin gratuita, le acepta y después avisa: «🔁 X ha vuelto a
+  entrar: ya tuvo la gratuita el dd/mm («canal»)…», con «Ver más info».
+- Commits: (este commit)
+
 ## 2026-10-28 — Captación: quien ya no puede tener la gratuita va a «free send», y aviso de cada gratuita
 
 - Un cliente (ya con la gratuita) borró el chat: Telegram lo sacó de «free
@@ -14,7 +24,9 @@ Entradas más recientes arriba.
   desconocidos no se tocan. Mismo límite de 90 (salen los más antiguos).
 - Aviso al dueño en el bot cada vez que se da una gratuita por primera vez
   («🎁 Gratuita a X («canal»)» con «Ver más info»), también con el lector en
-  real (antes solo quedaba en el registro y en el resumen).
+  real (antes solo quedaba en el registro y en el resumen). Quitado el mismo
+  día a petición del dueño (llenaba el chat de avisos): ver la entrada
+  siguiente.
 - Commits: 60b7058
 
 ## 2026-10-27 — Captación: /arrancar y /pausar mueven también el lector de carpetas

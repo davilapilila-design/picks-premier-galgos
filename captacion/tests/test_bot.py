@@ -63,8 +63,13 @@ class TestSolicitudes(Base):
         self.reloj.ahora += 90 * 24 * 3600  # meses después
         self.bot.procesar(update_solicitud(2, uid=500, fecha=self.reloj.ahora, enlace_nombre="otro"))
 
-        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        # Bienvenida sin gratuita, aceptar y, después, el aviso al dueño.
+        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest", "sendMessage"])
         self.assertEqual(self.api.llamadas[0][1]["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
+        aviso = self.api.envios_a(PROPIETARIO)[-1]
+        self.assertTrue(aviso["text"].startswith("🔁 "))
+        self.assertIn("ha vuelto a entrar: ya había pasado por aquí", aviso["text"])
+        self.assertEqual(aviso["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "gra:500")
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual(fila["num_solicitudes"], 2)
         self.assertEqual(fila["enlace_entrada"], "landing")  # se guarda el de la primera vez
@@ -380,7 +385,9 @@ class TestDudas(Base):
         with self.con:
             db.guardar_miembros(self.con, [500], 1)
         self.bot.procesar(update_solicitud(1, uid=500))
-        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest"])
+        self.assertEqual(self.api.metodos(), ["sendMessage", "approveChatJoinRequest", "sendMessage"])
+        self.assertEqual(len(self.api.envios_a(500)), 1)  # solo la bienvenida; lo otro es el aviso al dueño
+        self.assertIn("ya estaba en el canal", self.api.envios_a(PROPIETARIO)[-1]["text"])
 
     def test_con_la_gratuita_el_final_es_escribeme_sobre_ese_tema(self):
         self.con_gratuita(500)
@@ -595,10 +602,19 @@ class TestRecurrentes(Base):
         envio = self.ultimo_a(500)
         self.assertEqual(envio["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
         self.assertEqual(envio["reply_markup"], mensajes.teclado_bienvenida_recurrente(PERFIL))
-        self.assertIn("approveChatJoinRequest", self.api.metodos()[-1:])
+        self.assertEqual(self.api.metodos()[-2:], ["approveChatJoinRequest", "sendMessage"])  # y el aviso
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual(fila["bienvenida_tipo"], mensajes.TIPO_BIENVENIDA_BOT)  # se conserva la primera
         self.assertEqual(fila["recurrente_ts"], self.reloj.ahora)
+
+    def test_si_ya_tuvo_la_gratuita_el_aviso_dice_cuando_y_donde(self):
+        self.bot.procesar(update_solicitud(1, uid=500))
+        with self.con:
+            db.actualizar_campos(self.con, 500, 1, enlace_venta_ts=1_000_000, canal_venta="Lunes Tarde")
+        self.reloj.ahora += 3600
+        self.bot.procesar(update_solicitud(2, uid=500, fecha=self.reloj.ahora))
+        self.assertIn("ya tuvo la gratuita el ", self.api.envios_a(PROPIETARIO)[-1]["text"])
+        self.assertIn("(«Lunes Tarde»)", self.api.envios_a(PROPIETARIO)[-1]["text"])
 
     def test_quien_ya_estaba_en_el_canal_tampoco_recibe_la_gratuita(self):
         with self.con:

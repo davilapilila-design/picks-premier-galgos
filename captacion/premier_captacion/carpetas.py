@@ -318,14 +318,9 @@ class Organizador:
                                         enlace=enlaces.enlace(h), canal=titulo or "desconocido")
                 h, titulo = venta[-1]
                 campos = {"enlace_venta": enlaces.enlace(h), "canal_venta": titulo or "desconocido"}
-                primera = fila["enlace_venta_ts"] is None
-                if primera:
+                if fila["enlace_venta_ts"] is None:
                     campos["enlace_venta_ts"] = int(ts)
                 db.actualizar_campos(self.con, user_id, ts, **campos)
-            if primera and self.reloj() - ts < AVISO_GRATUITA_S:  # no al recuperar lo antiguo
-                from .consulta import CALLBACK  # (consulta importa este módulo)
-                self.avisar(f"🎁 Gratuita a {self._nombre(user_id)} («{titulo or 'canal desconocido'}»).",
-                            {"inline_keyboard": [[{"text": "🔎 Ver más info", "callback_data": f"{CALLBACK}{user_id}"}]]})
             await self._a_free_send(user_id)
 
     def es_principal(self, chat_id):

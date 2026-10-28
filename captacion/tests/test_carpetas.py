@@ -250,14 +250,6 @@ class TestSinGratuitaAFreeSend(Base):
         self.recibe(999, 1)
         self.assertEqual(self.tg.cambios, antes)
 
-    def test_aviso_de_gratuita_solo_la_primera_vez(self):
-        self.del_embudo(500)
-        self.envia(500, 1, "t.me/+VENTA0000000001")
-        self.envia(500, 2, "t.me/+VENTA0000000001")
-        regalos = [a for a in self.avisos if a.startswith("🎁")]
-        self.assertEqual(len(regalos), 1)
-        self.assertIn("Ana (@ana)", regalos[0])
-
 
 class TestFreeSend(Base):
     def test_enlace_de_venta_pasa_a_free_send(self):
@@ -324,8 +316,7 @@ class TestFreeSend(Base):
         self.org = self.organizador()
         self.del_embudo(500)
         self.envia(500, 1, "t.me/+VENTA0000000001")
-        self.assertTrue(self.avisos[0].startswith("🎁 Gratuita a"))
-        self.assertIn("está llena", self.avisos[1])
+        self.assertIn("está llena", self.avisos[0])
         self.assertNotIn(500, self.usuarios_de("free send"))
 
     def test_cada_enlace_se_consulta_una_sola_vez(self):
