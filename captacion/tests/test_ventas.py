@@ -93,6 +93,21 @@ class FalsoCliente:
             yield u
 
 
+class TestCanales(unittest.TestCase):
+    def test_solo_desde_el_debut(self):
+        from unittest import mock
+
+        def canal(titulo, dia):
+            return SimpleNamespace(title=titulo, date=datetime(2026, 7, dia, 10, tzinfo=timezone.utc))
+        todos = [canal("Viejo", 10), canal("Premier Galgos Debut", 22), canal("Lunes", 30)]
+
+        async def falsos(client, cfg):
+            return todos, None
+        with mock.patch.object(ventas.analisis, "canales_de_venta", falsos):
+            lista = asyncio.run(ventas.canales(None, SimpleNamespace(tz=MADRID)))
+        self.assertEqual([c.title for c in lista], ["Premier Galgos Debut", "Lunes"])
+
+
 class TestLeerMiembros(unittest.TestCase):
     def test_fecha_de_entrada_y_sin_bots(self):
         bot = usuario(9, "Bot")

@@ -75,6 +75,15 @@ def guardar_movimientos(con, canal_id, movimientos):
 
 # --- Telegram -----------------------------------------------------------------------
 
+async def canales(client, cfg):
+    """Los canales de venta desde «Premier Galgos Debut» (22/07): los de antes
+    no interesan (2026-10-28, el dueño). Cada vez se vuelve a mirar la
+    carpeta, así que los canales nuevos entran solos."""
+    todos, _ = await analisis.canales_de_venta(client, cfg)
+    desde = datetime.combine(analisis.DESDE, datetime.min.time(), tzinfo=cfg.tz).timestamp()
+    return [c for c in todos if getattr(c, "date", None) is None or c.date.timestamp() >= desde]
+
+
 def _nombre(u):
     return " ".join(x for x in (getattr(u, "first_name", None), getattr(u, "last_name", None)) if x) or None
 
@@ -175,8 +184,8 @@ async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api):
         if not await client.is_user_authorized():
             log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
             return 2
-        canales, _ = await analisis.canales_de_venta(client, cfg)
-        for canal in canales:
+        lista = await canales(client, cfg)
+        for canal in lista:
             n, registro, nuevos = await leer_canal(client, con, canal, con_miembros=True)
             sin_registro += registro is None
             log.info("Canal «%s»: %s dentro, %s", canal.title, n,
@@ -189,7 +198,7 @@ async def ejecutar(cfg, entorno, sheet_id, crear_cliente, credenciales_api):
     finally:
         await client.disconnect()
         con.close()
-    print(f"✓ Canales de venta leídos en {int(time.time() - inicio) // 60} min: {len(canales)} canales, "
+    print(f"✓ Canales de venta leídos en {int(time.time() - inicio) // 60} min: {len(lista)} canales, "
           f"{personas} personas dentro de alguno"
           + (f"; en {sin_registro} no se pudo leer el registro de entradas y salidas" if sin_registro else "")
           + (". Está en las pestañas «Canales de venta · …» del Sheet." if libro is not None else "."))
@@ -202,9 +211,9 @@ async def registro_periodico(client, con, cfg, cada=REGISTRO_CADA_S):
     await asyncio.sleep(300)  # que el lector arranque tranquilo
     while True:
         try:
-            canales, _ = await analisis.canales_de_venta(client, cfg)
+            lista = await canales(client, cfg)
             total = 0
-            for canal in canales:
+            for canal in lista:
                 _, _, nuevos = await leer_canal(client, con, canal, con_miembros=False)
                 total += nuevos
                 await asyncio.sleep(1)
