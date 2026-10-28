@@ -297,7 +297,7 @@ class BotCaptacion:
 
         self._aceptar(chat["id"], usuario)
         if recurrente:  # después de aceptar, para no retrasar su bienvenida
-            self.avisar(f"🔁 {describir(usuario)} ha vuelto a entrar: {self._motivo_recurrente(uid)}. "
+            self.avisar(f"🔁 {describir(usuario)} ha vuelto a entrar al canal: {self._motivo_recurrente(uid)}. "
                         "Le he dado la bienvenida sin gratuita.",
                         teclado={"inline_keyboard": [[{"text": "🔎 Ver más info",
                                                        "callback_data": f"{consulta.CALLBACK}{uid}"}]]})

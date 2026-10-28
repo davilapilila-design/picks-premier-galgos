@@ -68,7 +68,7 @@ class TestSolicitudes(Base):
         self.assertEqual(self.api.llamadas[0][1]["text"], mensajes.TEXTO_BIENVENIDA_RECURRENTE)
         aviso = self.api.envios_a(PROPIETARIO)[-1]
         self.assertTrue(aviso["text"].startswith("🔁 "))
-        self.assertIn("ha vuelto a entrar: ya había pasado por aquí", aviso["text"])
+        self.assertIn("ha vuelto a entrar al canal: ya había pasado por aquí", aviso["text"])
         self.assertEqual(aviso["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "gra:500")
         fila = db.obtener_usuario(self.con, 500)
         self.assertEqual(fila["num_solicitudes"], 2)
