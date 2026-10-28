@@ -11,7 +11,7 @@ Entradas más recientes arriba.
   canal, ya tuvo la gratuita o ya había pasado por aquí, el bot le da la
   bienvenida sin gratuita, le acepta y después avisa: «🔁 X ha vuelto a
   entrar: ya tuvo la gratuita el dd/mm («canal»)…», con «Ver más info».
-- Commits: (este commit)
+- Commits: 9fbdb4f
 
 ## 2026-10-28 — Captación: quien ya no puede tener la gratuita va a «free send», y aviso de cada gratuita
 
