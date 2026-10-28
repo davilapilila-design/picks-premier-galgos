@@ -15,7 +15,7 @@ Entradas más recientes arriba.
 - Aviso al dueño en el bot cada vez que se da una gratuita por primera vez
   («🎁 Gratuita a X («canal»)» con «Ver más info»), también con el lector en
   real (antes solo quedaba en el registro y en el resumen).
-- Commits: (este commit)
+- Commits: 60b7058
 
 ## 2026-10-27 — Captación: /arrancar y /pausar mueven también el lector de carpetas
 
