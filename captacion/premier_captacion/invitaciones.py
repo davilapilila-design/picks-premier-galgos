@@ -9,19 +9,22 @@ después de pagar, también en los canales antiguos, de los que no hay
 registro de entradas (pagos.emparejar_ventas).
 
 Modo a mano: `lector.sh real invitaciones [trozo del enlace]` (con el lector
-parado: la sesión no se puede usar desde dos programas a la vez).
+parado: la sesión no se puede usar desde dos programas a la vez). Sin trozo,
+solo lee los enlaces pendientes; si Telegram pide esperar más de la cuenta,
+para (código PARADO_POR_TELEGRAM) y la siguiente vez sigue por donde iba.
 """
 import asyncio
 import logging
 import time
 
-from . import db, enlaces, ventas
+from . import db, enlaces, pagos, ventas
 
 log = logging.getLogger("captacion.invitaciones")
 
 MODO = "invitaciones"
 POR_PAGINA = 100
 PAUSA_S = 2  # entre enlaces, para no forzar a Telegram
+PARADO_POR_TELEGRAM = 3  # código de salida: Telegram pidió esperar más de ventas.ESPERA_MAXIMA_S
 
 
 # --- Base de datos -------------------------------------------------------------
@@ -45,6 +48,17 @@ def enlaces_de_ventas(con):
     return [f[0] for f in con.execute(
         "SELECT enlace FROM pagos_overoption WHERE enlace IS NOT NULL "
         "AND es_propina = 0 AND estado = 'SUCCESS' GROUP BY enlace ORDER BY MAX(pago_ts) DESC")]
+
+
+def enlaces_pendientes(con):
+    """Los enlaces que hay que (volver a) leer: los que nunca se leyeron y los
+    leídos antes de acabar la ventana de su última venta (quien pagó después
+    aún no salía en la lista). Los de la venta más reciente primero."""
+    return [f[0] for f in con.execute(
+        "SELECT o.enlace FROM pagos_overoption o LEFT JOIN pagos_enlaces e ON e.enlace = o.enlace "
+        "WHERE o.enlace IS NOT NULL AND o.es_propina = 0 AND o.estado = 'SUCCESS' "
+        "GROUP BY o.enlace HAVING MAX(e.leido_ts) IS NULL OR MAX(e.leido_ts) < MAX(o.pago_ts) + ? "
+        "ORDER BY MAX(o.pago_ts) DESC", (pagos.VENTANA_S,))]
 
 
 # --- Telegram -----------------------------------------------------------------------
@@ -89,18 +103,25 @@ async def leer_enlace(client, enlace):
 
 
 async def ejecutar(cfg, entorno, crear_cliente, credenciales_api, solo=None):
-    """Modo a mano «invitaciones»: quién se unió con cada enlace de las ventas
-    (o solo con los que contienen `solo`)."""
+    """Modo a mano «invitaciones»: quién se unió con cada enlace pendiente de
+    las ventas (o con los que contienen `solo`, aunque ya estén leídos)."""
+    from telethon import errors
+
     api_id, api_hash, sesion = credenciales_api(entorno)
     con = db.abrir(cfg.db_path)
-    lista = [e for e in enlaces_de_ventas(con) if not solo or solo in e]
+    todos = enlaces_de_ventas(con)
+    lista = [e for e in todos if solo in e] if solo else enlaces_pendientes(con)
     if not lista:
         con.close()
+        if todos and not solo:
+            print("✓ Todos los enlaces ya están leídos.")
+            return 0
         print("No hay ventas con ese enlace." if solo else "No hay ventas con enlace.")
         return 1
     client = crear_cliente(sesion, api_id, api_hash, MODO)
     client.flood_sleep_threshold = ventas.ESPERA_MAXIMA_S
-    sin_canal = sin_admin = personas = 0
+    leidos = sin_canal = sin_admin = personas = 0
+    parado = False
     inicio = time.time()
     await client.connect()
     try:
@@ -108,7 +129,14 @@ async def ejecutar(cfg, entorno, crear_cliente, credenciales_api, solo=None):
             log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
             return 2
         for n, enlace in enumerate(lista, 1):
-            canal, invitados = await leer_enlace(client, enlace)
+            try:
+                canal, invitados = await leer_enlace(client, enlace)
+            except errors.FloodWaitError as e:
+                parado = True
+                log.warning("Telegram pide esperar %s min: paro en el enlace %s/%s. Lo leído queda "
+                            "guardado y la próxima vez sigue por donde iba.", e.seconds // 60 + 1, n, len(lista))
+                break
+            leidos += 1
             sin_canal += canal is None
             sin_admin += canal is not None and invitados is None
             personas += len(invitados or [])
@@ -123,7 +151,9 @@ async def ejecutar(cfg, entorno, crear_cliente, credenciales_api, solo=None):
     finally:
         await client.disconnect()
         con.close()
-    print(f"✓ {len(lista)} enlaces leídos en {int(time.time() - inicio) // 60} min: {personas} entradas"
+    print(("⏸" if parado else "✓") + f" {leidos} de {len(lista)} enlaces leídos en "
+          f"{int(time.time() - inicio) // 60} min: {personas} entradas"
           + (f"; {sin_canal} no llevan a un canal tuyo o han caducado" if sin_canal else "")
-          + (f"; en {sin_admin} no eres administrador" if sin_admin else "") + ".")
-    return 0
+          + (f"; en {sin_admin} no eres administrador" if sin_admin else "")
+          + ("; Telegram pidió esperar, faltan los demás" if parado else "") + ".")
+    return PARADO_POR_TELEGRAM if parado else 0

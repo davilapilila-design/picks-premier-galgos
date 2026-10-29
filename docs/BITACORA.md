@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: la lectura de enlaces sigue por donde iba
+
+- La primera pasada con todos los enlaces leyó 51 de 147: Telegram pidió
+  esperar ~50 min (más que el máximo de 30) y el programa acabó con error,
+  y al relanzarlo habría empezado otra vez por el primero.
+- Ahora sin trozo de enlace solo lee los pendientes (nunca leídos, o leídos
+  antes de acabar la ventana de su última venta); con trozo, lee ese aunque
+  ya esté leído. Si Telegram pide esperar demasiado, para limpio con código 3
+  y lo leído queda guardado.
+- Commits: (este)
+
 ## 2026-10-29 — Captación: cruce venta↔persona más estricto
 
 - Prueba con un canal de agosto: el doble de ventas que de personas en la

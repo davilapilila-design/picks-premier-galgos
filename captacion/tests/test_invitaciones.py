@@ -2,8 +2,13 @@
 Datos INVENTADOS. Las pruebas de la lectura usan los tipos reales de Telethon
 con un cliente falso que no se conecta a nada (se saltan si no está instalado)."""
 import asyncio
+import contextlib
+import io
+import os
+import tempfile
 import unittest
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 try:
     from telethon import errors
@@ -60,6 +65,41 @@ class TestGuardar(unittest.TestCase):
         venta(self.con, "v3", "https://t.me/+A", 2000)
         venta(self.con, "v4", None, 4000)
         self.assertEqual(invitaciones.enlaces_de_ventas(self.con),
+                         ["https://t.me/+B", "https://t.me/+A"])
+
+
+class TestPendientes(unittest.TestCase):
+    """Solo se vuelve a leer un enlace si nunca se leyó o si hay ventas
+    después de leerlo (quien pagó después aún no salía en la lista)."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        venta(self.con, "v1", "https://t.me/+A", 1000)
+
+    def leido(self, ahora):
+        with self.con:
+            invitaciones.guardar(self.con, "https://t.me/+A", 10, "Canal X", [], ahora=ahora)
+
+    def test_nunca_leido_esta_pendiente(self):
+        self.assertEqual(invitaciones.enlaces_pendientes(self.con), ["https://t.me/+A"])
+
+    def test_leido_despues_de_la_ultima_venta_no_se_repite(self):
+        self.leido(1000 + pagos.VENTANA_S + 1)
+        self.assertEqual(invitaciones.enlaces_pendientes(self.con), [])
+
+    def test_leido_nada_mas_pagar_se_repite(self):
+        self.leido(1000 + 60)  # el comprador aún podía no haber entrado
+        self.assertEqual(invitaciones.enlaces_pendientes(self.con), ["https://t.me/+A"])
+
+    def test_venta_nueva_despues_de_leerlo_se_repite(self):
+        self.leido(5000)
+        venta(self.con, "v2", "https://t.me/+A", 6000)
+        self.assertEqual(invitaciones.enlaces_pendientes(self.con), ["https://t.me/+A"])
+
+    def test_los_recientes_primero(self):
+        venta(self.con, "v2", "https://t.me/+B", 3000)
+        self.assertEqual(invitaciones.enlaces_pendientes(self.con),
                          ["https://t.me/+B", "https://t.me/+A"])
 
 
@@ -152,6 +192,95 @@ class TestLeerEnlace(unittest.TestCase):
         cliente = ClienteFalso(None, [])
         self.assertEqual(self.leer(cliente, "hola"), (None, None))
         self.assertEqual(cliente.peticiones, [])
+
+
+class ClienteVariosEnlaces:
+    """Cliente falso para ejecutar(): cada hash lleva a un canal (o lanza un
+    error), y nadie se unió. Apunta qué hashes se comprobaron."""
+
+    def __init__(self, por_hash):
+        self.por_hash = por_hash
+        self.comprobados = []
+
+    async def connect(self):
+        pass
+
+    async def disconnect(self):
+        pass
+
+    async def is_user_authorized(self):
+        return True
+
+    async def __call__(self, peticion):
+        if isinstance(peticion, functions.messages.CheckChatInviteRequest):
+            self.comprobados.append(peticion.hash)
+            r = self.por_hash[peticion.hash]
+            if isinstance(r, Exception):
+                raise r
+            return r
+        if isinstance(peticion, functions.messages.GetChatInviteImportersRequest):
+            return types.messages.ChatInviteImporters(count=0, importers=[], users=[])
+        raise AssertionError(f"petición inesperada: {peticion}")
+
+
+@unittest.skipIf(types is None, "telethon no está instalado")
+class TestEjecutar(unittest.TestCase):
+    A, B = "https://t.me/+AaAaAa111111", "https://t.me/+BbBbBb222222"
+
+    def setUp(self):
+        carpeta = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(carpeta.cleanup)
+        self.cfg = SimpleNamespace(db_path=os.path.join(carpeta.name, "prueba.db"))
+        con = db.abrir(self.cfg.db_path)
+        with con:
+            venta(con, "v1", self.A, 1000)
+            venta(con, "v2", self.B, 2000)
+        con.close()
+        antes = invitaciones.PAUSA_S
+        invitaciones.PAUSA_S = 0
+        self.addCleanup(setattr, invitaciones, "PAUSA_S", antes)
+        self.cliente = ClienteVariosEnlaces({
+            "AaAaAa111111": types.ChatInviteAlready(chat=canal_tg(10, "Canal A")),
+            "BbBbBb222222": types.ChatInviteAlready(chat=canal_tg(11, "Canal B"))})
+
+    def ejecutar(self, solo=None):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return asyncio.run(invitaciones.ejecutar(
+                self.cfg, {}, lambda *a: self.cliente, lambda entorno: (1, "h", "sesion"), solo=solo))
+
+    def leidos(self):
+        con = db.abrir(self.cfg.db_path)
+        try:
+            return {f[0] for f in con.execute("SELECT enlace FROM pagos_enlaces")}
+        finally:
+            con.close()
+
+    def marcar_leido(self, enlace):
+        con = db.abrir(self.cfg.db_path)
+        with con:
+            invitaciones.guardar(con, enlace, 10, "Canal A", [], ahora=10 ** 6)
+        con.close()
+
+    def test_se_salta_los_enlaces_ya_leidos(self):
+        self.marcar_leido(self.A)
+        self.assertEqual(self.ejecutar(), 0)
+        self.assertEqual(self.cliente.comprobados, ["BbBbBb222222"])
+
+    def test_con_trozo_de_enlace_lo_lee_aunque_ya_este_leido(self):
+        self.marcar_leido(self.A)
+        self.assertEqual(self.ejecutar(solo="AaAa"), 0)
+        self.assertEqual(self.cliente.comprobados, ["AaAaAa111111"])
+
+    def test_si_todo_esta_leido_no_conecta(self):
+        self.marcar_leido(self.A)
+        self.marcar_leido(self.B)
+        self.assertEqual(self.ejecutar(), 0)
+        self.assertEqual(self.cliente.comprobados, [])
+
+    def test_si_telegram_pide_esperar_mucho_para_y_guarda_lo_leido(self):
+        self.cliente.por_hash["AaAaAa111111"] = errors.FloodWaitError(request=None, capture=2978)
+        self.assertEqual(self.ejecutar(), invitaciones.PARADO_POR_TELEGRAM)
+        self.assertEqual(self.leidos(), {self.B})  # B (la venta más reciente) se leyó antes
 
 
 if __name__ == "__main__":
