@@ -34,14 +34,15 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 from . import db
 
 log = logging.getLogger("captacion.pagos")
 
-VENTANA_S = 180  # ±3 min entre la hora del pago y la entrada al canal
+VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
+ANTES_S = 30  # margen por si los relojes de overoption y Telegram no van iguales
 
 BASE = "https://api.overoption.io"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -303,10 +304,13 @@ def _invitados_por_enlace(con):
 
 def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     """Para cada venta de overoption, busca a la persona de Telegram que entró
-    en ±ventana_s: con el enlace de la venta si se sabe quién se unió con él;
-    si no, al mismo canal. Devuelve una lista de dicts con el resultado y su
-    estado: emparejada / dudosa_varios / sin_emparejar / sin_canal (y
-    por_correo, ver _propagar_por_correo)."""
+    después de pagar (hasta ventana_s, con ANTES_S de margen por los relojes):
+    con el enlace de la venta si se sabe quién se unió con él; si no, al mismo
+    canal. Telegram solo enseña a quien sigue dentro, así que el que entró a
+    esa hora puede no ser el comprador (que se fue): solo es «emparejada» si
+    es el único que entró y esa entrada no la reclama otra venta. Devuelve una
+    lista de dicts con el resultado y su estado: emparejada / dudosa_varios /
+    sin_emparejar / sin_canal (y por_correo, ver _propagar_por_correo)."""
     por_enlace, por_titulo, canales = _mapa_canales(con)
     entradas = _entradas_por_canal(con)
     invitados = _invitados_por_enlace(con)
@@ -314,30 +318,36 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
         "SELECT user_id, nombre, username FROM ventas_personas")}
 
     filtro = "WHERE es_propina = 0 AND estado = 'SUCCESS'" if solo_ventas else ""
-    resultados = []
+    ventas = []  # (venta, canal_id, grupo, entradas cerca o None si no se sabe el canal)
     for v in con.execute(f"SELECT * FROM pagos_overoption {filtro} ORDER BY pago_ts"):
         v = dict(v)
         canal_id = _canal_de_venta(v, por_enlace, por_titulo)
         fuente = invitados.get(v["enlace"]) if v["enlace"] else None
         if fuente is None and canal_id is not None:
             fuente = entradas.get(canal_id, [])
+        cerca = None if fuente is None else [
+            (uid, ts) for uid, ts in fuente
+            if v["pago_ts"] is not None and -ANTES_S <= ts - v["pago_ts"] <= ventana_s]
+        ventas.append((v, canal_id, canal_id if canal_id is not None else v["enlace"], cerca))
+    # Cuántas ventas reclaman cada entrada (en el mismo canal).
+    reclamada = Counter((grupo, e) for _, _, grupo, cerca in ventas for e in set(cerca or []))
+
+    resultados = []
+    for v, canal_id, grupo, cerca in ventas:
         user_id = nombre = username = None
-        if fuente is None:
+        quienes = list(dict.fromkeys(uid for uid, _ in cerca or []))  # sin repetir usuario
+        if cerca is None:
             estado = "sin_canal"
+        elif len(quienes) == 1 and all(reclamada[(grupo, e)] == 1 for e in cerca):
+            estado = "emparejada"
+            user_id = quienes[0]
+            p = personas.get(user_id)
+            nombre = p["nombre"] if p else None
+            username = p["username"] if p else None
+        elif quienes:
+            estado = "dudosa_varios"
         else:
-            cerca = [uid for uid, ts in fuente
-                     if v["pago_ts"] is not None and abs(ts - v["pago_ts"]) <= ventana_s]
-            cerca = list(dict.fromkeys(cerca))  # sin repetir usuario
-            if len(cerca) == 1:
-                estado = "emparejada"
-                user_id = cerca[0]
-                p = personas.get(user_id)
-                nombre = p["nombre"] if p else None
-                username = p["username"] if p else None
-            elif len(cerca) > 1:
-                estado = "dudosa_varios"
-            else:
-                estado = "sin_emparejar"
+            estado = "sin_emparejar"
         resultados.append({
             "id": v["id"], "producto": v["producto"], "correo": v["correo"],
             "importe": v["importe"], "moneda": v["moneda"], "neto": v["neto"],
@@ -352,15 +362,20 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
 
 def _propagar_por_correo(resultados):
     """Las ventas no emparejadas cuyo correo ya está emparejado con UNA sola
-    persona pasan a ser de esa persona (estado por_correo). Si un correo
-    aparece con dos personas distintas, no se propaga."""
+    persona pasan a ser de esa persona (estado por_correo). No se propaga si
+    el correo sale con dos personas, ni si la persona sale con dos correos
+    (uno de los cruces puede ser falso y se extendería a todas sus compras)."""
     por_correo = defaultdict(dict)
+    correos_de = defaultdict(set)
     for r in resultados:
         if r["estado_cruce"] == "emparejada" and r["correo"]:
             por_correo[r["correo"]][r["user_id"]] = r
+            correos_de[r["user_id"]].add(r["correo"])
     for r in resultados:
         quien = por_correo.get(r["correo"]) if r["correo"] else None
         if r["estado_cruce"] == "emparejada" or not quien or len(quien) != 1:
+            continue
+        if len(correos_de[next(iter(quien))]) != 1:
             continue
         ref = next(iter(quien.values()))
         r.update(user_id=ref["user_id"], nombre=ref["nombre"], username=ref["username"],
@@ -432,7 +447,7 @@ CABECERA_CLIENTES = ["Correo", "Compras", "Total pagado", "Total recibido", "Can
 _ESTADO_TEXTO = {
     "emparejada": "✅ emparejada",
     "por_correo": "✅ por correo (misma persona)",
-    "dudosa_varios": "⚠️ dudosa (varios a la vez)",
+    "dudosa_varios": "⚠️ dudosa (varias ventas o entradas a la vez)",
     "sin_emparejar": "— sin emparejar",
     "sin_canal": "⚠️ canal no identificado",
 }

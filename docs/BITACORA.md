@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: cruce venta↔persona más estricto
+
+- Prueba con un canal de agosto: el doble de ventas que de personas en la
+  lista de quién se unió con el enlace, porque Telegram solo trae a quien
+  sigue dentro. Si el comprador se fue, la venta se emparejaba con otro que
+  entró a esa hora, y «por correo» extendía el error a todas sus compras
+  (una persona salía con 3 correos; solo uno era suyo).
+- Ahora: hay que entrar DESPUÉS de pagar (30 s de margen por los relojes);
+  una entrada que reclaman dos ventas deja ambas dudosas; y no se propaga por
+  correo si la persona sale emparejada con más de un correo.
+- Commits: (este)
+
 ## 2026-10-29 — Captación: quién se unió con cada enlace de las ventas
 
 - Para emparejar también el historial (canales antiguos, sin registro de

@@ -76,6 +76,31 @@ class TestEmparejar(unittest.TestCase):
         self.assertEqual(r["estado_cruce"], "dudosa_varios")
         self.assertIsNone(r["user_id"])
 
+    def test_una_entrada_no_vale_para_dos_ventas(self):
+        # Solo queda dentro uno; el otro comprador se fue y Telegram no lo enseña.
+        canal(self.con, 10, "Canal X")
+        entra_movimiento(self.con, 10, 1, 500, 1100, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000, correo="a@example.com")
+        venta(self.con, "v2", "https://t.me/+L", 1090, correo="b@example.com")
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual((rs["v1"]["estado_cruce"], rs["v2"]["estado_cruce"]),
+                         ("dudosa_varios", "dudosa_varios"))
+        self.assertIsNone(rs["v1"]["user_id"])
+
+    def test_entrar_antes_de_pagar_no_cuenta(self):
+        canal(self.con, 10, "Canal X")
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000 + pagos.ANTES_S + 60)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual(r["estado_cruce"], "sin_emparejar")
+
+    def test_unos_segundos_antes_si_cuenta_por_los_relojes(self):
+        canal(self.con, 10, "Canal X")
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000 + pagos.ANTES_S - 5)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual(r["estado_cruce"], "emparejada")
+
     def test_sin_canal_identificado(self):
         venta(self.con, "v1", "https://t.me/+DESCONOCIDO", 1000, producto="No existe")
         r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
@@ -184,6 +209,18 @@ class TestPorCorreo(unittest.TestCase):
         r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v3"]
         self.assertEqual(r["estado_cruce"], "sin_canal")
         self.assertIsNone(r["user_id"])
+
+    def test_persona_con_varios_correos_no_se_propaga(self):
+        # Ana sale emparejada con dos correos: uno de los dos cruces puede ser falso.
+        canal(self.con, 11, "Canal Y")
+        entra_movimiento(self.con, 11, 2, 500, 2000, "https://t.me/+Y")
+        venta(self.con, "v2", "https://t.me/+Y", 2000, correo="otro@example.com")
+        venta(self.con, "v3", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="ana@example.com")
+        venta(self.con, "v4", "https://t.me/+VIEJO", 60, producto="Canal viejo",
+              correo="otro@example.com")
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual((rs["v3"]["estado_cruce"], rs["v4"]["estado_cruce"]), ("sin_canal", "sin_canal"))
 
     def test_pagos_por_persona_suma_las_compras_por_correo(self):
         venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
