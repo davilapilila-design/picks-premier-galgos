@@ -118,3 +118,39 @@ def test_urls_para_rellenar_las_filas_sin_enlace():
     assert job.urls_para_rellenar(existentes, df) == [
         (2, "https://greyhoundbet.racingpost.com/#result-meeting-result/"
             "race_id=111&track_id=8&r_date=2026-10-25&r_time=15%3A44")]
+
+
+class _HojaFalsa:
+    """Imita lo que usa el job de un worksheet de gspread: `row_count`, `add_rows`, `update`."""
+
+    def __init__(self, filas):
+        self.row_count = filas
+        self.anadidas = []
+        self.escrito = None
+
+    def add_rows(self, n):
+        self.anadidas.append(n)
+        self.row_count += n
+
+    def update(self, values=None, range_name=None, **kw):
+        assert range_name is not None and values is not None   # orden nuevo de gspread
+        fin = int(range_name.split(":")[1].lstrip("ABCDEFGHIJK"))
+        if fin > self.row_count:                               # lo que devuelve Google
+            raise RuntimeError(f"Range ({range_name}) exceeds grid limits")
+        self.escrito = (range_name, values)
+
+
+def test_hoja_llena_anade_filas_antes_de_escribir():
+    # 29/10/2026: resultados_galgos tenía 1012 filas, todas ocupadas, y las 4 de Central Park
+    # (12 filas) iban a la 1013-1024 → «exceeds grid limits» en cada pasada.
+    hoja = _HojaFalsa(1012)
+    filas = [["central park"] + [""] * 10] * 12
+    job.escribir_filas(hoja, 1013, filas)
+    assert hoja.row_count >= 1024 and hoja.anadidas
+    assert hoja.escrito == ("A1013:K1024", filas)
+
+
+def test_con_sitio_no_anade_filas():
+    hoja = _HojaFalsa(2000)
+    job.escribir_filas(hoja, 1013, [["x"] * 11])
+    assert hoja.anadidas == [] and hoja.escrito[0] == "A1013:K1013"

@@ -239,7 +239,7 @@ def rellenar_urls(sh):
     """Una vez (`--rellenar-urls`): pone el enlace de Racing Post en las filas de
     `resultados_galgos` que tienen race_id y no lo tienen (29/10/2026)."""
     ws = sh.worksheet("resultados_galgos")
-    existentes = ws.get("A2:K5000")
+    existentes = ws.get("A2:K")
     df = pd.read_parquet(PARQUET_PATH, columns=["Fecha", "rTime", "race_id", "Canodromo", "track_id"])
     cambios = urls_para_rellenar(existentes, df)
     sin_enlace = sum(1 for r in existentes if len(r) >= 10 and r[9] and not (len(r) > 8 and r[8]))
@@ -248,6 +248,17 @@ def rellenar_urls(sh):
         ws.batch_update([{"range": f"I{fila}", "values": [[url]]} for fila, url in cambios],
                         value_input_option="USER_ENTERED")
         print(f"{len(cambios)} enlaces escritos en resultados_galgos (columna I)", flush=True)
+
+
+def escribir_filas(ws, fila_inicio, filas):
+    """Escribe `filas` en A:K desde `fila_inicio`, añadiendo antes las filas que le falten a la
+    pestaña: Google rechaza escribir fuera de la cuadrícula («exceeds grid limits»), y el
+    29/10/2026 `resultados_galgos` se llenó (1012 filas) y dejó de resolverse todo."""
+    fila_fin = fila_inicio + len(filas) - 1
+    if fila_fin > ws.row_count:
+        ws.add_rows(fila_fin - ws.row_count)
+    ws.update(values=filas, range_name=f"A{fila_inicio}:K{fila_fin}", value_input_option="USER_ENTERED")
+    return fila_fin
 
 
 def main():
@@ -265,7 +276,7 @@ def main():
     patas = ws_patas.get("A2:H5000")
 
     ws_resultados = sh.worksheet("resultados_galgos")
-    existentes = ws_resultados.get("A2:D5000")
+    existentes = ws_resultados.get("A2:D")
     carreras_cubiertas = set()
     for row in existentes:
         if len(row) >= 3 and row[0]:
@@ -297,8 +308,7 @@ def main():
 
     if nuevas_filas:
         fila_inicio = len(existentes) + 2
-        fila_fin = fila_inicio + len(nuevas_filas) - 1
-        ws_resultados.update(f"A{fila_inicio}:K{fila_fin}", nuevas_filas, value_input_option="USER_ENTERED")
+        fila_fin = escribir_filas(ws_resultados, fila_inicio, nuevas_filas)
         print(f"{len(nuevas_filas)} filas nuevas insertadas en resultados_galgos ({fila_inicio}-{fila_fin})", flush=True)
     else:
         print("ninguna de las pendientes tenia datos en el parquet todavia", flush=True)

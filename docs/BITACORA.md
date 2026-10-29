@@ -3,6 +3,19 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 (cont. 2) — `resultados_galgos` llena: el job no podía escribir filas nuevas
+- **Qué fallaba**: desde las 17:35 de Madrid cada pasada de `picks-resultados` acababa en
+  «exceeds grid limits». La pestaña tenía 1012 filas, todas ocupadas, y el job escribía las
+  nuevas a partir de la 1013 con un rango fijo, que Google no amplía solo. Las 4 apuestas de
+  Central Park de la tarde se quedaban sin resolver aunque el parquet ya tenía sus resultados.
+- **Arreglo** (`scripts/vm_job_resultados_galgos.py`): `escribir_filas` añade a la pestaña las
+  filas que falten antes de escribir, y pasa `values`/`range_name` con nombre (el orden de
+  argumentos de `worksheet.update` cambió en gspread y avisaba). Además, las lecturas de
+  `resultados_galgos` ya no se cortan en la fila 5000: con más filas, el job habría escrito
+  siempre en la 5001, machacando datos. El Apps Script lee con `getLastRow`, así que las
+  filas vacías añadidas no le afectan.
+- Tests: 2 nuevos (hoja llena → añade filas; con sitio → no toca la cuadrícula).
+
 ## 2026-10-29 (cont.) — Enlace a la ficha del resultado en Racing Post en `resultados_galgos`
 - Pedido del dueño: rellenar `url_carrera` con el enlace al resultado de la carrera en Racing
   Post, como hace el predictor de Proyecto Galgos.
