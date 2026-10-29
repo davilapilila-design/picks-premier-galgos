@@ -61,6 +61,20 @@ class TestGuardia(unittest.TestCase):
         with self.assertRaises(guardia.PeticionProhibida):
             guardia.comprobar(peticion("messages.UpdateDialogFilterRequest"), "suscriptores")
 
+    def test_invitaciones_solo_lee_quien_se_unio_con_cada_enlace(self):
+        guardia.comprobar(peticion("messages.GetChatInviteImportersRequest"), "invitaciones")
+        guardia.comprobar(peticion("messages.CheckChatInviteRequest"), "invitaciones")
+        for modo in ("historico", "simulacion", "lector", "suscriptores", "ventas"):
+            with self.subTest(modo), self.assertRaises(guardia.PeticionProhibida):
+                guardia.comprobar(peticion("messages.GetChatInviteImportersRequest"), modo)
+        # Ni crear, cambiar, anular o borrar enlaces, ni aceptar solicitudes.
+        for nombre in ("messages.ExportChatInviteRequest", "messages.EditExportedChatInviteRequest",
+                       "messages.DeleteExportedChatInviteRequest", "messages.HideChatJoinRequestRequest",
+                       "messages.HideAllChatJoinRequestsRequest", "messages.UpdateDialogFilterRequest",
+                       "channels.GetParticipantsRequest", "channels.GetAdminLogRequest"):
+            with self.subTest(nombre), self.assertRaises(guardia.PeticionProhibida):
+                guardia.comprobar(peticion(nombre), "invitaciones")
+
     def test_iniciar_sesion_solo_en_su_modo(self):
         guardia.comprobar(peticion("auth.SendCodeRequest"), "iniciar-sesion")
         with self.assertRaises(guardia.PeticionProhibida):
@@ -302,6 +316,22 @@ class TestLeerSuscriptores(unittest.TestCase):
         self.addCleanup(con.close)
         self.assertTrue(all(db.es_miembro(con, i) for i in range(1, 6)))
         self.assertFalse(db.es_miembro(con, 6))
+
+
+class TestModoInvitaciones(unittest.TestCase):
+    def test_lanza_la_lectura_de_invitaciones_con_el_trozo_de_enlace(self):
+        from premier_captacion import invitaciones
+        llamadas = []
+
+        async def falso(cfg, entorno, crear_cliente, credenciales_api, solo=None):
+            llamadas.append((crear_cliente, solo))
+            return 0
+
+        entorno = {"CAPTACION_DB": ":memory:", "CAPTACION_CANAL_ID": "-1001234567890"}
+        with mock.patch.dict("os.environ", entorno), mock.patch.object(invitaciones, "ejecutar", falso):
+            self.assertEqual(lector.main(["invitaciones", "AbCd"]), 0)
+            self.assertEqual(lector.main(["invitaciones"]), 0)
+        self.assertEqual(llamadas, [(lector.crear_cliente, "AbCd"), (lector.crear_cliente, None)])
 
 
 class TestModoPedido(unittest.TestCase):

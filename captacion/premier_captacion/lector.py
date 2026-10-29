@@ -600,9 +600,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Lector de la cuenta del dueño (carpetas e histórico).")
     parser.add_argument("modo", nargs="?", default="servicio",
                         choices=["servicio", "iniciar-sesion", "historico", "embudo-prueba", "canal-de-enlace",
-                                 "apuntar-gratuita", "suscriptores", "analisis", "ventas"])
-    parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace) "
-                                                "o @usuario (apuntar-gratuita)")
+                                 "apuntar-gratuita", "suscriptores", "analisis", "ventas", "invitaciones"])
+    parser.add_argument("dato", nargs="?", help="id de Telegram (embudo-prueba), enlace (canal-de-enlace), "
+                                                "@usuario (apuntar-gratuita) o trozo de enlace (invitaciones)")
     parser.add_argument("mas", nargs="*", help="apuntar-gratuita: «AAAA-MM-DD HH:MM» de la bienvenida y de la "
                                                "gratuita, y el enlace de venta")
     args = parser.parse_args(argv)
@@ -636,6 +636,10 @@ def main(argv=None):
             from . import ventas
             hoja = _id_sheet(args.dato) if args.dato else cfg.sheet_id
             return asyncio.run(ventas.ejecutar(cfg, entorno, hoja, crear_cliente, credenciales_api))
+        if args.modo == "invitaciones":
+            from . import invitaciones
+            return asyncio.run(invitaciones.ejecutar(cfg, entorno, crear_cliente, credenciales_api,
+                                                     solo=args.dato))
         if args.modo == "apuntar-gratuita":
             if not args.dato or len(args.mas) != 3:
                 parser.error('apuntar-gratuita @usuario "AAAA-MM-DD HH:MM" "AAAA-MM-DD HH:MM" <enlace de venta>')

@@ -57,6 +57,11 @@ INICIO_SESION = frozenset({
 # venta): solo lectura, autorizado por el dueño el 2026-10-28.
 REGISTRO = frozenset({"channels.GetAdminLogRequest"})
 
+# Quién se unió con cada enlace de invitación (lo mismo que se ve en la app
+# en Enlaces de invitación → «X se unieron»): solo lectura, autorizado por el
+# dueño el 2026-10-29, para emparejar cada venta de overoption con su persona.
+INVITADOS = frozenset({"messages.GetChatInviteImportersRequest"})
+
 MODOS = {
     "iniciar-sesion": LECTURA | INICIO_SESION,
     "historico": LECTURA,
@@ -71,6 +76,8 @@ MODOS = {
     # Miembros y registro de los canales de venta (ventas.py; solo lectura,
     # autorizado por el dueño el 2026-10-28).
     "ventas": LECTURA | REGISTRO | {"channels.GetParticipantsRequest"},
+    # Quién se unió con los enlaces de las ventas de overoption (invitaciones.py).
+    "invitaciones": LECTURA | INVITADOS,
 }
 
 

@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: quién se unió con cada enlace de las ventas
+
+- Para emparejar también el historial (canales antiguos, sin registro de
+  entradas): Telegram guarda por enlace de invitación quién se unió y a qué
+  hora, y overoption da el enlace exacto de cada producto. Permiso nuevo en
+  el guardia, solo lectura y autorizado por el dueño hoy:
+  `messages.GetChatInviteImportersRequest`, solo en el modo «invitaciones».
+- `invitaciones.py` (modo a mano `lector.sh real invitaciones [trozo del
+  enlace]`, con el lector parado) guarda canal e invitados (migración 8:
+  `pagos_enlaces`, `pagos_invitados`; se queda la primera vez que se unió).
+  El cruce usa los que entraron con el enlace de la venta si se conocen; si
+  no, las entradas al canal, como antes. Primero se prueba con un canal.
+- Commits: (este)
+
 ## 2026-10-29 — Captación: las compras se asignan también por correo
 
 - Si una venta se empareja con una persona de Telegram (por enlace + hora),

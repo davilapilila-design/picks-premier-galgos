@@ -158,6 +158,22 @@ MIGRACIONES = [
         visto_ts INTEGER
     );
     """,
+    # 8 (quién se unió con cada enlace de las ventas, solo lectura; autorizado
+    # por el dueño el 2026-10-29; ver invitaciones.py)
+    """
+    CREATE TABLE pagos_enlaces (
+        enlace TEXT PRIMARY KEY,
+        canal_id INTEGER,
+        titulo TEXT,
+        leido_ts INTEGER
+    );
+    CREATE TABLE pagos_invitados (
+        enlace TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        ts INTEGER NOT NULL,
+        PRIMARY KEY (enlace, user_id)
+    );
+    """,
 ]
 
 

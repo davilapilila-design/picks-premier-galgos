@@ -100,6 +100,44 @@ class TestEmparejar(unittest.TestCase):
         self.assertEqual(r["estado_cruce"], "sin_canal")
 
 
+class TestPorEnlace(unittest.TestCase):
+    """Con la lista de quién se unió con cada enlace (invitaciones.py), la
+    venta se empareja con quien entró con SU enlace, también en canales
+    antiguos que no se siguen."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+
+    def invitados(self, enlace, canal_id, titulo, filas):
+        from premier_captacion import invitaciones
+        with self.con:
+            invitaciones.guardar(self.con, enlace, canal_id, titulo, filas, ahora=1)
+
+    def test_empareja_en_un_canal_que_no_se_sigue(self):
+        self.invitados("https://t.me/+V", 99, "Canal viejo", [(700, "Eva", "eva", 1060)])
+        venta(self.con, "v1", "https://t.me/+V", 1000, producto="Otro nombre")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual(r["estado_cruce"], "emparejada")
+        self.assertEqual((r["user_id"], r["nombre"]), (700, "Eva"))
+        self.assertEqual((r["canal_id"], r["titulo"]), (99, "Canal viejo"))
+
+    def test_solo_cuentan_los_que_entraron_con_ese_enlace(self):
+        canal(self.con, 10, "Canal X")
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+OTRO")  # otro enlace, misma hora
+        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 1030)])
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual(r["estado_cruce"], "emparejada")
+        self.assertEqual(r["user_id"], 700)
+
+    def test_enlace_leido_sin_nadie_en_la_ventana_queda_sin_emparejar(self):
+        self.invitados("https://t.me/+V", 99, "Canal viejo", [(700, "Eva", None, 9000)])
+        venta(self.con, "v1", "https://t.me/+V", 1000)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual(r["estado_cruce"], "sin_emparejar")
+
+
 class TestPorCorreo(unittest.TestCase):
     """Si una venta se empareja con una persona, las demás compras con ese
     mismo correo son de esa persona (aunque no se sepa el canal o la hora)."""

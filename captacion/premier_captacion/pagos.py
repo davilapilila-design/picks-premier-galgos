@@ -267,6 +267,10 @@ def _mapa_canales(con):
             titulos[_norm(f["titulo"])].add(f["canal_id"])
     # Solo los nombres que señalan a un único canal sirven para emparejar.
     por_titulo = {t: next(iter(ids)) for t, ids in titulos.items() if len(ids) == 1}
+    # Los enlaces leídos en Telegram (invitaciones.py), también de canales antiguos.
+    for f in con.execute("SELECT enlace, canal_id, titulo FROM pagos_enlaces WHERE canal_id IS NOT NULL"):
+        por_enlace.setdefault(f["enlace"], f["canal_id"])
+        canales.setdefault(f["canal_id"], f["titulo"])
     return por_enlace, por_titulo, canales
 
 
@@ -289,12 +293,23 @@ def _entradas_por_canal(con):
     return {cid: sorted(v, key=lambda x: x[1]) for cid, v in ent.items()}
 
 
+def _invitados_por_enlace(con):
+    """enlace -> [(user_id, ts)] de quien se unió con él (invitaciones.py)."""
+    inv = defaultdict(list)
+    for f in con.execute("SELECT enlace, user_id, ts FROM pagos_invitados ORDER BY ts"):
+        inv[f["enlace"]].append((f["user_id"], f["ts"]))
+    return inv
+
+
 def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     """Para cada venta de overoption, busca a la persona de Telegram que entró
-    al mismo canal en ±ventana_s. Devuelve una lista de dicts con el resultado
-    y su estado: emparejada / dudosa_varios / sin_emparejar / sin_canal."""
+    en ±ventana_s: con el enlace de la venta si se sabe quién se unió con él;
+    si no, al mismo canal. Devuelve una lista de dicts con el resultado y su
+    estado: emparejada / dudosa_varios / sin_emparejar / sin_canal (y
+    por_correo, ver _propagar_por_correo)."""
     por_enlace, por_titulo, canales = _mapa_canales(con)
     entradas = _entradas_por_canal(con)
+    invitados = _invitados_por_enlace(con)
     personas = {f["user_id"]: f for f in con.execute(
         "SELECT user_id, nombre, username FROM ventas_personas")}
 
@@ -303,11 +318,14 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     for v in con.execute(f"SELECT * FROM pagos_overoption {filtro} ORDER BY pago_ts"):
         v = dict(v)
         canal_id = _canal_de_venta(v, por_enlace, por_titulo)
+        fuente = invitados.get(v["enlace"]) if v["enlace"] else None
+        if fuente is None and canal_id is not None:
+            fuente = entradas.get(canal_id, [])
         user_id = nombre = username = None
-        if canal_id is None:
+        if fuente is None:
             estado = "sin_canal"
         else:
-            cerca = [uid for uid, ts in entradas.get(canal_id, [])
+            cerca = [uid for uid, ts in fuente
                      if v["pago_ts"] is not None and abs(ts - v["pago_ts"]) <= ventana_s]
             cerca = list(dict.fromkeys(cerca))  # sin repetir usuario
             if len(cerca) == 1:
