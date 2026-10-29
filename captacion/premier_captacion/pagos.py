@@ -323,23 +323,53 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
         resultados.append({
             "id": v["id"], "producto": v["producto"], "correo": v["correo"],
             "importe": v["importe"], "moneda": v["moneda"], "neto": v["neto"],
-            "metodo": v["metodo"], "pago_ts": v["pago_ts"],
+            "metodo": v["metodo"], "pago_ts": v["pago_ts"], "enlace": v["enlace"],
             "canal_id": canal_id, "titulo": canales.get(canal_id),
             "user_id": user_id, "nombre": nombre, "username": username,
             "estado_cruce": estado,
         })
+    _propagar_por_correo(resultados)
     return resultados
+
+
+def _propagar_por_correo(resultados):
+    """Las ventas no emparejadas cuyo correo ya está emparejado con UNA sola
+    persona pasan a ser de esa persona (estado por_correo). Si un correo
+    aparece con dos personas distintas, no se propaga."""
+    por_correo = defaultdict(dict)
+    for r in resultados:
+        if r["estado_cruce"] == "emparejada" and r["correo"]:
+            por_correo[r["correo"]][r["user_id"]] = r
+    for r in resultados:
+        quien = por_correo.get(r["correo"]) if r["correo"] else None
+        if r["estado_cruce"] == "emparejada" or not quien or len(quien) != 1:
+            continue
+        ref = next(iter(quien.values()))
+        r.update(user_id=ref["user_id"], nombre=ref["nombre"], username=ref["username"],
+                 estado_cruce="por_correo")
+
+
+def _clave_canal(r):
+    """Para contar canales distintos aunque el canal de Telegram no se sepa."""
+    return r["canal_id"] if r["canal_id"] is not None else (r["enlace"] or r["producto"])
+
+
+def personas_por_correo(con, ventana_s=VENTANA_S):
+    """correo -> (nombre, username) de la persona de Telegram de ese correo."""
+    return {r["correo"]: (r["nombre"], r["username"])
+            for r in emparejar_ventas(con, ventana_s=ventana_s)
+            if r["user_id"] is not None and r["correo"]}
 
 
 def pagos_por_persona(con, ventana_s=VENTANA_S):
     """user_id -> {canales: nº canales distintos pagados, eur: total recibido,
-    n: nº de ventas} de las ventas emparejadas."""
+    n: nº de ventas} de las ventas emparejadas (por hora o por correo)."""
     por_persona = {}
     for r in emparejar_ventas(con, ventana_s=ventana_s):
-        if r["estado_cruce"] != "emparejada":
+        if r["user_id"] is None:
             continue
         d = por_persona.setdefault(r["user_id"], {"_canales": set(), "eur": 0.0, "n": 0})
-        d["_canales"].add(r["canal_id"])
+        d["_canales"].add(_clave_canal(r))
         d["eur"] += r["neto"] or 0
         d["n"] += 1
     return {uid: {"canales": len(d["_canales"]), "eur": round(d["eur"], 2), "n": d["n"]}
@@ -380,9 +410,10 @@ CABECERA_PAGOS = ["Fecha y hora", "Producto (overoption)", "Importe", "Moneda", 
                   "Método", "Correo comprador", "Canal de Telegram", "Persona",
                   "Cruce", "ID transacción"]
 CABECERA_CLIENTES = ["Correo", "Compras", "Total pagado", "Total recibido", "Canales distintos",
-                     "Primera compra", "Última compra"]
+                     "Primera compra", "Última compra", "Persona de Telegram"]
 _ESTADO_TEXTO = {
     "emparejada": "✅ emparejada",
+    "por_correo": "✅ por correo (misma persona)",
     "dudosa_varios": "⚠️ dudosa (varios a la vez)",
     "sin_emparejar": "— sin emparejar",
     "sin_canal": "⚠️ canal no identificado",
@@ -401,7 +432,8 @@ def filas_pagos(con, tz, ventana_s=VENTANA_S):
             _ESTADO_TEXTO.get(r["estado_cruce"], r["estado_cruce"]), r["id"],
         ])
     # Las dudosas y sin emparejar, arriba del todo, para que el dueño las revise.
-    orden = {"dudosa_varios": 0, "sin_canal": 1, "sin_emparejar": 2, "emparejada": 3}
+    orden = {"dudosa_varios": 0, "sin_canal": 1, "sin_emparejar": 2, "emparejada": 3,
+             "por_correo": 4}
     filas.sort(key=lambda f: (orden.get(
         {v: k for k, v in _ESTADO_TEXTO.items()}.get(f[9], ""), 9), -(f[0] or 0)))
     return filas
@@ -409,12 +441,14 @@ def filas_pagos(con, tz, ventana_s=VENTANA_S):
 
 def filas_clientes_sheet(con, tz):
     from . import sheet
+    quien = personas_por_correo(con)
     filas = []
     for c in filas_clientes(con):
         correo, n, pagado, recibido, canales, primera, ultima = c
+        persona = sheet.nombre_visible(*quien[correo]) if correo in quien else ""
         filas.append([correo, n, pagado, recibido, canales,
                       sheet.serie_fecha_hora(primera, tz) if primera else "",
-                      sheet.serie_fecha_hora(ultima, tz) if ultima else ""])
+                      sheet.serie_fecha_hora(ultima, tz) if ultima else "", persona])
     return filas
 
 

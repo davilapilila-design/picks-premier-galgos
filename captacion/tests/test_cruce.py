@@ -100,6 +100,76 @@ class TestEmparejar(unittest.TestCase):
         self.assertEqual(r["estado_cruce"], "sin_canal")
 
 
+class TestPorCorreo(unittest.TestCase):
+    """Si una venta se empareja con una persona, las demás compras con ese
+    mismo correo son de esa persona (aunque no se sepa el canal o la hora)."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000, correo="ana@example.com")
+
+    def test_venta_sin_canal_del_mismo_correo_es_de_esa_persona(self):
+        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="ana@example.com")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
+        self.assertEqual(r["estado_cruce"], "por_correo")
+        self.assertEqual(r["user_id"], 500)
+        self.assertEqual(r["nombre"], "Ana")
+
+    def test_dudosa_y_sin_emparejar_del_mismo_correo_se_resuelven(self):
+        entra_movimiento(self.con, 10, 2, 500, 5000, "https://t.me/+L")
+        entra_movimiento(self.con, 10, 3, 501, 5010, "https://t.me/+L")
+        venta(self.con, "v2", "https://t.me/+L", 5000, correo="ana@example.com")  # dudosa
+        venta(self.con, "v3", "https://t.me/+L", 9000, correo="ana@example.com")  # nadie entra
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        for vid in ("v2", "v3"):
+            self.assertEqual(rs[vid]["estado_cruce"], "por_correo")
+            self.assertEqual(rs[vid]["user_id"], 500)
+
+    def test_otro_correo_no_hereda_la_persona(self):
+        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="otro@example.com")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
+        self.assertEqual(r["estado_cruce"], "sin_canal")
+        self.assertIsNone(r["user_id"])
+
+    def test_correo_con_dos_personas_distintas_no_se_propaga(self):
+        canal(self.con, 11, "Canal Y")
+        entra_movimiento(self.con, 11, 2, 501, 2000, "https://t.me/+Y")
+        venta(self.con, "v2", "https://t.me/+Y", 2000, correo="ana@example.com")
+        venta(self.con, "v3", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="ana@example.com")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v3"]
+        self.assertEqual(r["estado_cruce"], "sin_canal")
+        self.assertIsNone(r["user_id"])
+
+    def test_pagos_por_persona_suma_las_compras_por_correo(self):
+        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="ana@example.com", neto=50)
+        p = pagos.pagos_por_persona(self.con, ventana_s=180)[500]
+        self.assertEqual(p["canales"], 2)       # Canal X + el canal viejo
+        self.assertAlmostEqual(p["eur"], 77)    # 27 + 50
+
+    def test_fila_de_pagos_dice_por_correo_y_trae_la_persona(self):
+        from zoneinfo import ZoneInfo
+        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
+              correo="ana@example.com")
+        filas = {f[10]: f for f in pagos.filas_pagos(self.con, ZoneInfo("Europe/Madrid"))}
+        self.assertIn("Ana", filas["v2"][8])
+        self.assertIn("por correo", filas["v2"][9].lower())
+
+    def test_clientes_trae_la_persona_de_telegram_del_correo(self):
+        from zoneinfo import ZoneInfo
+        venta(self.con, "v2", None, 50, correo="otro@example.com")
+        filas = {f[0]: f for f in pagos.filas_clientes_sheet(self.con, ZoneInfo("Europe/Madrid"))}
+        self.assertIn("Ana", filas["ana@example.com"][-1])
+        self.assertEqual(filas["otro@example.com"][-1], "")
+
+
 class TestAgregados(unittest.TestCase):
     def setUp(self):
         self.con = db.abrir(":memory:")

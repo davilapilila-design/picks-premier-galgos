@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: las compras se asignan también por correo
+
+- Si una venta se empareja con una persona de Telegram (por enlace + hora),
+  las demás compras con ese MISMO correo pasan a ser de esa persona (estado
+  "por correo"), aunque sean de canales antiguos sin registro de entradas o
+  hayan salido dudosas. Si un correo sale con dos personas distintas, no se
+  propaga. Con los datos reales: de 11 ventas con persona a 355 (9 personas,
+  7.680 € recibidos), sin ningún conflicto.
+- "Canales que pagó"/"€ pagado" de Personas cuentan también estas compras;
+  la pestaña Clientes gana la columna "Persona de Telegram".
+- Commits: (este)
+
 ## 2026-10-29 — Captación: ventas de overoption cruzadas con las entradas
 
 - El dueño quiere saber quién ha PAGADO cada canal. overoption (overoption.io)
