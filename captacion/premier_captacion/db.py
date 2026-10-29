@@ -174,6 +174,14 @@ MIGRACIONES = [
         PRIMARY KEY (enlace, user_id)
     );
     """,
+    # 9 (el dueño escribe en el Sheet de quién es un correo; ver pagos.py)
+    """
+    CREATE TABLE pagos_correos_manual (
+        correo TEXT PRIMARY KEY,  -- en minúsculas
+        texto TEXT NOT NULL,      -- lo que escribió: @usuario, id o enlace
+        ts INTEGER NOT NULL
+    );
+    """,
 ]
 
 

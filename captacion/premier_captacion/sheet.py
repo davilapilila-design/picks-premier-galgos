@@ -375,6 +375,10 @@ class PestanaGoogle:
         self._asegurar_tamano(desde_fila + len(filas) - 1)
         self.ws.update(values=filas, range_name=f"A{desde_fila}", raw=True)
 
+    def valores(self):
+        """Lo que hay escrito en la pestaña, fila a fila (como texto)."""
+        return self.ws.get_all_values()
+
     def ids(self):
         valores = self.ws.col_values(1, value_render_option="UNFORMATTED_VALUE")
         return [int(v) for v in valores[len(self.filas_cabecera):] if isinstance(v, (int, float))]

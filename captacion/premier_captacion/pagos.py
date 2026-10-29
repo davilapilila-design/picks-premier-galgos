@@ -29,6 +29,7 @@ import html
 import json
 import logging
 import os
+import re
 import time
 import unicodedata
 import urllib.error
@@ -45,6 +46,8 @@ VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
 ANTES_S = 30  # margen por si los relojes de overoption y Telegram no van iguales
 POR_CORREO_MIN = 2  # ventas emparejadas con la misma persona para fiarse del correo...
 POR_CORREO_PROPORCION = 0.8  # ...si son al menos este tanto de las emparejadas del correo
+SEGURAS = ("emparejada", "por_eliminacion")  # cruces que cuentan para saber de quién es un correo
+MAX_VUELTAS = 10  # de eliminación + correo (cada vuelta usa lo que resolvió la anterior)
 
 BASE = "https://api.overoption.io"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -334,32 +337,72 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     # Cuántas ventas reclaman cada entrada (en el mismo canal).
     reclamada = Counter((grupo, e) for _, _, grupo, cerca in ventas for e in set(cerca or []))
 
-    resultados = []
+    base = []
+    candidatos = {}  # id de venta dudosa -> quiénes entraron a esa hora
+    grupos = {}  # id de venta -> canal (o enlace si no se sabe el canal)
     for v, canal_id, grupo, cerca in ventas:
-        user_id = nombre = username = None
+        user_id = None
         quienes = list(dict.fromkeys(uid for uid, _ in cerca or []))  # sin repetir usuario
         if cerca is None:
             estado = "sin_canal"
         elif len(quienes) == 1 and all(reclamada[(grupo, e)] == 1 for e in cerca):
             estado = "emparejada"
             user_id = quienes[0]
-            p = personas.get(user_id)
-            nombre = p["nombre"] if p else None
-            username = p["username"] if p else None
         elif quienes:
             estado = "dudosa_varios"
+            candidatos[v["id"]] = set(quienes)
         else:
             estado = "sin_emparejar"
-        resultados.append({
+        grupos[v["id"]] = grupo
+        base.append({
             "id": v["id"], "producto": v["producto"], "correo": v["correo"],
             "importe": v["importe"], "moneda": v["moneda"], "neto": v["neto"],
             "metodo": v["metodo"], "pago_ts": v["pago_ts"], "enlace": v["enlace"],
             "canal_id": canal_id, "titulo": canales.get(canal_id),
-            "user_id": user_id, "nombre": nombre, "username": username,
-            "estado_cruce": estado,
+            "user_id": user_id, **_quien(personas, user_id),
+            "estado_cruce": estado, "posibles": [],
         })
-    _propagar_por_correo(resultados)
+    # Por vueltas: lo que se sabe por correo deja a otras ventas de esa hora
+    # con una sola persona posible, y esa persona resuelve su correo.
+    manual = _manuales(con, personas)
+    eliminadas = {}  # id de venta -> user_id
+    for _ in range(MAX_VUELTAS):
+        resultados = [dict(r) for r in base]
+        for r in resultados:
+            if r["id"] in eliminadas:
+                r.update(user_id=eliminadas[r["id"]], **_quien(personas, eliminadas[r["id"]]),
+                         estado_cruce="por_eliminacion")
+        _propagar_por_correo(resultados, personas, manual)
+        nuevas = {vid: uid for vid, uid in _eliminar(resultados, candidatos, grupos).items()
+                  if vid not in eliminadas}
+        if not nuevas:
+            break
+        eliminadas.update(nuevas)
     return resultados
+
+
+def _quien(personas, user_id):
+    p = personas.get(user_id) if user_id is not None else None
+    return {"nombre": p["nombre"] if p else None, "username": p["username"] if p else None}
+
+
+def _eliminar(resultados, candidatos, grupos):
+    """Pone en cada venta dudosa sin persona quién puede ser todavía
+    (`posibles`): los que entraron a esa hora menos los que ya se sabe que
+    pagaron ese canal con otra venta (nadie paga dos veces un canal).
+    Devuelve {id: user_id} de las que solo les queda una persona que no es
+    posible para ninguna otra venta de ese canal."""
+    comprado = {(grupos[r["id"]], r["user_id"]) for r in resultados
+                if r["user_id"] is not None and grupos[r["id"]] is not None}
+    posibles = {}
+    for r in resultados:
+        if r["user_id"] is None and r["id"] in candidatos:
+            g = grupos[r["id"]]
+            r["posibles"] = posibles[r["id"]] = sorted(
+                u for u in candidatos[r["id"]] if (g, u) not in comprado)
+    veces = Counter((grupos[vid], u) for vid, ps in posibles.items() for u in ps)
+    return {vid: ps[0] for vid, ps in posibles.items()
+            if len(ps) == 1 and veces[(grupos[vid], ps[0])] == 1}
 
 
 def _clave_correo(correo):
@@ -367,41 +410,49 @@ def _clave_correo(correo):
     return correo.strip().lower() if correo else None
 
 
-def _propagar_por_correo(resultados):
-    """Las compras de un correo cuya persona se sabe seguro pasan a ser de esa
-    persona (estado por_correo). Un cruce suelto puede ser falso (el comprador
-    se fue y entró otro a esa hora), así que el correo es de una persona si:
-    - POR_CORREO_MIN o más ventas emparejadas apuntan a ella y son al menos
-      POR_CORREO_PROPORCION de las del correo (el cruce en contra también
-      pasa a ella), o
-    - solo hay una emparejada y esa persona no sale con ningún otro correo.
+def _propagar_por_correo(resultados, personas, manual=None):
+    """Las compras de un correo cuya persona se sabe pasan a ser de esa
+    persona (estado por_correo, o manual si lo dijo el dueño: `manual` es
+    {correo: user_id} y manda sobre todo lo demás). Un cruce suelto puede ser
+    falso (el comprador se fue y entró otro a esa hora), así que el correo es
+    de una persona si:
+    - POR_CORREO_MIN o más ventas seguras (emparejadas o por eliminación)
+      apuntan a ella y son al menos POR_CORREO_PROPORCION de las del correo
+      (el cruce en contra también pasa a ella), o
+    - solo hay una segura y esa persona no sale con ningún otro correo.
     Y nadie paga dos veces el mismo canal: si un correo compró canales que la
     persona ya pagó con otro correo suyo (con más cruces), es otro comprador
     (p. ej. un amigo que compra lo mismo a la vez) y sus cruces con ella eran
     falsos: pasan a dudosos."""
-    seguras = defaultdict(Counter)  # correo -> {user_id: nº de ventas emparejadas}
+    manual = manual or {}
+    seguras = defaultdict(Counter)  # correo -> {user_id: nº de ventas seguras}
     canales_de = defaultdict(set)  # correo -> canales que compró
-    ref = {}
     for r in resultados:
         correo = _clave_correo(r["correo"])
         if not correo:
             continue
         canales_de[correo].add(_clave_canal(r))
-        if r["estado_cruce"] == "emparejada":
+        if r["estado_cruce"] in SEGURAS:
             seguras[correo][r["user_id"]] += 1
-            ref.setdefault(r["user_id"], r)
     correos_de = defaultdict(set)
     for correo, cuantas in seguras.items():
         for uid in cuantas:
             correos_de[uid].add(correo)
+    for correo, uid in manual.items():
+        correos_de[uid].add(correo)
     candidatos = []
     for correo, cuantas in seguras.items():
+        if correo in manual:
+            continue
         uid, n = cuantas.most_common(1)[0]
         total = sum(cuantas.values())
         if ((n >= POR_CORREO_MIN and n >= POR_CORREO_PROPORCION * total)
                 or (total == 1 and len(correos_de[uid]) == 1)):
             candidatos.append((n, correo, uid))
     dueno, pagado = {}, defaultdict(set)  # pagado: user_id -> canales de sus correos
+    for correo, uid in manual.items():
+        dueno[correo] = uid
+        pagado[uid] |= canales_de[correo]
     falsos = set()  # (correo, user_id) de otro comprador
     for n, correo, uid in sorted(candidatos, key=lambda c: (-c[0], c[1])):
         if canales_de[correo] & pagado[uid]:
@@ -410,13 +461,61 @@ def _propagar_por_correo(resultados):
         dueno[correo] = uid
         pagado[uid] |= canales_de[correo]
     for r in resultados:
-        if r["estado_cruce"] == "emparejada" and (_clave_correo(r["correo"]), r["user_id"]) in falsos:
+        correo = _clave_correo(r["correo"])
+        if r["estado_cruce"] in SEGURAS and (correo, r["user_id"]) in falsos:
             r.update(user_id=None, nombre=None, username=None, estado_cruce="dudosa_varios")
-        uid = dueno.get(_clave_correo(r["correo"]))
-        if uid is None or (r["estado_cruce"] == "emparejada" and r["user_id"] == uid):
+        elif r["estado_cruce"] == "por_eliminacion" and dueno.get(correo) != r["user_id"]:
+            # La eliminación falla si el comprador se fue y quedó otro que
+            # entró a esa hora: solo vale si su correo acaba siendo de esa persona.
+            r.update(user_id=None, nombre=None, username=None, estado_cruce="dudosa_varios")
+        uid = dueno.get(correo)
+        if uid is None or (r["estado_cruce"] in SEGURAS and r["user_id"] == uid):
             continue
-        r.update(user_id=uid, nombre=ref[uid]["nombre"], username=ref[uid]["username"],
-                 estado_cruce="por_correo")
+        r.update(user_id=uid, **_quien(personas, uid),
+                 estado_cruce="manual" if correo in manual else "por_correo")
+
+
+# --- Correos que el dueño dice de quién son (pestaña «Correos por identificar») ------
+
+def guardar_manuales(con, entradas, ahora=None):
+    """entradas: {correo: lo que escribió el dueño (@usuario, id o enlace)};
+    vacío = quitarlo."""
+    ahora = int(time.time() if ahora is None else ahora)
+    for correo, texto in entradas.items():
+        clave = _clave_correo(correo)
+        if not clave:
+            continue
+        texto = (texto or "").strip()
+        if texto:
+            con.execute("INSERT INTO pagos_correos_manual (correo, texto, ts) VALUES (?, ?, ?) "
+                        "ON CONFLICT (correo) DO UPDATE SET texto = excluded.texto, ts = excluded.ts "
+                        "WHERE texto <> excluded.texto", (clave, texto, ahora))
+        else:
+            con.execute("DELETE FROM pagos_correos_manual WHERE correo = ?", (clave,))
+
+
+def _resolver_persona(texto, personas, por_usuario):
+    """user_id de quien escribió el dueño, entre quienes han entrado en sus canales."""
+    t = re.sub(r"^(https?://)?(t\.me|telegram\.me)/", "", (texto or "").strip(), flags=re.I)
+    t = t.strip().lstrip("@").lower()
+    if t.isdigit():
+        return int(t) if int(t) in personas else None
+    return por_usuario.get(t)
+
+
+def _textos_manuales(con):
+    return {f["correo"]: f["texto"] for f in con.execute("SELECT correo, texto FROM pagos_correos_manual")}
+
+
+def _manuales(con, personas):
+    """correo -> user_id de los correos que el dueño dijo de quién son (si se encuentra a la persona)."""
+    por_usuario = {p["username"].lower(): uid for uid, p in personas.items() if p["username"]}
+    resueltos = {}
+    for correo, texto in _textos_manuales(con).items():
+        uid = _resolver_persona(texto, personas, por_usuario)
+        if uid is not None:
+            resueltos[correo] = uid
+    return resueltos
 
 
 def _clave_canal(r):
@@ -488,7 +587,71 @@ _ESTADO_TEXTO = {
     "dudosa_varios": "⚠️ dudosa (varias ventas o entradas a la vez)",
     "sin_emparejar": "— sin emparejar",
     "sin_canal": "⚠️ canal no identificado",
+    "por_eliminacion": "✅ por eliminación (los demás de esa hora ya se saben)",
+    "manual": "✅ indicado por ti",
 }
+
+TAB_POR_IDENTIFICAR = "Correos por identificar"
+CABECERA_POR_IDENTIFICAR = ["Correo", "Compras", "Te llegó", "Última compra", "Cómo están sus ventas",
+                            "Posibles personas (entraron a esa hora; nº de ventas)",
+                            "Su Telegram (escríbelo tú: @usuario o id)", "Resultado"]
+COLUMNA_MANUAL = 6  # (contando desde 0) la columna que escribe el dueño
+_ESTADO_CORTO = {
+    "dudosa_varios": "dudosas", "sin_canal": "canal no identificado",
+    "sin_emparejar": "sin nadie que encaje", "emparejada": "seguras", "por_correo": "por correo",
+    "por_eliminacion": "por eliminación", "manual": "indicadas por ti",
+}
+
+
+def leer_manuales(pestana):
+    """{correo: texto} de la columna que escribe el dueño en la pestaña
+    (también los vacíos: borrar la celda quita la asignación)."""
+    entradas = {}
+    for fila in pestana.valores()[1:]:
+        if fila and str(fila[0]).strip():
+            entradas[str(fila[0])] = str(fila[COLUMNA_MANUAL]).strip() if len(fila) > COLUMNA_MANUAL else ""
+    return entradas
+
+
+def filas_por_identificar(con, tz, resultados=None):
+    """Una fila por correo con alguna compra sin persona (y los que el dueño
+    ya rellenó), de más a menos compras."""
+    from . import sheet
+    resultados = emparejar_ventas(con) if resultados is None else resultados
+    personas = {f["user_id"]: f for f in con.execute("SELECT user_id, nombre, username FROM ventas_personas")}
+    textos = _textos_manuales(con)
+    manual = _manuales(con, personas)
+
+    def visible(uid):
+        p = personas.get(uid)
+        return sheet.nombre_visible(p["nombre"], p["username"]) if p else str(uid)
+
+    por_correo = defaultdict(list)
+    for r in resultados:
+        if _clave_correo(r["correo"]):
+            por_correo[_clave_correo(r["correo"])].append(r)
+    filas = []
+    for correo, rs in por_correo.items():
+        if all(r["user_id"] is not None for r in rs) and correo not in textos:
+            continue
+        estados = Counter(r["estado_cruce"] for r in rs)
+        posibles = Counter(u for r in rs if r["user_id"] is None for u in r["posibles"])
+        if correo not in textos:
+            resultado = ""
+        elif correo in manual:
+            resultado = f"✅ aplicado: {visible(manual[correo])}"
+        else:
+            resultado = f"❌ no encuentro a «{textos[correo]}» entre quienes han entrado en tus canales"
+        ultima = max((r["pago_ts"] for r in rs if r["pago_ts"]), default=None)
+        filas.append([
+            correo, len(rs), round(sum(r["neto"] or 0 for r in rs), 2),
+            sheet.serie_fecha_hora(ultima, tz) if ultima else "",
+            " · ".join(f"{n} {_ESTADO_CORTO.get(e, e)}" for e, n in estados.most_common()),
+            ", ".join(f"{visible(u)} ({n})" for u, n in posibles.most_common(3)),
+            textos.get(correo, ""), resultado,
+        ])
+    filas.sort(key=lambda f: (-f[1], f[0]))
+    return filas
 
 
 def filas_pagos(con, tz, ventana_s=VENTANA_S):
@@ -504,7 +667,7 @@ def filas_pagos(con, tz, ventana_s=VENTANA_S):
         ])
     # Las dudosas y sin emparejar, arriba del todo, para que el dueño las revise.
     orden = {"dudosa_varios": 0, "sin_canal": 1, "sin_emparejar": 2, "emparejada": 3,
-             "por_correo": 4}
+             "por_eliminacion": 4, "por_correo": 5, "manual": 6}
     filas.sort(key=lambda f: (orden.get(
         {v: k for k, v in _ESTADO_TEXTO.items()}.get(f[9], ""), 9), -(f[0] or 0)))
     return filas
@@ -529,12 +692,18 @@ def hay_datos(con):
 
 def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S):
     from . import sheet
+    # Primero, lo que haya escrito el dueño en «Correos por identificar».
+    identificar = libro.pestana(TAB_POR_IDENTIFICAR, [CABECERA_POR_IDENTIFICAR])
+    with con:
+        guardar_manuales(con, leer_manuales(identificar))
     p = libro.pestana(TAB_PAGOS, [CABECERA_PAGOS])
     p.reemplazar(filas_pagos(con, tz, ventana_s=ventana_s), desde_fila=2)
     p.formatear([("A2:A", sheet.FORMATO_FECHA_HORA)])
     p = libro.pestana(TAB_CLIENTES, [CABECERA_CLIENTES])
     p.reemplazar(filas_clientes_sheet(con, tz), desde_fila=2)
     p.formatear([("F2:G", sheet.FORMATO_FECHA_HORA)])
+    identificar.reemplazar(filas_por_identificar(con, tz), desde_fila=2)
+    identificar.formatear([("D2:D", sheet.FORMATO_FECHA_HORA)])
 
 
 # --- Ejecutable (servicio captacion-pagos@<instancia>) --------------------------------

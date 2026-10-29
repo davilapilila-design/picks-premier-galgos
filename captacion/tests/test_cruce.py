@@ -329,6 +329,205 @@ class TestPorCorreo(unittest.TestCase):
         self.assertIn("Ana", filas[0][-1])
 
 
+class TestEliminacion(unittest.TestCase):
+    """Compras a la vez: si ya se sabe quiénes son los demás que entraron a
+    esa hora (nadie paga dos veces un canal), la venta es del que queda."""
+
+    L, M = "https://t.me/+L", "https://t.me/+M"
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        for cid, titulo in ((10, "Canal X"), (11, "Canal Y"), (12, "Canal Z")):
+            canal(self.con, cid, titulo)
+        persona(self.con, 500, nombre="Ana", username="ana")
+        persona(self.con, 501, nombre="Luis", username="luis")
+        persona(self.con, 502, nombre="Marta", username=None)
+        # Ana ya se sabe por su correo (venta segura en otro canal).
+        entra_movimiento(self.con, 11, 1, 500, 1000, "https://t.me/+Y")
+        venta(self.con, "a0", "https://t.me/+Y", 1000, correo="ana@example.com")
+        # Ana y Luis compran el Canal X a la vez y entran a la vez: dudosas.
+        venta(self.con, "a1", self.L, 5000, correo="ana@example.com")
+        venta(self.con, "l1", self.L, 5010, correo="luis@example.com")
+        entra_movimiento(self.con, 10, 2, 500, 5005, self.L)
+        entra_movimiento(self.con, 10, 3, 501, 5012, self.L)
+
+    def cruce(self):
+        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+
+    def test_si_los_demas_de_esa_hora_ya_se_saben_queda_el_que_falta(self):
+        rs = self.cruce()
+        self.assertEqual((rs["a1"]["estado_cruce"], rs["a1"]["user_id"]), ("por_correo", 500))
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
+        self.assertEqual(rs["l1"]["nombre"], "Luis")
+
+    def test_resuelto_uno_se_resuelven_todas_las_compras_de_su_correo(self):
+        venta(self.con, "l9", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="luis@example.com")
+        r = self.cruce()["l9"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 501))
+
+    def test_en_cadena(self):
+        # Luis y Marta compran el Canal Z a la vez: Luis se sabe por eliminación
+        # en el Canal X, así que la de Marta sale en la vuelta siguiente.
+        venta(self.con, "l2", self.M, 9000, correo="luis@example.com")
+        venta(self.con, "m1", self.M, 9005, correo="marta@example.com")
+        entra_movimiento(self.con, 12, 4, 501, 9008, self.M)
+        entra_movimiento(self.con, 12, 5, 502, 9010, self.M)
+        rs = self.cruce()
+        self.assertEqual((rs["l2"]["estado_cruce"], rs["l2"]["user_id"]), ("por_correo", 501))
+        self.assertEqual((rs["m1"]["estado_cruce"], rs["m1"]["user_id"]), ("por_eliminacion", 502))
+
+    def test_dos_ventas_con_el_mismo_unico_candidato_no_se_asignan(self):
+        # Pepe también compró a esa hora pero se fue del canal: Luis podría ser
+        # el de su venta o el de la de Pepe.
+        venta(self.con, "p1", self.L, 5020, correo="pepe@example.com")
+        rs = self.cruce()
+        self.assertEqual(rs["l1"]["estado_cruce"], "dudosa_varios")
+        self.assertEqual(rs["p1"]["estado_cruce"], "dudosa_varios")
+        self.assertIsNone(rs["l1"]["user_id"])
+
+    def test_eliminacion_que_no_confirma_su_correo_se_descarta(self):
+        # Luis ya es seguro el de luis@ (venta segura + la de eliminación). En el
+        # Canal Z pagan Ana y Pepe; Pepe se fue y queda Luis, que entró por su
+        # cuenta: Luis saldría con un segundo correo de un solo cruce, así que
+        # esa eliminación no vale.
+        entra_movimiento(self.con, 11, 7, 501, 40000, "https://t.me/+Y")
+        venta(self.con, "lx", "https://t.me/+Y", 40000, correo="luis@example.com")
+        venta(self.con, "a2", self.M, 30000, correo="ana@example.com")
+        venta(self.con, "p2", self.M, 30005, correo="pepe@example.com")
+        entra_movimiento(self.con, 12, 8, 500, 30003, self.M)
+        entra_movimiento(self.con, 12, 9, 501, 30008, self.M)
+        rs = self.cruce()
+        self.assertEqual((rs["p2"]["estado_cruce"], rs["p2"]["user_id"]), ("dudosa_varios", None))
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
+
+    def test_la_dudosa_trae_quien_queda_posible(self):
+        venta(self.con, "p1", self.L, 5020, correo="pepe@example.com")
+        rs = self.cruce()
+        self.assertEqual(rs["p1"]["posibles"], [501])  # Ana ya compró ese canal
+
+    def test_fila_de_pagos_dice_por_eliminacion(self):
+        from zoneinfo import ZoneInfo
+        filas = {f[10]: f for f in pagos.filas_pagos(self.con, ZoneInfo("Europe/Madrid"))}
+        self.assertIn("Luis", filas["l1"][8])
+        self.assertIn("eliminación", filas["l1"][9])
+
+
+class TestManual(unittest.TestCase):
+    """El dueño dice de quién es un correo: todas sus compras son de esa persona."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        persona(self.con, 501, nombre="Luis", username="Luis_99")
+        venta(self.con, "v1", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="luis@example.com")
+        venta(self.con, "v2", "https://t.me/+VIEJO2", 60, producto="Otro viejo", correo="Luis@Example.com")
+
+    def indicar(self, correo, texto):
+        with self.con:
+            pagos.guardar_manuales(self.con, {correo: texto}, ahora=1)
+
+    def cruce(self):
+        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+
+    def test_con_usuario_asigna_todas_sus_compras(self):
+        self.indicar("luis@example.com", "@luis_99")  # sin distinguir mayúsculas
+        rs = self.cruce()
+        for vid in ("v1", "v2"):
+            self.assertEqual((rs[vid]["estado_cruce"], rs[vid]["user_id"]), ("manual", 501))
+        self.assertEqual(rs["v1"]["nombre"], "Luis")
+
+    def test_con_id_o_enlace(self):
+        for texto in ("501", "https://t.me/Luis_99", " Luis_99 "):
+            self.indicar("luis@example.com", texto)
+            self.assertEqual(self.cruce()["v1"]["user_id"], 501, texto)
+
+    def test_persona_que_no_ha_entrado_en_tus_canales_no_se_asigna(self):
+        self.indicar("luis@example.com", "@nadie")
+        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+
+    def test_lo_tuyo_manda_sobre_el_cruce_por_hora(self):
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
+        venta(self.con, "v3", "https://t.me/+L", 1000, correo="luis@example.com")
+        self.indicar("luis@example.com", "@luis_99")
+        r = self.cruce()["v3"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("manual", 501))
+
+    def test_borrar_quita_la_asignacion(self):
+        self.indicar("luis@example.com", "@luis_99")
+        self.indicar("luis@example.com", "")
+        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+
+
+class TestPestanaPorIdentificar(unittest.TestCase):
+    """Pestaña del Sheet con los correos sin persona, de más a menos compras,
+    con una columna para que el dueño escriba su @usuario de Telegram."""
+
+    def setUp(self):
+        from zoneinfo import ZoneInfo
+
+        from premier_captacion import sheet
+
+        from .test_sheet import LibroFalso
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        self.tz = ZoneInfo("Europe/Madrid")
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        persona(self.con, 501, nombre="Luis", username="luis")
+        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
+        venta(self.con, "a1", "https://t.me/+L", 1000, correo="ana@example.com")  # resuelto
+        for i in range(3):
+            venta(self.con, f"l{i}", "https://t.me/+VIEJO", 50 + i, correo="luis@example.com", neto=10)
+        venta(self.con, "p1", "https://t.me/+VIEJO", 70, correo="pepe@example.com", neto=10)
+        self.falso = LibroFalso()
+        self.libro = sheet.LibroGoogle(self.falso)
+
+    def escribir(self):
+        self.libro.preparar()
+        pagos.escribir_pestanas(self.con, self.tz, self.libro)
+        return self.falso.hoja(pagos.TAB_POR_IDENTIFICAR)
+
+    def fila(self, hoja, correo):
+        return next(f for f in hoja.tabla()[1:] if f[0] == correo)
+
+    def test_lista_los_correos_sin_persona_de_mas_a_menos_compras(self):
+        tabla = self.escribir().tabla()
+        self.assertEqual(tabla[0], pagos.CABECERA_POR_IDENTIFICAR)
+        self.assertEqual([f[0] for f in tabla[1:]], ["luis@example.com", "pepe@example.com"])
+        self.assertEqual(tabla[1][1], 3)  # compras
+
+    def test_lo_que_escribe_el_dueno_se_guarda_y_se_aplica(self):
+        hoja = self.escribir()
+        n = [f[0] for f in hoja.tabla()].index("luis@example.com") + 1
+        hoja.celdas[(n, pagos.COLUMNA_MANUAL + 1)] = "@luis"
+        hoja = self.escribir()
+        f = self.fila(hoja, "luis@example.com")
+        self.assertEqual(f[pagos.COLUMNA_MANUAL], "@luis")  # se queda escrito
+        self.assertIn("Luis", f[pagos.COLUMNA_MANUAL + 1])  # ✅ aplicado
+        pagos_tab = self.falso.hoja(pagos.TAB_PAGOS).tabla()
+        self.assertTrue(all("Luis" in r[8] for r in pagos_tab[1:] if r[6] == "luis@example.com"))
+
+    def test_si_no_encuentra_a_la_persona_lo_dice(self):
+        hoja = self.escribir()
+        n = [f[0] for f in hoja.tabla()].index("pepe@example.com") + 1
+        hoja.celdas[(n, pagos.COLUMNA_MANUAL + 1)] = "@nadie"
+        f = self.fila(self.escribir(), "pepe@example.com")
+        self.assertIn("no encuentro", f[pagos.COLUMNA_MANUAL + 1])
+
+    def test_vaciar_la_celda_lo_quita(self):
+        hoja = self.escribir()
+        n = [f[0] for f in hoja.tabla()].index("luis@example.com") + 1
+        hoja.celdas[(n, pagos.COLUMNA_MANUAL + 1)] = "@luis"
+        hoja = self.escribir()
+        n = [f[0] for f in hoja.tabla()].index("luis@example.com") + 1
+        del hoja.celdas[(n, pagos.COLUMNA_MANUAL + 1)]
+        self.escribir()
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM pagos_correos_manual").fetchone()[0], 0)
+
+
 class TestAgregados(unittest.TestCase):
     def setUp(self):
         self.con = db.abrir(":memory:")
