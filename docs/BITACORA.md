@@ -25,9 +25,19 @@ Entradas más recientes arriba.
   los dos lados del cambio. `PLAN.md` decía lo contrario (rTime en UTC): corregido.
 - **Se queda pendiente a propósito**: msg 446, pata 2 (Dunstall Park 10/10 21:54): en hora de
   Madrid sería la de las 20:54 UK, que no existe (hay 20:38 y 20:58), pero sí hay una carrera a
-  las 21:54 UK. Parece escrita en hora UK; con esa ambigüedad, marcado manual.
+  las 21:54 UK. Parece escrita en hora UK; con esa ambigüedad, marcado manual. La apuesta ya
+  sale `perdio` por su pata 1, así que no cambia nada.
+- **Desplegado y verificado** (29/10, ~15:10 UTC): copia del script anterior en
+  `/opt/picks-premier-galgos/vm_job_resultados_galgos.py.bak-20261029`, script nuevo en su
+  sitio (mismo sha256 que el commit) y `systemctl start picks-resultados.service`: «14
+  pendientes: 43 filas encontradas, 1 sin datos», 43 filas insertadas en `resultados_galgos`
+  (970-1012). Releída la hoja: las 12 apuestas resueltas con fuente `auto` (583, 593, 594,
+  595, 601 y 606 gano; 584, 589, 590, 599, 600 y 605 perdio), y cada una casa con la trampa
+  ganadora de su carrera en el parquet.
+- **Aparte, sin tocar**: `url_carrera` sale vacía en estas filas porque `results_enriched`
+  no trae `track_id` desde mayo (0% de las carreras). No es de este arreglo.
 
-Commits: (este commit)
+Commits: 762826a, (este commit)
 
 ## 2026-10-24 (cont.) — Web: nuevo enlace de invitación al canal de Telegram (desplegado, v41)
 - Pedido del dueño: el botón para unirse al canal de Telegram de la web de
