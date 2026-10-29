@@ -132,11 +132,12 @@ cuenta de servicio de Google (la hoja se comparte con el email de esa
 cuenta de servicio como editor; la clave del servicio vive en
 `/root/.config/picks-premier-galgos/` en la VM, nunca en ningún repo). Es
 idempotente (salta carreras que ya tiene) y solo procesa carreras que ya
-deberían haber corrido. Al escribir, la hora de la carrera (`rTime`, en
-UTC) se convierte a hora de Reino Unido (`Europe/London`) antes de
-guardarla — sin esto el cruce por hora exacta falla en horario de verano
-británico (ver `docs/BITACORA.md` 2026-08-25/26 para el hallazgo, la
-verificación y el despliegue completos).
+deberían haber corrido. Para cruzar por hora exacta, la hora de la hoja
+(`hora_carrera`, en hora de **Madrid**) se pasa a hora de **Reino Unido**, que
+es la del `rTime` del parquet, y solo vale una carrera exacta y única
+(corregido el 2026-10-29: antes se tomaba la de la hoja como UK y `rTime` como
+UTC, lo que en verano daba lo mismo y desde el cambio de hora del 25/10 dejó
+sin resolver todo; ver `docs/BITACORA.md` 2026-10-29 y 2026-08-25/26).
 
 `cuota_final`/`url_carrera`/posición exacta para picks fuera de podio
 (gano/perdio ya se resuelve sin ellos, vía el fallback de "trampa

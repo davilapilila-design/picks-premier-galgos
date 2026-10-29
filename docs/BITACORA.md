@@ -3,6 +3,32 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — picks-resultados no resolvía nada desde el cambio de hora: horas mal supuestas
+- **Qué pasaba**: desde el 24/10 19:55 `resultados_galgos` no tenía filas nuevas y 12 apuestas
+  (13 patas: msgs 583 x2, 584, 589, 590, 593, 594, 595, 599, 600, 601, 605, 606) seguían
+  pendientes. El timer corría cada 20 min y el parquet (`results_enriched.parquet`) estaba al
+  día con esas carreras dentro; el job decía siempre «14 pendientes, 0 filas encontradas».
+- **Por qué**: el job tomaba la hora de la hoja como hora UK y el `rTime` del parquet como UTC.
+  Las dos cosas eran falsas: la hoja va en hora de **Madrid** y `rTime` en hora de **Reino
+  Unido** (carrera 2230818 del 24/10: 10:32 en el parquet y en `results_full`). En verano los
+  dos errores se compensaban (UK→UTC resta 1 h, lo mismo que Madrid→UK: Central Park 24/10
+  18:50 en la hoja = `rTime` 17:50). Desde el 25/10 UK = UTC: el job buscaba una hora tarde
+  (Sheffield 25/10 16:44 → buscaba 16:44, la carrera era a las 15:44). Las 13 patas tenían su
+  carrera exacta y única 60 min antes de la hora de la hoja. No era casualidad: era el cambio
+  de hora. Los dos fallos del log (24/10 18:05 y 26/10 21:35) son cortes puntuales de la API
+  de Sheets, sin relación.
+- **Arreglo** (`scripts/vm_job_resultados_galgos.py`): `rtime_uk` pasa la hora de la hoja
+  (Madrid) a hora UK con zoneinfo (vale en verano y en invierno) y se compara con `rTime` tal
+  cual; el filtro de «carrera ya corrida» también usa la hora de Madrid; si casan dos carreras,
+  la pata se queda pendiente y sale «AMBIGUA» en el log; el enlace de Racing Post lleva la hora
+  real (UK). Tests nuevos en `tests/test_vm_job_resultados_galgos.py` con los casos reales de
+  los dos lados del cambio. `PLAN.md` decía lo contrario (rTime en UTC): corregido.
+- **Se queda pendiente a propósito**: msg 446, pata 2 (Dunstall Park 10/10 21:54): en hora de
+  Madrid sería la de las 20:54 UK, que no existe (hay 20:38 y 20:58), pero sí hay una carrera a
+  las 21:54 UK. Parece escrita en hora UK; con esa ambigüedad, marcado manual.
+
+Commits: (este commit)
+
 ## 2026-10-24 (cont.) — Web: nuevo enlace de invitación al canal de Telegram (desplegado, v41)
 - Pedido del dueño: el botón para unirse al canal de Telegram de la web de
   Premier Galgos pasa de `https://t.me/+VtCh-VrBHPpiMzg0` a

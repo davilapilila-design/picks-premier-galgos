@@ -35,6 +35,17 @@ Dos fases, para no cargar el parquet (lo más pesado, ~2MB+ en memoria) si
 no hace falta: primero se calcula qué patas están "pendientes" (no
 cubiertas todavía Y ya deberían haber corrido) con solo lo leído de
 Sheets - si no hay ninguna, el job termina ahí, sin tocar el parquet.
+
+Horas (corregido 2026-10-29, docs/BITACORA.md): la hora de la hoja
+(`apuestas_patas.hora_carrera`) es la de MADRID y el `rTime` del parquet es
+la hora de REINO UNIDO (igual que en `results_full` y en el master de Proyecto
+Galgos). Antes se tomaba la de la hoja como UK y `rTime` como UTC: en verano
+los dos errores se compensaban (UK -> UTC = -1 h = Madrid -> UK) y desde el
+cambio de hora del 25/10/2026 (UK = UTC) el job buscaba una hora tarde y no
+encontraba ninguna carrera. Ahora: hora de la hoja (Madrid) -> hora UK con
+zoneinfo, que vale en verano y en invierno, y coincidencia exacta y ÚNICA
+con `rTime`: si casan dos carreras, la pata se queda pendiente (CLAUDE.md:
+nunca inferir sobre ambigüedad).
 """
 import socket
 import sys
@@ -57,7 +68,6 @@ SHEET_ID = "1axZnIIIXBpqVhhb6RVGawNaWpSLVLBwXK079MxcOfF4"
 PARQUET_PATH = "/opt/galgos/repo/data/historical/results_enriched.parquet"
 
 UK = ZoneInfo("Europe/London")
-UTC = ZoneInfo("UTC")
 MADRID = ZoneInfo("Europe/Madrid")
 
 MARGEN_CARRERA_CORRIDA_MIN = 30
@@ -83,6 +93,13 @@ def frac_to_decimal(s):
         return None
 
 
+def rtime_uk(fecha_dt, hora_hoja):
+    """'YYYY-MM-DD HH:MM' en hora de Reino Unido (el `rTime` del parquet) de una
+    carrera con la hora de la hoja, que es la de Madrid."""
+    dt_madrid = datetime.combine(fecha_dt, datetime.strptime(hora_hoja, "%H:%M").time(), tzinfo=MADRID)
+    return dt_madrid.astimezone(UK).strftime("%Y-%m-%d %H:%M")
+
+
 def calcular_pendientes(patas, carreras_cubiertas, limite):
     """Fase barata (sin parquet): qué patas hay que mirar de verdad -
     no cubiertas todavía Y su carrera ya debería haber corrido."""
@@ -101,7 +118,7 @@ def calcular_pendientes(patas, carreras_cubiertas, limite):
 
         try:
             fecha_dt = datetime.strptime(fecha_pick_str, "%d/%m/%Y").date()
-            hora_uk = datetime.strptime(hora_carrera, "%H:%M").time()
+            hora_madrid = datetime.strptime(hora_carrera, "%H:%M").time()
         except ValueError:
             continue
 
@@ -111,23 +128,25 @@ def calcular_pendientes(patas, carreras_cubiertas, limite):
             saltadas_ya_cubiertas += 1
             continue
 
-        dt_uk = datetime.combine(fecha_dt, hora_uk, tzinfo=UK)
-        if dt_uk.astimezone(MADRID) > limite:
+        # La hora de la hoja es la de Madrid (ver el docstring del módulo).
+        dt_madrid = datetime.combine(fecha_dt, hora_madrid, tzinfo=MADRID)
+        if dt_madrid > limite:
             saltadas_futuras += 1
             continue
 
         pendientes.append({
             "hipodromo": hipodromo, "hora_carrera": hora_carrera,
             "fecha_dt": fecha_dt, "fecha_str": fecha_str,
-            "clave_carrera": clave_carrera, "dt_uk": dt_uk,
+            "clave_carrera": clave_carrera, "rtime_uk": rtime_uk(fecha_dt, hora_carrera),
         })
 
     return pendientes, saltadas_ya_cubiertas, saltadas_futuras
 
 
-def resolver_contra_parquet(pendientes):
-    """Fase cara: solo se llega aquí si `pendientes` no está vacío."""
-    df = pd.read_parquet(PARQUET_PATH)
+def resolver_contra_parquet(pendientes, df=None):
+    """Fase cara: solo se llega aquí si `pendientes` no está vacío. `df`: el
+    parquet ya leído (tests); si no se da, se lee de PARQUET_PATH."""
+    df = pd.read_parquet(PARQUET_PATH) if df is None else df.copy()
     df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.strftime("%Y-%m-%d")
 
     nuevas_filas = []
@@ -136,8 +155,7 @@ def resolver_contra_parquet(pendientes):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for p in pendientes:
-        dt_utc = p["dt_uk"].astimezone(UTC)
-        rtime_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
+        rtime = p["rtime_uk"]          # hora UK, como el rTime del parquet
         fecha_iso = p["fecha_dt"].isoformat()
         hipodromo = p["hipodromo"]
         hora_carrera = p["hora_carrera"]
@@ -146,10 +164,16 @@ def resolver_contra_parquet(pendientes):
         mask = (
             (df["Canodromo"].str.lower() == hipodromo.lower())
             & (df["Fecha"] == fecha_iso)
-            & (df["rTime"] == rtime_utc)
+            & (df["rTime"] == rtime)
         )
         sub = df[mask]
         if len(sub) == 0:
+            sin_datos_todavia += 1
+            continue
+        if sub["race_id"].astype(str).nunique() > 1:
+            # Dos carreras a la misma hora en el mismo canódromo: no se adivina cuál es.
+            print(f"AMBIGUA, se queda pendiente: {hipodromo} {fecha_str} {hora_carrera} "
+                  f"(rTime {rtime}: race_id {sorted(sub['race_id'].astype(str).unique())})", flush=True)
             sin_datos_todavia += 1
             continue
 
@@ -157,7 +181,7 @@ def resolver_contra_parquet(pendientes):
         track_id = str(sub.iloc[0]["track_id"]) if sub.iloc[0]["track_id"] not in (None, "None") else ""
         url_carrera = (
             f"https://greyhoundbet.racingpost.com/#result-meeting-result/"
-            f"race_id={race_id}&track_id={track_id}&r_date={fecha_iso}&r_time={hora_carrera.replace(':', '%3A')}"
+            f"race_id={race_id}&track_id={track_id}&r_date={fecha_iso}&r_time={rtime[-5:].replace(':', '%3A')}"
             if track_id else ""
         )
         for _, r in sub.iterrows():
