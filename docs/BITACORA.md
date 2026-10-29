@@ -3,6 +3,23 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: eliminación en compras a la vez y correos que dice el dueño
+
+- Eliminación (`pagos._eliminar`, por vueltas con el cruce por correo): en
+  una venta dudosa se quitan de los que entraron a esa hora los que ya se
+  sabe que pagaron ese canal con otra venta; si queda uno solo y no es
+  posible para otra venta del canal, es «por eliminación» y cuenta como
+  segura para su correo. Solo vale si su correo acaba siendo de esa persona
+  (si no, el comprador se fue y quedó otro: un cliente que compra mucho en
+  las avalanchas salía así en varios correos distintos).
+- Pestaña nueva «Correos por identificar»: los correos con compras sin
+  persona, de más a menos compras, con quién pudo ser (los que quedan
+  posibles en sus dudosas) y una columna donde el dueño escribe el @usuario
+  o id. Se lee antes de escribir el Sheet (migración 9:
+  `pagos_correos_manual`), manda sobre el cruce y vaciar la celda lo quita.
+- Con los datos reales: de 922 a 1.038 ventas con persona (52 de 235 correos).
+- Commits: 3535210
+
 ## 2026-10-29 — Captación: «por correo» por mayoría y sin mayúsculas
 
 - Con los 147 enlaces leídos, «por correo» bajaba en vez de subir: el
