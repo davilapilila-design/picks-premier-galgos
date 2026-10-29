@@ -182,6 +182,16 @@ MIGRACIONES = [
         ts INTEGER NOT NULL
     );
     """,
+    # 10 (quién tiene chat privado con el dueño: solo id, nombre y @usuario,
+    # para emparejar correos por nombre; autorizado el 2026-10-30; nombres.py)
+    """
+    CREATE TABLE personas_chat (
+        user_id INTEGER PRIMARY KEY,
+        nombre TEXT,
+        username TEXT,
+        visto_ts INTEGER NOT NULL
+    );
+    """,
 ]
 
 

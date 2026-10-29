@@ -3,6 +3,25 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: por nombre automático y registro del canal en el cruce
+
+- El cruce usaba solo la lista de «quién se unió» de cada enlace (solo trae
+  a quien sigue dentro) e ignoraba el registro del canal que guarda el
+  lector (48 h, trae también a quien se fue): ahora junta las dos fuentes.
+  Había 47 entradas de gente que luego se salió.
+- `nombres.py`: correo ↔ persona por @usuario o nombre (apellido completo +
+  nombre o sus 4 primeras letras; nunca un nombre suelto; si falta algún
+  apellido del nombre de Telegram, solo con la hora). Lo aplica el cruce
+  («por_nombre») si una sola persona casa mejor, manda sobre un cruce por
+  hora suelto pero no si la hora dice otra persona ≥2 veces. Salen en
+  «Correos por identificar» con 🤖 para revisarlos; «no» en la columna G lo
+  bloquea.
+- Nombres: canales de venta, usuarios del bot y chats privados del dueño,
+  que el lector apunta una vez al día (migración 10: `personas_chat`, solo
+  id, nombre y @usuario; con GetDialogs, que ya estaba permitido; autorizado
+  por el dueño hoy).
+- Commits: (este)
+
 ## 2026-10-30 — Captación: correos por nombre (a mano, con el visto bueno del dueño)
 
 - Sin cambios de código. Un comprador grande no salía por ningún cruce: no

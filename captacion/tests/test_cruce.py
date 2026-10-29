@@ -162,6 +162,17 @@ class TestPorEnlace(unittest.TestCase):
         r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
         self.assertEqual(r["estado_cruce"], "sin_emparejar")
 
+    def test_tambien_cuenta_el_registro_del_canal_quien_se_fue(self):
+        # La lista de quién se unió solo trae a quien sigue dentro; el registro
+        # del canal (48 h, lo guarda el lector) trae también a quien se fue.
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+L")  # Ana entró y se fue
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 500))
+
 
 class TestPorCorreo(unittest.TestCase):
     """Si una venta se empareja con una persona, las demás compras con ese
@@ -459,6 +470,90 @@ class TestManual(unittest.TestCase):
         self.indicar("luis@example.com", "@luis_99")
         self.indicar("luis@example.com", "")
         self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+
+
+class TestPorNombre(unittest.TestCase):
+    """Correos con el nombre o el @usuario de una persona de Telegram
+    (nombres.py): si es seguro, todas sus compras son de esa persona."""
+
+    CORREO = "luisferrandiz80@example.com"
+
+    def setUp(self):
+        from premier_captacion import nombres
+        self.nombres = nombres
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        venta(self.con, "v1", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo=self.CORREO)
+
+    def chats(self, *personas):
+        with self.con:
+            self.nombres.guardar_chats(self.con, personas, ahora=1)
+
+    def cruce(self):
+        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+
+    def segura(self, vid, user_id, ts, correo):
+        entra_movimiento(self.con, 10, ts, user_id, ts, "https://t.me/+L")
+        venta(self.con, vid, "https://t.me/+L", ts, correo=correo)
+
+    def test_nombre_y_apellido_de_un_chat_privado(self):
+        self.chats((800, "Luis Ferrandiz", None))
+        r = self.cruce()["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"], r["nombre"]), ("por_nombre", 800, "Luis Ferrandiz"))
+
+    def test_si_le_falta_un_apellido_hace_falta_la_hora(self):
+        self.chats((800, "Luis Ferrandiz Gimeno", None))  # «gimeno» no está en el correo
+        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        # Entró a la hora de una de sus compras (junto con Ana): ahora sí.
+        venta(self.con, "v2", "https://t.me/+L", 5000, correo=self.CORREO)
+        entra_movimiento(self.con, 10, 1, 500, 5002, "https://t.me/+L")
+        entra_movimiento(self.con, 10, 2, 800, 5004, "https://t.me/+L")
+        rs = self.cruce()
+        self.assertEqual((rs["v1"]["estado_cruce"], rs["v1"]["user_id"]), ("por_nombre", 800))
+
+    def test_dos_personas_que_casan_igual_no_se_aplica(self):
+        self.chats((800, "Luis Ferrandiz", None), (801, "Luis Ferrandiz", None))
+        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+
+    def test_corrige_un_cruce_suelto_con_otra_persona(self):
+        self.chats((800, "Luis Ferrandiz", None))
+        self.segura("v2", 500, 5000, self.CORREO)  # una sola vez con Ana
+        rs = self.cruce()
+        self.assertEqual((rs["v2"]["estado_cruce"], rs["v2"]["user_id"]), ("por_nombre", 800))
+
+    def test_si_la_hora_dice_otra_cosa_con_fuerza_no(self):
+        self.chats((800, "Luis Ferrandiz", None))
+        self.segura("v2", 500, 5000, self.CORREO)
+        self.segura("v3", 500, 9000, self.CORREO)  # dos veces con Ana
+        r = self.cruce()["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
+
+    def test_lo_que_dice_el_dueno_manda(self):
+        self.chats((800, "Luis Ferrandiz", None), (801, "Pepe", "pepe_otro"))
+        with self.con:
+            pagos.guardar_manuales(self.con, {self.CORREO: "@pepe_otro"}, ahora=1)
+        r = self.cruce()["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("manual", 801))  # también de los chats
+
+    def test_escribir_no_lo_bloquea(self):
+        self.chats((800, "Luis Ferrandiz", None))
+        with self.con:
+            pagos.guardar_manuales(self.con, {self.CORREO: "no"}, ahora=1)
+        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+
+    def test_la_pestana_lo_ensena_y_dice_como_quitarlo(self):
+        from zoneinfo import ZoneInfo
+        self.chats((800, "Luis Ferrandiz", None))
+        tz = ZoneInfo("Europe/Madrid")
+        f = next(f for f in pagos.filas_por_identificar(self.con, tz) if f[0] == self.CORREO)
+        self.assertIn("🤖", f[pagos.COLUMNA_MANUAL + 1])
+        self.assertIn("Luis Ferrandiz", f[pagos.COLUMNA_MANUAL + 1])
+        with self.con:
+            pagos.guardar_manuales(self.con, {self.CORREO: "no"}, ahora=1)
+        f = next(f for f in pagos.filas_por_identificar(self.con, tz) if f[0] == self.CORREO)
+        self.assertIn("🚫", f[pagos.COLUMNA_MANUAL + 1])
 
 
 class TestPestanaPorIdentificar(unittest.TestCase):
