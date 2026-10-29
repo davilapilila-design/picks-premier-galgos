@@ -3,6 +3,25 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 (cont.) — Enlace a la ficha del resultado en Racing Post en `resultados_galgos`
+- Pedido del dueño: rellenar `url_carrera` con el enlace al resultado de la carrera en Racing
+  Post, como hace el predictor de Proyecto Galgos.
+- **Por qué salía vacío**: el job lo montaba con el `track_id` de la propia fila del parquet, y
+  `results_enriched` no lo trae desde marzo (0% de las carreras desde mayo).
+- **Arreglo** (`scripts/vm_job_resultados_galgos.py`): `mapa_track_ids` saca canódromo →
+  `track_id` de las filas antiguas del parquet que sí lo traen. Es lo mismo que
+  `shared/data.py::_build_track_id_map` del predictor: los ids son estables, y si un
+  canódromo tuviera dos distintos no entraría. Hay 34 canódromos. `url_resultado` monta
+  `…/#result-meeting-result/race_id=…&track_id=…&r_date=…&r_time=HH:MM`, con la hora UK de la
+  carrera. Las filas nuevas ya salen con enlace; `--rellenar-urls` rellena una vez las
+  antiguas que tienen race_id y no tienen enlace. Tests nuevos.
+- **Msg 446, pata 2** (aclarado): el tipster escribió 20:58 y 22:54 (hora de Madrid) y el bot
+  guardó 19:58 y 21:54. Es el único mensaje con la hora cambiada: las otras 307 patas guardan la
+  del texto. La pata 2 es Dunstall Park 10/10 21:54 UK (OR1, 480 m, race_id 2227780):
+  Fahrenheit Jess (trampa 3) ganó. La doble está perdida por la pata 1 (Ballydoyle Tina, 3.ª).
+
+Commits: (este commit)
+
 ## 2026-10-29 — picks-resultados no resolvía nada desde el cambio de hora: horas mal supuestas
 - **Qué pasaba**: desde el 24/10 19:55 `resultados_galgos` no tenía filas nuevas y 12 apuestas
   (13 patas: msgs 583 x2, 584, 589, 590, 593, 594, 595, 599, 600, 601, 605, 606) seguían

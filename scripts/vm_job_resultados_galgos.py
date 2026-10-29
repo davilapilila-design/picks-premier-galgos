@@ -100,6 +100,44 @@ def rtime_uk(fecha_dt, hora_hoja):
     return dt_madrid.astimezone(UK).strftime("%Y-%m-%d %H:%M")
 
 
+def mapa_track_ids(df):
+    """canódromo (minúsculas) -> track_id, de las filas del parquet que lo traen. La
+    columna dejó de rellenarse en marzo de 2026, pero los ids son estables (es lo mismo que
+    hace el predictor de Proyecto Galgos, `shared/data.py::_build_track_id_map`). Un
+    canódromo con dos ids distintos no entra: no se adivina."""
+    con = df[df["track_id"].astype(str).str.fullmatch(r"[0-9]+")]
+    ids = con.groupby(con["Canodromo"].astype(str).str.strip().str.lower())["track_id"].agg(
+        lambda s: set(s.astype(str)))
+    return {cano: next(iter(v)) for cano, v in ids.items() if len(v) == 1}
+
+
+def url_resultado(race_id, track_id, fecha_iso, rtime):
+    """Enlace a la ficha del resultado en Racing Post, con la hora UK de la carrera."""
+    if not (race_id and track_id and rtime):
+        return ""
+    return (f"https://greyhoundbet.racingpost.com/#result-meeting-result/"
+            f"race_id={race_id}&track_id={track_id}&r_date={fecha_iso}&r_time={rtime[-5:].replace(':', '%3A')}")
+
+
+def urls_para_rellenar(existentes, df):
+    """[(fila de la hoja, url)] de las filas de `resultados_galgos` (desde la 2) con race_id y
+    sin enlace, si su carrera está en el parquet y su canódromo tiene track_id."""
+    mapa = mapa_track_ids(df)
+    carreras = df.assign(race_id=df["race_id"].astype(str)).drop_duplicates("race_id").set_index("race_id")
+    out = []
+    for i, row in enumerate(existentes):
+        if len(row) < 10 or not row[9] or (len(row) > 8 and row[8]):
+            continue
+        if row[9] not in carreras.index:
+            continue
+        c = carreras.loc[row[9]]
+        track_id = mapa.get(str(c["Canodromo"]).strip().lower(), "")
+        url = url_resultado(row[9], track_id, pd.to_datetime(c["Fecha"]).strftime("%Y-%m-%d"), str(c["rTime"]))
+        if url:
+            out.append((i + 2, url))
+    return out
+
+
 def calcular_pendientes(patas, carreras_cubiertas, limite):
     """Fase barata (sin parquet): qué patas hay que mirar de verdad -
     no cubiertas todavía Y su carrera ya debería haber corrido."""
@@ -148,6 +186,7 @@ def resolver_contra_parquet(pendientes, df=None):
     parquet ya leído (tests); si no se da, se lee de PARQUET_PATH."""
     df = pd.read_parquet(PARQUET_PATH) if df is None else df.copy()
     df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.strftime("%Y-%m-%d")
+    mapa = mapa_track_ids(df)
 
     nuevas_filas = []
     clave_puesta = set()
@@ -178,12 +217,10 @@ def resolver_contra_parquet(pendientes, df=None):
             continue
 
         race_id = str(sub.iloc[0]["race_id"])
-        track_id = str(sub.iloc[0]["track_id"]) if sub.iloc[0]["track_id"] not in (None, "None") else ""
-        url_carrera = (
-            f"https://greyhoundbet.racingpost.com/#result-meeting-result/"
-            f"race_id={race_id}&track_id={track_id}&r_date={fecha_iso}&r_time={rtime[-5:].replace(':', '%3A')}"
-            if track_id else ""
-        )
+        propio = str(sub.iloc[0]["track_id"])
+        # El parquet ya no trae track_id (desde marzo): sale del mapa de las filas antiguas.
+        track_id = propio if propio.isdigit() else mapa.get(hipodromo.lower(), "")
+        url_carrera = url_resultado(race_id, track_id, fecha_iso, rtime)
         for _, r in sub.iterrows():
             clave = (hipodromo, fecha_str, hora_carrera, str(r["trap"]))
             if clave in clave_puesta:
@@ -198,6 +235,21 @@ def resolver_contra_parquet(pendientes, df=None):
     return nuevas_filas, sin_datos_todavia
 
 
+def rellenar_urls(sh):
+    """Una vez (`--rellenar-urls`): pone el enlace de Racing Post en las filas de
+    `resultados_galgos` que tienen race_id y no lo tienen (29/10/2026)."""
+    ws = sh.worksheet("resultados_galgos")
+    existentes = ws.get("A2:K5000")
+    df = pd.read_parquet(PARQUET_PATH, columns=["Fecha", "rTime", "race_id", "Canodromo", "track_id"])
+    cambios = urls_para_rellenar(existentes, df)
+    sin_enlace = sum(1 for r in existentes if len(r) >= 10 and r[9] and not (len(r) > 8 and r[8]))
+    print(f"filas con race_id y sin enlace: {sin_enlace}; se rellenan: {len(cambios)}", flush=True)
+    if cambios:
+        ws.batch_update([{"range": f"I{fila}", "values": [[url]]} for fila, url in cambios],
+                        value_input_option="USER_ENTERED")
+        print(f"{len(cambios)} enlaces escritos en resultados_galgos (columna I)", flush=True)
+
+
 def main():
     creds = Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE,
@@ -205,6 +257,9 @@ def main():
     )
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
+    if "--rellenar-urls" in sys.argv[1:]:
+        rellenar_urls(sh)
+        return
 
     ws_patas = sh.worksheet("apuestas_patas")
     patas = ws_patas.get("A2:H5000")

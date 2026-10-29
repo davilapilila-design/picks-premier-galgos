@@ -79,3 +79,42 @@ def test_dos_carreras_a_la_misma_hora_no_se_resuelven():
     df = _df(("301", "2026-10-28 14:11", "Harlow"), ("302", "2026-10-28 14:11", "Harlow"))
     filas, sin_datos = job.resolver_contra_parquet(pend, df)
     assert filas == [] and sin_datos == 1
+
+
+# ── Enlace a la ficha del resultado en Racing Post (29/10/2026) ─────────────
+
+def test_mapa_de_track_ids_de_las_filas_antiguas():
+    df = pd.DataFrame({"Canodromo": ["Harlow", "Harlow", "Hove", "Hove", "Romford", "Romford", "Yarmouth"],
+                       "track_id": ["61", None, "None", "50", "62", "63", ""]})
+    # Hove: solo su id numérico; Romford: dos ids distintos, no se adivina; Yarmouth: sin id
+    assert job.mapa_track_ids(df) == {"harlow": "61", "hove": "50"}
+
+
+def test_las_filas_nuevas_llevan_el_enlace_aunque_el_parquet_no_traiga_track_id():
+    pend, _, _ = job.calcular_pendientes([_pata("583", "25/10/2026", "Sheffield", "16:44")], set(),
+                                         datetime(2026, 10, 26, 12, 0, tzinfo=MADRID))
+    df = _df(("111", "2026-10-25 15:44", "Sheffield")).assign(track_id=None)
+    df = pd.concat([df, pd.DataFrame([{"Fecha": "2026-03-01", "rTime": "2026-03-01 12:00", "race_id": "9",
+                                       "Canodromo": "Sheffield", "track_id": "8", "trap": 1, "name": "x",
+                                       "position": "1", "fract": "1/1", "dogId": "1"}])])
+    filas, _ = job.resolver_contra_parquet(pend, df)
+    assert filas[0][8] == ("https://greyhoundbet.racingpost.com/#result-meeting-result/"
+                           "race_id=111&track_id=8&r_date=2026-10-25&r_time=15%3A44")
+
+
+def test_urls_para_rellenar_las_filas_sin_enlace():
+    df = pd.concat([_df(("111", "2026-10-25 15:44", "Sheffield"), ("222", "2026-10-26 11:21", "Harlow"))
+                    .assign(track_id=None),
+                    pd.DataFrame([{"Fecha": "2026-03-01", "rTime": "2026-03-01 12:00", "race_id": "9",
+                                   "Canodromo": "Sheffield", "track_id": "8", "trap": 1, "name": "x",
+                                   "position": "1", "fract": "1/1", "dogId": "1"}])])
+    existentes = [
+        ["Sheffield", "25/10/2026", "16:44", "2", "a", "1", "ts", "2", "", "111", "d"],    # sin enlace
+        ["Sheffield", "25/10/2026", "16:44", "1", "b", "2", "ts", "3", "ya", "111", "d"],  # ya lo tiene
+        ["Harlow", "26/10/2026", "12:21", "5", "c", "1", "ts", "2", "", "222", "d"],       # Harlow sin id
+        ["Hove", "25/10/2026", "18:49", "1", "e", "1", "ts", "2", "", "", "d"],            # sin race_id
+        ["Hove", "25/10/2026", "18:49", "1", "e", "1", "ts", "2", "", "333", "d"],         # no está en el parquet
+    ]
+    assert job.urls_para_rellenar(existentes, df) == [
+        (2, "https://greyhoundbet.racingpost.com/#result-meeting-result/"
+            "race_id=111&track_id=8&r_date=2026-10-25&r_time=15%3A44")]
