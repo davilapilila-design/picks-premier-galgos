@@ -244,6 +244,90 @@ class TestPorCorreo(unittest.TestCase):
         self.assertIn("Ana", filas["ana@example.com"][-1])
         self.assertEqual(filas["otro@example.com"][-1], "")
 
+    # --- Mayúsculas y mayoría ---
+
+    def segura(self, vid, user_id, ts, correo):
+        """Una venta que se empareja seguro con user_id (entra justo al pagar)."""
+        entra_movimiento(self.con, 10, ts, user_id, ts, "https://t.me/+L")
+        venta(self.con, vid, "https://t.me/+L", ts, correo=correo)
+
+    def vieja(self, vid, correo, ts=50):
+        venta(self.con, vid, "https://t.me/+VIEJO", ts, producto="Canal viejo", correo=correo)
+
+    def test_mayusculas_y_espacios_son_el_mismo_correo(self):
+        self.vieja("v2", " Ana@Example.COM ")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
+
+    def test_el_mismo_correo_en_mayusculas_no_cuenta_como_dos_correos(self):
+        # Pagó unas veces como Ana@ y otras como ana@: es un solo correo.
+        self.segura("v2", 500, 5000, "Ana@example.com")
+        self.vieja("v3", "ana@example.com")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v3"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
+
+    def test_mayoria_clara_se_propaga_aunque_haya_un_cruce_en_contra(self):
+        persona(self.con, 501, nombre="Luis", username=None)
+        for i, ts in enumerate((5000, 9000, 13000)):
+            self.segura(f"a{i}", 500, ts, "ana@example.com")  # Ana: 4 con v1
+        self.segura("l1", 501, 17000, "ana@example.com")      # Luis: 1 (el que se fue era Ana)
+        self.vieja("v9", "ana@example.com")
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual((rs["v9"]["estado_cruce"], rs["v9"]["user_id"]), ("por_correo", 500))
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_correo", 500))
+        self.assertEqual((rs["a0"]["estado_cruce"], rs["a0"]["user_id"]), ("emparejada", 500))
+
+    def test_mayoria_floja_no_se_propaga(self):
+        persona(self.con, 501, nombre="Luis", username=None)
+        self.segura("a1", 500, 5000, "ana@example.com")  # Ana: 2 con v1
+        self.segura("l1", 501, 9000, "ana@example.com")  # Luis: 1 → 67 %
+        self.vieja("v9", "ana@example.com")
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("emparejada", 501))
+
+    def test_correo_firme_se_propaga_aunque_la_persona_salga_con_otro_suelto(self):
+        self.segura("a1", 500, 5000, "ana@example.com")    # ana@: 2 seguras → firme
+        self.segura("o1", 500, 9000, "otro@example.com")   # otro@: 1 suelta → no
+        self.vieja("v8", "ana@example.com")
+        self.vieja("v9", "otro@example.com", ts=60)
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual((rs["v8"]["estado_cruce"], rs["v8"]["user_id"]), ("por_correo", 500))
+        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
+
+    def test_correo_que_compro_los_mismos_canales_es_otro_comprador(self):
+        # Un amigo de Ana compra los mismos canales a la vez; dos veces se fue
+        # y la entrada de Ana cayó en su venta. Nadie paga dos veces un canal.
+        self.segura("a1", 500, 5000, "ana@example.com")
+        self.segura("l1", 500, 9000, "luis@example.com")
+        self.segura("l2", 500, 13000, "luis@example.com")
+        self.vieja("v8", "ana@example.com")
+        self.vieja("v9", "luis@example.com", ts=60)
+        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+        self.assertEqual((rs["v8"]["estado_cruce"], rs["v8"]["user_id"]), ("por_correo", 500))
+        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
+        # Y sus dos cruces con Ana eran falsos: quedan dudosos, sin persona.
+        for vid in ("l1", "l2"):
+            self.assertEqual((rs[vid]["estado_cruce"], rs[vid]["user_id"]), ("dudosa_varios", None))
+
+    def test_segundo_correo_con_canales_distintos_si_es_suyo(self):
+        canal(self.con, 11, "Canal Y")
+        self.segura("a1", 500, 5000, "ana@example.com")
+        for vid, ts in (("n1", 9000), ("n2", 13000)):
+            entra_movimiento(self.con, 11, ts, 500, ts, "https://t.me/+Y")
+            venta(self.con, vid, "https://t.me/+Y", ts, correo="ana.nueva@example.com")
+        self.vieja("v9", "ana.nueva@example.com")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v9"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
+
+    def test_clientes_junta_el_correo_escrito_con_mayusculas(self):
+        from zoneinfo import ZoneInfo
+        self.vieja("v2", "Ana@Example.com")
+        filas = pagos.filas_clientes_sheet(self.con, ZoneInfo("Europe/Madrid"))
+        self.assertEqual([f[0] for f in filas], ["ana@example.com"])
+        self.assertEqual(filas[0][1], 2)  # compras
+        self.assertIn("Ana", filas[0][-1])
+
 
 class TestAgregados(unittest.TestCase):
     def setUp(self):

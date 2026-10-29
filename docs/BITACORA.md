@@ -3,6 +3,22 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-29 — Captación: «por correo» por mayoría y sin mayúsculas
+
+- Con los 147 enlaces leídos, «por correo» bajaba en vez de subir: el
+  comprador con más compras pagó unas veces con el correo en mayúscula y
+  otras en minúscula (salía como persona con dos correos y no se propagaba),
+  y un cruce suelto falso en contra bloqueaba correos con decenas de cruces
+  buenos.
+- Ahora: el correo se compara en minúsculas y sin espacios (también en la
+  pestaña de clientes); un correo es de una persona si ≥2 ventas emparejadas
+  apuntan a ella y son ≥80 % de las del correo (o una sola, si esa persona no
+  sale con otro correo); y como nadie paga dos veces el mismo canal, un correo
+  que compró canales que la persona ya pagó con otro suyo es otro comprador
+  (un amigo que compra a la vez) y esos cruces pasan a dudosos.
+- Prueba en seco con los datos reales: de 565 a 924 ventas con persona.
+- Commits: (este)
+
 ## 2026-10-29 — Captación: la lectura de enlaces sigue por donde iba
 
 - La primera pasada con todos los enlaces leyó 51 de 147: Telegram pidió

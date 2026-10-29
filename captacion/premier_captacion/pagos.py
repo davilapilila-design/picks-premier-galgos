@@ -43,6 +43,8 @@ log = logging.getLogger("captacion.pagos")
 
 VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
 ANTES_S = 30  # margen por si los relojes de overoption y Telegram no van iguales
+POR_CORREO_MIN = 2  # ventas emparejadas con la misma persona para fiarse del correo...
+POR_CORREO_PROPORCION = 0.8  # ...si son al menos este tanto de las emparejadas del correo
 
 BASE = "https://api.overoption.io"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -360,25 +362,60 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     return resultados
 
 
+def _clave_correo(correo):
+    """El mismo correo escrito con mayúsculas o espacios es el mismo correo."""
+    return correo.strip().lower() if correo else None
+
+
 def _propagar_por_correo(resultados):
-    """Las ventas no emparejadas cuyo correo ya está emparejado con UNA sola
-    persona pasan a ser de esa persona (estado por_correo). No se propaga si
-    el correo sale con dos personas, ni si la persona sale con dos correos
-    (uno de los cruces puede ser falso y se extendería a todas sus compras)."""
-    por_correo = defaultdict(dict)
+    """Las compras de un correo cuya persona se sabe seguro pasan a ser de esa
+    persona (estado por_correo). Un cruce suelto puede ser falso (el comprador
+    se fue y entró otro a esa hora), así que el correo es de una persona si:
+    - POR_CORREO_MIN o más ventas emparejadas apuntan a ella y son al menos
+      POR_CORREO_PROPORCION de las del correo (el cruce en contra también
+      pasa a ella), o
+    - solo hay una emparejada y esa persona no sale con ningún otro correo.
+    Y nadie paga dos veces el mismo canal: si un correo compró canales que la
+    persona ya pagó con otro correo suyo (con más cruces), es otro comprador
+    (p. ej. un amigo que compra lo mismo a la vez) y sus cruces con ella eran
+    falsos: pasan a dudosos."""
+    seguras = defaultdict(Counter)  # correo -> {user_id: nº de ventas emparejadas}
+    canales_de = defaultdict(set)  # correo -> canales que compró
+    ref = {}
+    for r in resultados:
+        correo = _clave_correo(r["correo"])
+        if not correo:
+            continue
+        canales_de[correo].add(_clave_canal(r))
+        if r["estado_cruce"] == "emparejada":
+            seguras[correo][r["user_id"]] += 1
+            ref.setdefault(r["user_id"], r)
     correos_de = defaultdict(set)
-    for r in resultados:
-        if r["estado_cruce"] == "emparejada" and r["correo"]:
-            por_correo[r["correo"]][r["user_id"]] = r
-            correos_de[r["user_id"]].add(r["correo"])
-    for r in resultados:
-        quien = por_correo.get(r["correo"]) if r["correo"] else None
-        if r["estado_cruce"] == "emparejada" or not quien or len(quien) != 1:
+    for correo, cuantas in seguras.items():
+        for uid in cuantas:
+            correos_de[uid].add(correo)
+    candidatos = []
+    for correo, cuantas in seguras.items():
+        uid, n = cuantas.most_common(1)[0]
+        total = sum(cuantas.values())
+        if ((n >= POR_CORREO_MIN and n >= POR_CORREO_PROPORCION * total)
+                or (total == 1 and len(correos_de[uid]) == 1)):
+            candidatos.append((n, correo, uid))
+    dueno, pagado = {}, defaultdict(set)  # pagado: user_id -> canales de sus correos
+    falsos = set()  # (correo, user_id) de otro comprador
+    for n, correo, uid in sorted(candidatos, key=lambda c: (-c[0], c[1])):
+        if canales_de[correo] & pagado[uid]:
+            falsos.add((correo, uid))
             continue
-        if len(correos_de[next(iter(quien))]) != 1:
+        dueno[correo] = uid
+        pagado[uid] |= canales_de[correo]
+    for r in resultados:
+        if r["estado_cruce"] == "emparejada" and (_clave_correo(r["correo"]), r["user_id"]) in falsos:
+            r.update(user_id=None, nombre=None, username=None, estado_cruce="dudosa_varios")
+        uid = dueno.get(_clave_correo(r["correo"]))
+        if uid is None or (r["estado_cruce"] == "emparejada" and r["user_id"] == uid):
             continue
-        ref = next(iter(quien.values()))
-        r.update(user_id=ref["user_id"], nombre=ref["nombre"], username=ref["username"],
+        r.update(user_id=uid, nombre=ref[uid]["nombre"], username=ref[uid]["username"],
                  estado_cruce="por_correo")
 
 
@@ -388,8 +425,8 @@ def _clave_canal(r):
 
 
 def personas_por_correo(con, ventana_s=VENTANA_S):
-    """correo -> (nombre, username) de la persona de Telegram de ese correo."""
-    return {r["correo"]: (r["nombre"], r["username"])
+    """correo (en minúsculas) -> (nombre, username) de la persona de Telegram de ese correo."""
+    return {_clave_correo(r["correo"]): (r["nombre"], r["username"])
             for r in emparejar_ventas(con, ventana_s=ventana_s)
             if r["user_id"] is not None and r["correo"]}
 
@@ -410,14 +447,15 @@ def pagos_por_persona(con, ventana_s=VENTANA_S):
 
 
 def filas_clientes(con):
-    """Una fila por correo de comprador (no necesita Telegram): nº de compras,
-    total pagado, total recibido, nº de canales, primera y última compra."""
+    """Una fila por correo de comprador (en minúsculas; no necesita Telegram):
+    nº de compras, total pagado, total recibido, nº de canales, primera y
+    última compra."""
     por_correo = {}
     for v in con.execute("SELECT correo, importe, neto, content_uid, enlace, producto, pago_ts "
                          "FROM pagos_overoption WHERE es_propina = 0 AND estado = 'SUCCESS'"):
-        if not v["correo"]:
+        if not _clave_correo(v["correo"]):
             continue
-        d = por_correo.setdefault(v["correo"], {
+        d = por_correo.setdefault(_clave_correo(v["correo"]), {
             "n": 0, "pagado": 0.0, "recibido": 0.0, "canales": set(),
             "primera": None, "ultima": None})
         d["n"] += 1
