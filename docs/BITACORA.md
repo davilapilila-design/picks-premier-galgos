@@ -3,6 +3,22 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: correos por nombre (a mano, con el visto bueno del dueño)
+
+- Sin cambios de código. Un comprador grande no salía por ningún cruce: no
+  está en ningún canal (se sale tras cada carrera) y Telegram solo enseña a
+  quien sigue dentro. Su id salió buscando, en modo solo lectura («historico»,
+  sin permisos nuevos), un mensaje suyo que dio el dueño. Antes le asigné por
+  deducción el id de otra persona con el mismo nombre de pila: deshecho; no
+  asignar nunca un id sin verificarlo en Telegram.
+- Se leyeron (solo lectura) los nombres de los chats privados del dueño y se
+  compararon con los correos pendientes: apellido completo + nombre (o sus 4
+  primeras letras), o el @usuario dentro del correo; nunca un nombre suelto.
+  El dueño revisó la lista y se apuntaron 29 correos en «Correos por
+  identificar» (dos corrigen cruces míos: uno de eliminación que daba 31
+  compras a otra persona). Archivo temporal de nombres borrado al acabar.
+- Queda: 1.281 de 2.601 ventas con persona (78 de 235 correos).
+
 ## 2026-10-29 — Captación: eliminación en compras a la vez y correos que dice el dueño
 
 - Eliminación (`pagos._eliminar`, por vueltas con el cruce por correo): en
