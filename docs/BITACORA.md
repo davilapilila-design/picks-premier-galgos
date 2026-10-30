@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: el lector lee solo los enlaces de las ventas nuevas
+
+- Autorizado por el dueño: `messages.GetChatInviteImportersRequest` (solo
+  lectura, ya permitido en el modo a mano `invitaciones`) pasa también a los
+  modos `lector` y `simulacion` del candado. Sigue prohibido crear, cambiar,
+  anular o borrar enlaces y aceptar solicitudes.
+- Cada media hora el lector lee los enlaces pendientes (los de las ventas
+  nuevas que trae overoption), para que un canal nuevo se empareje el mismo
+  día sin lanzarlo a mano. Sin pendientes no pide nada a Telegram; si
+  Telegram pide esperar, para y sigue en la vuelta siguiente.
+- Commits: (este)
+
 ## 2026-10-30 — Captación: registro del canal con el enlace escrito de otra forma
 
 - Las 27 ventas del 29/10 salían sin canal: su enlace aún no se había leído

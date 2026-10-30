@@ -17,8 +17,11 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
   sin el visto bueno explícito del dueño, y nunca con nada que envíe,
   marque como leído, se una o salga de chats. Ampliaciones autorizadas por
   él (solo lectura): `channels.GetParticipantsRequest` (modos `suscriptores`
-  y `ventas`) y `channels.GetAdminLogRequest` (registro de entradas y salidas
-  de los canales de venta, ver `ventas.py`).
+  y `ventas`), `channels.GetAdminLogRequest` (registro de entradas y salidas
+  de los canales de venta, ver `ventas.py`) y
+  `messages.GetChatInviteImportersRequest` (quién se unió con cada enlace de
+  las ventas: modo `invitaciones` y, desde el 2026-10-30, el lector, ver
+  `invitaciones.py`).
 - El lector arranca siempre en **simulación**; pasarlo a real
   (`configurar.sh <instancia> lector real`, o `/arrancar` en el bot, que
   también lo pasa a real; `/pausar` lo vuelve a simulación: estado

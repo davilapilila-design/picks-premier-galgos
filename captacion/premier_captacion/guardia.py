@@ -59,7 +59,8 @@ REGISTRO = frozenset({"channels.GetAdminLogRequest"})
 
 # Quién se unió con cada enlace de invitación (lo mismo que se ve en la app
 # en Enlaces de invitación → «X se unieron»): solo lectura, autorizado por el
-# dueño el 2026-10-29, para emparejar cada venta de overoption con su persona.
+# dueño el 2026-10-29, para emparejar cada venta de overoption con su persona;
+# y el 2026-10-30, también dentro del lector (los enlaces de las ventas nuevas).
 INVITADOS = frozenset({"messages.GetChatInviteImportersRequest"})
 
 MODOS = {
@@ -67,8 +68,8 @@ MODOS = {
     "historico": LECTURA,
     # El lector en simulación no puede ni pedir cambios de carpetas: aunque
     # hubiera un fallo en el código, Telegram no recibiría nada que escriba.
-    "simulacion": LECTURA | REGISTRO | {"account.UpdateStatusRequest"},
-    "lector": LECTURA | REGISTRO | CARPETAS | {"account.UpdateStatusRequest"},
+    "simulacion": LECTURA | REGISTRO | INVITADOS | {"account.UpdateStatusRequest"},
+    "lector": LECTURA | REGISTRO | INVITADOS | CARPETAS | {"account.UpdateStatusRequest"},
     # Leer la lista de suscriptores del canal principal (solo lectura;
     # autorizado por el dueño el 2026-10-23), para no ofrecer la gratuita a
     # quien ya estaba dentro.

@@ -223,8 +223,8 @@ class ClienteVariosEnlaces:
         raise AssertionError(f"petición inesperada: {peticion}")
 
 
-@unittest.skipIf(types is None, "telethon no está instalado")
-class TestEjecutar(unittest.TestCase):
+class ConDosVentas(unittest.TestCase):
+    """Base: dos ventas con enlaces distintos (B la más reciente)."""
     A, B = "https://t.me/+AaAaAa111111", "https://t.me/+BbBbBb222222"
 
     def setUp(self):
@@ -243,11 +243,6 @@ class TestEjecutar(unittest.TestCase):
             "AaAaAa111111": types.ChatInviteAlready(chat=canal_tg(10, "Canal A")),
             "BbBbBb222222": types.ChatInviteAlready(chat=canal_tg(11, "Canal B"))})
 
-    def ejecutar(self, solo=None):
-        with contextlib.redirect_stdout(io.StringIO()):
-            return asyncio.run(invitaciones.ejecutar(
-                self.cfg, {}, lambda *a: self.cliente, lambda entorno: (1, "h", "sesion"), solo=solo))
-
     def leidos(self):
         con = db.abrir(self.cfg.db_path)
         try:
@@ -260,6 +255,14 @@ class TestEjecutar(unittest.TestCase):
         with con:
             invitaciones.guardar(con, enlace, 10, "Canal A", [], ahora=10 ** 6)
         con.close()
+
+
+@unittest.skipIf(types is None, "telethon no está instalado")
+class TestEjecutar(ConDosVentas):
+    def ejecutar(self, solo=None):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return asyncio.run(invitaciones.ejecutar(
+                self.cfg, {}, lambda *a: self.cliente, lambda entorno: (1, "h", "sesion"), solo=solo))
 
     def test_se_salta_los_enlaces_ya_leidos(self):
         self.marcar_leido(self.A)
@@ -281,6 +284,40 @@ class TestEjecutar(unittest.TestCase):
         self.cliente.por_hash["AaAaAa111111"] = errors.FloodWaitError(request=None, capture=2978)
         self.assertEqual(self.ejecutar(), invitaciones.PARADO_POR_TELEGRAM)
         self.assertEqual(self.leidos(), {self.B})  # B (la venta más reciente) se leyó antes
+
+
+@unittest.skipIf(types is None, "telethon no está instalado")
+class TestDentroDelLector(ConDosVentas):
+    """Cada vuelta del lector lee solo los enlaces pendientes, con su cliente."""
+
+    def vuelta(self):
+        con = db.abrir(self.cfg.db_path)
+        try:
+            return asyncio.run(invitaciones.una_vuelta(self.cliente, con))
+        finally:
+            con.close()
+
+    def test_lee_solo_los_pendientes(self):
+        self.marcar_leido(self.A)
+        self.vuelta()
+        self.assertEqual(self.cliente.comprobados, ["BbBbBb222222"])
+        self.assertEqual(self.leidos(), {self.A, self.B})
+
+    def test_sin_pendientes_no_pide_nada_a_telegram(self):
+        self.marcar_leido(self.A)
+        self.marcar_leido(self.B)
+        self.vuelta()
+        self.assertEqual(self.cliente.comprobados, [])
+
+    def test_si_telegram_pide_esperar_para_y_la_siguiente_vuelta_sigue(self):
+        self.cliente.por_hash["AaAaAa111111"] = errors.FloodWaitError(request=None, capture=2978)
+        self.vuelta()  # no rompe el lector
+        self.assertEqual(self.leidos(), {self.B})
+        self.cliente.por_hash["AaAaAa111111"] = types.ChatInviteAlready(chat=canal_tg(10, "Canal A"))
+        self.cliente.comprobados.clear()
+        self.vuelta()
+        self.assertEqual(self.cliente.comprobados, ["AaAaAa111111"])
+        self.assertEqual(self.leidos(), {self.A, self.B})
 
 
 if __name__ == "__main__":

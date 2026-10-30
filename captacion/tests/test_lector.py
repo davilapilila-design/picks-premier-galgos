@@ -64,7 +64,7 @@ class TestGuardia(unittest.TestCase):
     def test_invitaciones_solo_lee_quien_se_unio_con_cada_enlace(self):
         guardia.comprobar(peticion("messages.GetChatInviteImportersRequest"), "invitaciones")
         guardia.comprobar(peticion("messages.CheckChatInviteRequest"), "invitaciones")
-        for modo in ("historico", "simulacion", "lector", "suscriptores", "ventas"):
+        for modo in ("historico", "suscriptores", "ventas"):
             with self.subTest(modo), self.assertRaises(guardia.PeticionProhibida):
                 guardia.comprobar(peticion("messages.GetChatInviteImportersRequest"), modo)
         # Ni crear, cambiar, anular o borrar enlaces, ni aceptar solicitudes.
@@ -74,6 +74,17 @@ class TestGuardia(unittest.TestCase):
                        "channels.GetParticipantsRequest", "channels.GetAdminLogRequest"):
             with self.subTest(nombre), self.assertRaises(guardia.PeticionProhibida):
                 guardia.comprobar(peticion(nombre), "invitaciones")
+
+    def test_el_lector_tambien_lee_quien_se_unio_pero_no_toca_enlaces(self):
+        # Autorizado por el dueño el 2026-10-30: el lector lee los enlaces de las
+        # ventas nuevas, para emparejarlas el mismo día.
+        for modo in ("lector", "simulacion"):
+            guardia.comprobar(peticion("messages.GetChatInviteImportersRequest"), modo)
+            for nombre in ("messages.ExportChatInviteRequest", "messages.EditExportedChatInviteRequest",
+                           "messages.DeleteExportedChatInviteRequest", "messages.HideChatJoinRequestRequest",
+                           "messages.HideAllChatJoinRequestsRequest"):
+                with self.subTest(modo=modo, nombre=nombre), self.assertRaises(guardia.PeticionProhibida):
+                    guardia.comprobar(peticion(nombre), modo)
 
     def test_iniciar_sesion_solo_en_su_modo(self):
         guardia.comprobar(peticion("auth.SendCodeRequest"), "iniciar-sesion")

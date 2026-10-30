@@ -8,6 +8,11 @@ de quién se unió con él y a qué hora (en la app: Enlaces de invitación →
 después de pagar, también en los canales antiguos, de los que no hay
 registro de entradas (pagos.emparejar_ventas).
 
+Dentro del lector (autorizado el 2026-10-30): cada media hora lee los enlaces
+pendientes, los de las ventas nuevas que trae overoption, para que cada venta
+se empareje el mismo día (lectura_periodica). Si no hay pendientes, no pide
+nada a Telegram.
+
 Modo a mano: `lector.sh real invitaciones [trozo del enlace]` (con el lector
 parado: la sesión no se puede usar desde dos programas a la vez). Sin trozo,
 solo lee los enlaces pendientes; si Telegram pide esperar más de la cuenta,
@@ -25,6 +30,7 @@ MODO = "invitaciones"
 POR_PAGINA = 100
 PAUSA_S = 2  # entre enlaces, para no forzar a Telegram
 PARADO_POR_TELEGRAM = 3  # código de salida: Telegram pidió esperar más de ventas.ESPERA_MAXIMA_S
+LECTURA_CADA_S = 30 * 60  # dentro del lector
 
 
 # --- Base de datos -------------------------------------------------------------
@@ -102,11 +108,62 @@ async def leer_enlace(client, enlace):
     return canal, invitados
 
 
+async def leer_lista(client, con, lista):
+    """Lee y guarda los enlaces de `lista`, uno detrás de otro. Devuelve
+    (leidos, sin_canal, sin_admin, personas, parado); parado = Telegram pidió
+    esperar más de la cuenta (lo leído hasta ahí queda guardado)."""
+    from telethon import errors
+
+    leidos = sin_canal = sin_admin = personas = 0
+    for n, enlace in enumerate(lista, 1):
+        try:
+            canal, invitados = await leer_enlace(client, enlace)
+        except errors.FloodWaitError as e:
+            log.warning("Telegram pide esperar %s min: paro en el enlace %s/%s. Lo leído queda "
+                        "guardado y la próxima vez sigue por donde iba.", e.seconds // 60 + 1, n, len(lista))
+            return leidos, sin_canal, sin_admin, personas, True
+        leidos += 1
+        sin_canal += canal is None
+        sin_admin += canal is not None and invitados is None
+        personas += len(invitados or [])
+        with con:
+            guardar(con, enlace, getattr(canal, "id", None), getattr(canal, "title", None),
+                    invitados or [], time.time())
+        log.info("Enlace %s/%s: %s", n, len(lista),
+                 "no lleva a un canal tuyo (o ha caducado)" if canal is None
+                 else f"«{canal.title}», sin permiso para ver quién entró" if invitados is None
+                 else f"«{canal.title}», {len(invitados)} se unieron")
+        await asyncio.sleep(PAUSA_S)
+    return leidos, sin_canal, sin_admin, personas, False
+
+
+async def una_vuelta(client, con):
+    """Una vuelta dentro del lector: lee los enlaces pendientes, si los hay."""
+    lista = enlaces_pendientes(con)
+    if not lista:
+        return
+    leidos, _, _, personas, parado = await leer_lista(client, con, lista)
+    log.info("Enlaces de las ventas nuevas: %s de %s leídos, %s entradas%s", leidos, len(lista), personas,
+             " (Telegram pidió esperar: los demás, en la próxima vuelta)" if parado else "")
+
+
+async def lectura_periodica(client, con, cada=LECTURA_CADA_S):
+    """Dentro del lector: cada media hora, quién se unió con los enlaces de las
+    ventas nuevas, para emparejarlas el mismo día."""
+    await asyncio.sleep(900)  # que el lector arranque tranquilo
+    while True:
+        try:
+            await una_vuelta(client, con)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Error leyendo los enlaces de las ventas nuevas")
+        await asyncio.sleep(cada)
+
+
 async def ejecutar(cfg, entorno, crear_cliente, credenciales_api, solo=None):
     """Modo a mano «invitaciones»: quién se unió con cada enlace pendiente de
     las ventas (o con los que contienen `solo`, aunque ya estén leídos)."""
-    from telethon import errors
-
     api_id, api_hash, sesion = credenciales_api(entorno)
     con = db.abrir(cfg.db_path)
     todos = enlaces_de_ventas(con)
@@ -120,34 +177,13 @@ async def ejecutar(cfg, entorno, crear_cliente, credenciales_api, solo=None):
         return 1
     client = crear_cliente(sesion, api_id, api_hash, MODO)
     client.flood_sleep_threshold = ventas.ESPERA_MAXIMA_S
-    leidos = sin_canal = sin_admin = personas = 0
-    parado = False
     inicio = time.time()
     await client.connect()
     try:
         if not await client.is_user_authorized():
             log.error("La cuenta no está conectada: el dueño tiene que ejecutar conectar-cuenta.sh")
             return 2
-        for n, enlace in enumerate(lista, 1):
-            try:
-                canal, invitados = await leer_enlace(client, enlace)
-            except errors.FloodWaitError as e:
-                parado = True
-                log.warning("Telegram pide esperar %s min: paro en el enlace %s/%s. Lo leído queda "
-                            "guardado y la próxima vez sigue por donde iba.", e.seconds // 60 + 1, n, len(lista))
-                break
-            leidos += 1
-            sin_canal += canal is None
-            sin_admin += canal is not None and invitados is None
-            personas += len(invitados or [])
-            with con:
-                guardar(con, enlace, getattr(canal, "id", None), getattr(canal, "title", None),
-                        invitados or [], time.time())
-            log.info("Enlace %s/%s: %s", n, len(lista),
-                     "no lleva a un canal tuyo (o ha caducado)" if canal is None
-                     else f"«{canal.title}», sin permiso para ver quién entró" if invitados is None
-                     else f"«{canal.title}», {len(invitados)} se unieron")
-            await asyncio.sleep(PAUSA_S)
+        leidos, sin_canal, sin_admin, personas, parado = await leer_lista(client, con, lista)
     finally:
         await client.disconnect()
         con.close()
