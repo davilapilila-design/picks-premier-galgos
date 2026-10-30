@@ -162,6 +162,37 @@ class TestPorEnlace(unittest.TestCase):
         r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
         self.assertEqual(r["estado_cruce"], "sin_emparejar")
 
+    def test_enlace_nuevo_se_sabe_el_canal_por_el_registro(self):
+        # El enlace de la venta aún no se ha leído, pero el registro del canal
+        # ya tiene entradas con él: con eso se sabe el canal.
+        canal(self.con, 10, "Lunes Tarde 26.10")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        entra_movimiento(self.con, 10, 1, 500, 1005, "https://t.me/+NUEVO")
+        venta(self.con, "v1", "https://t.me/+NUEVO", 1000, producto="Lunes Tarde 7.00 - 3.00")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"], r["canal_id"]), ("emparejada", 500, 10))
+
+    def test_registro_del_canal_con_el_enlace_escrito_de_otra_forma(self):
+        # Pasó con un canal: el registro guardaba el mismo enlace con otro texto
+        # (se nota porque trae las mismas entradas, al segundo, que la lista).
+        canal(self.con, 10, "Canal X")
+        persona(self.con, 500, nombre="Ana", username="ana")
+        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTROTEXTO")  # Ana entró y se fue
+        entra_movimiento(self.con, 10, 2, 700, 5030, "https://t.me/+OTROTEXTO")  # Eva, como en la lista
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 500))
+
+    def test_no_cuentan_las_entradas_por_el_enlace_de_otro_producto(self):
+        canal(self.con, 10, "Canal X")
+        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 1030)])
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTRAVENTA")
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        venta(self.con, "v2", "https://t.me/+OTRAVENTA", 900, producto="Otro producto")
+        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 700))
+
     def test_tambien_cuenta_el_registro_del_canal_quien_se_fue(self):
         # La lista de quién se unió solo trae a quien sigue dentro; el registro
         # del canal (48 h, lo guarda el lector) trae también a quien se fue.

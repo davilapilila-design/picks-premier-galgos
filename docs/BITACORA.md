@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: registro del canal con el enlace escrito de otra forma
+
+- Las 27 ventas del 29/10 salían sin canal: su enlace aún no se había leído
+  y el registro del canal guardaba las entradas con otro texto de enlace
+  (las mismas 30 personas, al segundo, que la lista de Telegram del enlace
+  de la venta; solo pasa en 1 de 59 canales).
+- Ahora un enlace del registro cuenta como el de la venta si trae entradas
+  idénticas a la lista de un enlace de ese canal; uno distinto (p. ej. de
+  regalo) sigue sin contar.
+- Comprobado con las ventas conocidas: el orden en que se paga y se entra
+  coincide en el 91 % de los pares a menos de 60 s (no basta para emparejar
+  por orden); retraso pago→entrada: mediana 7 s, p90 32 s.
+- Commits: (este)
+
 ## 2026-10-30 — Captación: copia diaria a Google Drive de lo que usa el cruce
 
 - Lo pidió el dueño: Telegram borra el registro de los canales a las 48 h y

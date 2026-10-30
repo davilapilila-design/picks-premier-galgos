@@ -308,11 +308,24 @@ def _invitados_por_enlace(con):
     inv = defaultdict(set)
     for f in con.execute("SELECT enlace, user_id, ts FROM pagos_invitados"):
         inv[f["enlace"]].add((f["user_id"], f["ts"]))
-    leidos = set(inv)
-    for f in con.execute("SELECT enlace, user_id, ts FROM ventas_movimientos "
+    lista = {e: set(v) for e, v in inv.items()}  # lo que dice Telegram, antes de añadir el registro
+    canal_de = {f["enlace"]: f["canal_id"] for f in con.execute(
+        "SELECT enlace, canal_id FROM pagos_enlaces WHERE canal_id IS NOT NULL")}
+    registro, canal_registro = defaultdict(set), {}  # enlace del registro -> entradas / canal
+    for f in con.execute("SELECT canal_id, enlace, user_id, ts FROM ventas_movimientos "
                          "WHERE tipo = 'entra' AND enlace IS NOT NULL"):
-        if f["enlace"] in leidos:
-            inv[f["enlace"]].add((f["user_id"], f["ts"]))
+        registro[f["enlace"]].add((f["user_id"], f["ts"]))
+        canal_registro[f["enlace"]] = f["canal_id"]
+    for enlace, entradas in registro.items():
+        if enlace in lista:
+            inv[enlace] |= entradas
+            continue
+        # El registro a veces guarda el mismo enlace escrito de otra forma (pasó
+        # el 29/10): se nota porque trae entradas idénticas, al segundo, a las
+        # de la lista de un enlace de ese canal. Otro enlace (p. ej. de regalo) no.
+        for leido, de_telegram in lista.items():
+            if canal_de.get(leido) == canal_registro[enlace] and entradas & de_telegram:
+                inv[leido] |= entradas
     return {e: sorted(v, key=lambda x: x[1]) for e, v in inv.items()}
 
 
