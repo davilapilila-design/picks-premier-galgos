@@ -1,0 +1,16 @@
+# Sube a Google Drive la copia de lo que usa el cruce de ventas (copia-drive.sh).
+# La lanza captacion-copia@<instancia>.timer una vez al día.
+#   systemctl start captacion-copia@real      (copia ahora mismo)
+#   journalctl -u captacion-copia@real -n 20
+[Unit]
+Description=Premier Galgos captacion: copia diaria a Google Drive (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Como root: rclone y su acceso a Drive solo los tiene root; la parte de
+# Python corre como el usuario captacion (ver copia-drive.sh).
+ExecStart=/bin/bash /opt/premier-captacion/copia-drive.sh %i
+TimeoutStartSec=30m
+Nice=15

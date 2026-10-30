@@ -124,7 +124,7 @@ rm -rf "$DESTINO/premier_captacion.nuevo"
 cp -r "$TMP/captacion/premier_captacion" "$DESTINO/premier_captacion.nuevo"
 rm -rf "$DESTINO/premier_captacion"
 mv "$DESTINO/premier_captacion.nuevo" "$DESTINO/premier_captacion"
-for script in instalar configurar lector conectar-cuenta leer-historico; do
+for script in instalar configurar lector conectar-cuenta leer-historico copia-drive; do
     install -m 755 "$TMP/captacion/deploy/$script.sh" "$DESTINO/"
 done
 install -m 644 "$TMP/captacion/deploy/instancia.env.example" "$DESTINO/"
@@ -239,6 +239,14 @@ if [ "$VENV_OK" = 1 ] && [ -f "$DIR_CONFIG/overoption.env" ]; then
 else
     echo "   ℹ️  Ventas de overoption sin activar (faltan las credenciales:"
     echo "       bash $DESTINO/configurar.sh $INSTANCIA overoption)."
+fi
+# Copia diaria a Google Drive de lo que usa el cruce de ventas: solo si hay
+# rclone (configurado para root) y destino en el .env (CAPTACION_COPIA_DRIVE).
+if [ "$VENV_OK" = 1 ] && [ -n "$(valor_de CAPTACION_COPIA_DRIVE)" ] && command -v rclone >/dev/null; then
+    systemctl enable --quiet --now "captacion-copia@$INSTANCIA.timer"
+    echo "   copia diaria a Drive: activada (04:45) ✓"
+else
+    echo "   ℹ️  Copia diaria a Drive sin activar (falta rclone o CAPTACION_COPIA_DRIVE en $ENV)."
 fi
 if [ "$VENV_OK" = 1 ] && systemctl is-enabled --quiet "captacion-lector@$INSTANCIA" 2>/dev/null; then
     systemctl restart "captacion-lector@$INSTANCIA"

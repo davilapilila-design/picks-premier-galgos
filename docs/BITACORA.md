@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: copia diaria a Google Drive de lo que usa el cruce
+
+- Lo pidió el dueño: Telegram borra el registro de los canales a las 48 h y
+  la lista de «quién se unió» pierde a quien se va; todo eso solo estaba en
+  la base de la VM (que no entraba en ninguna copia).
+- `copia.py` saca la base entera (copia coherente con `backup`), un CSV por
+  tabla del cruce (ventas, enlaces, quién se unió, registro, miembros,
+  personas, chats, manuales, usuarios) con las fechas también en hora de
+  España, el resultado del cruce y un LEEME. `deploy/copia-drive.sh` lo sube
+  con rclone (de root) a `CAPTACION_COPIA_DRIVE/<instancia>/<día>` y a
+  `.../ultima`; timer `captacion-copia@` a las 04:45. La sesión de Telegram
+  no está en la base y nunca se sube.
+- Commits: (este)
+
 ## 2026-10-30 — Captación: por nombre automático y registro del canal en el cruce
 
 - El cruce usaba solo la lista de «quién se unió» de cada enlace (solo trae

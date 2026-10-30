@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer: copia diaria de captacion a Google Drive (%i), 04:45 hora de España
+
+[Timer]
+OnCalendar=*-*-* 04:45:00 Europe/Madrid
+RandomizedDelaySec=5m
+# Si la VM estaba apagada a esa hora, se hace al arrancar.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
