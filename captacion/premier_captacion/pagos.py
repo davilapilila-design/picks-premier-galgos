@@ -329,6 +329,19 @@ def _invitados_por_enlace(con):
     return {e: sorted(v, key=lambda x: x[1]) for e, v in inv.items()}
 
 
+def _quien_entro(con, entradas, invitados, por_enlace):
+    """canal_id -> (desde_ts, {user_id}) de los canales con registro: desde
+    cuándo se sabe todo el que entra (el registro trae también a quien se fue)
+    y quién entró alguna vez."""
+    desde = {f["canal_id"]: f["desde"] for f in con.execute(
+        "SELECT canal_id, MIN(ts) AS desde FROM ventas_movimientos GROUP BY canal_id")}
+    quienes = {cid: {uid for uid, _ in entradas.get(cid, [])} for cid in desde}
+    for enlace, lista in invitados.items():
+        if por_enlace.get(enlace) in quienes:
+            quienes[por_enlace[enlace]] |= {uid for uid, _ in lista}
+    return {cid: (desde[cid], quienes[cid]) for cid in desde}
+
+
 def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     """Para cada venta de overoption, busca a la persona de Telegram que entró
     después de pagar (hasta ventana_s, con ANTES_S de margen por los relojes):
@@ -342,6 +355,7 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     entradas = _entradas_por_canal(con)
     invitados = _invitados_por_enlace(con)
     personas = _personas(con)
+    registro = _quien_entro(con, entradas, invitados, por_enlace)
 
     filtro = "WHERE es_propina = 0 AND estado = 'SUCCESS'" if solo_ventas else ""
     ventas = []  # (venta, canal_id, grupo, entradas cerca o None si no se sabe el canal)
@@ -361,7 +375,10 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
     base = []
     candidatos = {}  # id de venta dudosa -> quiénes entraron a esa hora
     grupos = {}  # id de venta -> canal (o enlace si no se sabe el canal)
+    entraron = {}  # id de venta -> quiénes entraron alguna vez en su canal (si se sabe entero)
     for v, canal_id, grupo, cerca in ventas:
+        if canal_id in registro and v["pago_ts"] is not None and v["pago_ts"] >= registro[canal_id][0]:
+            entraron[v["id"]] = registro[canal_id][1]
         user_id = None
         quienes = list(dict.fromkeys(uid for uid, _ in cerca or []))  # sin repetir usuario
         if cerca is None:
@@ -402,7 +419,7 @@ def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
             if r["id"] in eliminadas:
                 r.update(user_id=eliminadas[r["id"]], **_quien(personas, eliminadas[r["id"]]),
                          estado_cruce="por_eliminacion")
-        _propagar_por_correo(resultados, personas, manual, nombre)
+        _propagar_por_correo(resultados, personas, manual, nombre, entraron)
         nuevas = {vid: uid for vid, uid in _eliminar(resultados, candidatos, grupos).items()
                   if vid not in eliminadas}
         if not nuevas:
@@ -479,7 +496,7 @@ def _clave_correo(correo):
     return correo.strip().lower() if correo else None
 
 
-def _propagar_por_correo(resultados, personas, manual=None, nombre=None):
+def _propagar_por_correo(resultados, personas, manual=None, nombre=None, entraron=None):
     """Las compras de un correo cuya persona se sabe pasan a ser de esa
     persona (estado por_correo, o manual si lo dijo el dueño: `manual` es
     {correo: user_id} y manda sobre todo lo demás). Un cruce suelto puede ser
@@ -488,19 +505,25 @@ def _propagar_por_correo(resultados, personas, manual=None, nombre=None):
     - POR_CORREO_MIN o más ventas seguras (emparejadas o por eliminación)
       apuntan a ella y son al menos POR_CORREO_PROPORCION de las del correo
       (el cruce en contra también pasa a ella), o
-    - solo hay una segura y esa persona no sale con ningún otro correo.
+    - solo hay una segura, esa persona no sale con ningún otro correo y no
+      falta en ningún canal que compró el correo del que se sabe todo el que
+      entró (`entraron`: id de venta -> quiénes entraron alguna vez en su
+      canal): quien compra entra.
     Y nadie paga dos veces el mismo canal: si un correo compró canales que la
     persona ya pagó con otro correo suyo (con más cruces), es otro comprador
     (p. ej. un amigo que compra lo mismo a la vez) y sus cruces con ella eran
     falsos: pasan a dudosos."""
     manual = manual or {}
+    entraron = entraron or {}
     seguras = defaultdict(Counter)  # correo -> {user_id: nº de ventas seguras}
     canales_de = defaultdict(set)  # correo -> canales que compró
+    ventas_de = defaultdict(list)  # correo -> ids de sus ventas
     for r in resultados:
         correo = _clave_correo(r["correo"])
         if not correo:
             continue
         canales_de[correo].add(_clave_canal(r))
+        ventas_de[correo].append(r["id"])
         if r["estado_cruce"] in SEGURAS:
             seguras[correo][r["user_id"]] += 1
     dueno, pagado = {}, defaultdict(set)  # pagado: user_id -> canales de sus correos
@@ -531,7 +554,8 @@ def _propagar_por_correo(resultados, personas, manual=None, nombre=None):
         uid, n = cuantas.most_common(1)[0]
         total = sum(cuantas.values())
         if ((n >= POR_CORREO_MIN and n >= POR_CORREO_PROPORCION * total)
-                or (total == 1 and len(correos_de[uid]) == 1)):
+                or (total == 1 and len(correos_de[uid]) == 1
+                    and all(uid in entraron.get(vid, {uid}) for vid in ventas_de[correo]))):
             candidatos.append((n, correo, uid))
     falsos = set()  # (correo, user_id) de otro comprador
     for n, correo, uid in sorted(candidatos, key=lambda c: (-c[0], c[1])):

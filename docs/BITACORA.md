@@ -3,6 +3,19 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-30 — Captación: quien compra entra (un solo cruce no vale si falta en un canal)
+
+- Al apuntar el dueño 8 correos a mano, las eliminaciones en cadena dieron
+  un correo de 34 compras a una persona por una sola eliminación de
+  septiembre, aunque ese correo compró hoy dos canales en los que esa
+  persona no entró.
+- Ahora, cuando un correo se da a alguien por una sola venta segura, esa
+  persona tiene que haber entrado alguna vez en todos los canales que compró
+  el correo de los que se sabe todo el que entra (los que tienen registro,
+  desde su primera entrada). Con los datos reales cambian 3 correos (61
+  compras), que vuelven a dudosas; nada más.
+- Commits: (este)
+
 ## 2026-10-30 — Captación: el lector lee solo los enlaces de las ventas nuevas
 
 - Autorizado por el dueño: `messages.GetChatInviteImportersRequest` (solo

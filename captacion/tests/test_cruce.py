@@ -443,6 +443,27 @@ class TestEliminacion(unittest.TestCase):
         self.assertEqual((rs["p2"]["estado_cruce"], rs["p2"]["user_id"]), ("dudosa_varios", None))
         self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
 
+    def test_si_no_entro_nunca_en_otro_canal_que_compro_su_correo_no_vale(self):
+        # luis@ compra después el Canal Y, del que se tiene el registro entero
+        # (desde la venta de Ana), y Luis no entra nunca: quien quedó en el
+        # Canal X no era el comprador.
+        venta(self.con, "l2", "https://t.me/+Y", 7000, correo="luis@example.com")
+        rs = self.cruce()
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("dudosa_varios", None))
+        self.assertIsNone(rs["l2"]["user_id"])
+
+    def test_si_entro_en_ese_canal_aunque_fuera_tarde_vale(self):
+        venta(self.con, "l2", "https://t.me/+Y", 7000, correo="luis@example.com")
+        entra_movimiento(self.con, 11, 9, 501, 20000, "https://t.me/+Y")
+        rs = self.cruce()
+        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
+        self.assertEqual((rs["l2"]["estado_cruce"], rs["l2"]["user_id"]), ("por_correo", 501))
+
+    def test_compra_de_antes_del_registro_del_canal_no_cuenta(self):
+        # De antes del registro solo se sabe quién sigue dentro: no estar no dice nada.
+        venta(self.con, "l2", "https://t.me/+Y", 500, correo="luis@example.com")
+        self.assertEqual(self.cruce()["l1"]["user_id"], 501)
+
     def test_la_dudosa_trae_quien_queda_posible(self):
         venta(self.con, "p1", self.L, 5020, correo="pepe@example.com")
         rs = self.cruce()
