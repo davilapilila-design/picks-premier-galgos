@@ -3,6 +3,27 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-10-31 — `/stats` y resumen semanal: cuota media
+- Pedido del dueño: añadir la cuota media al mensaje de estadísticas.
+- `calcularEstadisticasPeriodo_` (Estadisticas.gs): media de la cuota
+  PUBLICADA (`cuota` de `apuestas`; en combinadas, la conjunta) de las
+  apuestas resueltas del periodo, ganadas y perdidas, sin ocultas. Sin
+  gemela/trío: no tienen cuota previa, solo dividendo y solo si ganan -
+  meterlas inflaría la media; si hay alguna en el periodo el texto añade
+  "(sin gemela/trío)". `obtenerFilasExoticasNormalizadas_` (Dashboard.gs)
+  marca esas filas con `esExotica: true`. Si no hay ninguna cuota, la línea
+  no sale.
+- Rama de partida: `fix-horas-resultados` (= producción v41, aún sin
+  fusionar en `main`) - `main` no tenía el aviso de duplicados ni el enlace
+  nuevo de Telegram que sí están desplegados.
+- Verificado: `test_estadisticas` (con casos nuevos de cuota media) OK en
+  local y en Apps Script; previsualización con datos reales de "/stats 31"
+  = el mensaje del dueño + "Cuota media: 4,12".
+- Código subido a Apps Script (HEAD: lo usa ya el resumen semanal de los
+  lunes, que corre con disparador). **Pendiente**: nueva versión + desplegar
+  para que el comando `/stats` (webhook, despliegue v41) la muestre.
+- Commits: (este commit)
+
 ## 2026-10-29 (cont. 2) — `resultados_galgos` llena: el job no podía escribir filas nuevas
 - **Qué fallaba**: desde las 17:35 de Madrid cada pasada de `picks-resultados` acababa en
   «exceeds grid limits». La pestaña tenía 1012 filas, todas ocupadas, y el job escribía las

@@ -364,6 +364,9 @@ function obtenerFilasExoticasNormalizadas_() {
       stake: fila[index['stake_total']],
       cuota: fila[index['resultado_final']] === 'gano' ? fila[index['dividendo']] : '',
       cuotaFinal: '',
+      // Sin cuota previa (solo dividendo, y solo si gana): /stats las deja
+      // fuera de la cuota media (Estadisticas.gs).
+      esExotica: true,
       fechaPick: fila[index['fecha_pick']],
       canodromo: fila[index['hipodromo']],
       galgo: nombre + ' ' + combinaciones,

@@ -71,6 +71,17 @@ function calcularEstadisticasPeriodo_(filas, rango, mensajes) {
 
   const ganadas = resueltas.filter(function (f) { return f.resultadoFinal === 'gano'; }).length;
   const metricas = calcularMetricas_(resueltas);
+
+  // Cuota media (pedido del dueño 2026-10-31): media de la cuota PUBLICADA
+  // de las resueltas (ganadas y perdidas; en combinadas, la conjunta). Sin
+  // gemela/trío: no tienen cuota previa, solo el dividendo y solo cuando
+  // ganan - meterlas inflaría la media con los aciertos.
+  const exoticas = resueltas.filter(function (f) { return f.esExotica === true; }).length;
+  const cuotas = resueltas.filter(function (f) {
+    return f.esExotica !== true && esNumerico_(f.cuota) && f.cuota > 0;
+  }).map(function (f) { return f.cuota; });
+  const cuotaMedia = cuotas.length === 0 ? null :
+    cuotas.reduce(function (a, b) { return a + b; }, 0) / cuotas.length;
   return {
     resueltas: resueltas.length,
     ganadas: ganadas,
@@ -78,6 +89,8 @@ function calcularEstadisticasPeriodo_(filas, rango, mensajes) {
     unidadesNetas: metricas.hayDatos ? metricas.unidadesNetas : 0,
     roiPct: metricas.hayDatos ? metricas.roiPct : 0,
     pctAciertos: metricas.hayDatos ? metricas.pctAciertos : 0,
+    cuotaMedia: cuotaMedia,
+    exoticasSinCuota: exoticas,
     pendientes: pendientes,
     sinRegistrar: picksSinRegistrar_(mensajes || [], rango),
   };
@@ -131,13 +144,18 @@ function construirTextosEstadisticas_(titulo, rango, stats) {
   if (stats.resueltas === 0) {
     principal = cabecera + '\nSin apuestas resueltas.';
   } else {
-    principal = [
+    const lineas = [
       cabecera,
       'Apuestas resueltas: ' + stats.resueltas + ' (' + stats.ganadas + ' ganadas, ' + stats.perdidas + ' perdidas)',
       'Unidades: ' + formatearNumeroEs_(stats.unidadesNetas, 2, true) + ' UD',
       'ROI: ' + formatearNumeroEs_(stats.roiPct, 1, true) + ' %',
       'Acierto: ' + formatearNumeroEs_(stats.pctAciertos, 1, false) + ' %',
-    ].join('\n');
+    ];
+    if (stats.cuotaMedia != null) {
+      lineas.push('Cuota media: ' + formatearNumeroEs_(stats.cuotaMedia, 2, false) +
+        (stats.exoticasSinCuota > 0 ? ' (sin gemela/trío)' : ''));
+    }
+    principal = lineas.join('\n');
   }
   const avisos = [];
   if (stats.pendientes > 0) avisos.push('Pendientes de resultado: ' + stats.pendientes);
@@ -287,6 +305,22 @@ function test_estadisticas() {
   textos = construirTextosEstadisticas_('Último día', { desde: '2026-09-25', hasta: '2026-09-25' },
     calcularEstadisticasPeriodo_([], semana));
   assertIguales_(textos[0], '📊 Último día · 25/09\nSin apuestas resueltas.', 'periodo vacio');
+
+  // Cuota media: solo resueltas, sin ocultas ni gemela/trío; 2 decimales.
+  const conCuotas = [
+    { messageId: '1', oculto: false, resultadoFinal: 'gano', unidadesNetas: 3, stake: 1, cuota: 4, fechaPick: d('2026-09-21') },
+    { messageId: '2', oculto: false, resultadoFinal: 'perdio', unidadesNetas: -1, stake: 1, cuota: 2.5, fechaPick: d('2026-09-22') },
+    { messageId: '3', oculto: false, resultadoFinal: 'perdio', unidadesNetas: -1, stake: 1, cuota: 3.2, fechaPick: d('2026-09-23') },
+    { messageId: '4', oculto: false, resultadoFinal: 'pendiente', unidadesNetas: '', stake: 1, cuota: 50, fechaPick: d('2026-09-23') },
+    { messageId: '5', oculto: true, resultadoFinal: 'gano', unidadesNetas: 9, stake: 1, cuota: 10, fechaPick: d('2026-09-23') },
+    { messageId: '6', oculto: false, resultadoFinal: 'gano', unidadesNetas: 30, stake: 1, cuota: 31, esExotica: true, fechaPick: d('2026-09-24') },
+  ];
+  const sc = calcularEstadisticasPeriodo_(conCuotas, semana);
+  assertIguales_(Math.round(sc.cuotaMedia * 100) / 100, 3.23, 'cuota media (4+2,5+3,2)/3, sin pendiente/oculta/exotica');
+  textos = construirTextosEstadisticas_('Resumen semanal', semana, sc);
+  assertIguales_(textos[0].split('\n')[5], 'Cuota media: 3,23 (sin gemela/trío)', 'texto cuota media con exotica');
+  textos = construirTextosEstadisticas_('Resumen semanal', semana, calcularEstadisticasPeriodo_(conCuotas.slice(0, 3), semana));
+  assertIguales_(textos[0].split('\n')[5], 'Cuota media: 3,23', 'texto cuota media sin exotica');
 
   // Picks sin registrar (revision_manual / error), caso real msg 519.
   const mensajes = [
