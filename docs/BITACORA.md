@@ -16,7 +16,11 @@ Entradas más recientes arriba.
 - Diseño en `docs/superpowers/specs/2026-11-01-cuentas-por-cliente-design.md`
   (cruce nuevo con las gratis fuera, mínimo 2 compras, veto por nombre y
   examen fijo contra los correos que confirmó el dueño). Sin código aún.
-- Commits: `c88ad82`
+- 2026-11-02, a petición del dueño: un correo necesita 3 compras buenas
+  (no 2) y el 80 % de las comprobables; la comprobación sigue siempre, con
+  pestaña «Correos · comprobación» y aviso del bot al momento si un correo
+  pasa a «revisar».
+- Commits: `c88ad82`, (este commit)
 
 ## 2026-10-30 — Captación: quien compra entra (un solo cruce no vale si falta en un canal)
 

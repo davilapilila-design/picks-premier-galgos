@@ -24,6 +24,13 @@ venta desde el 22/07/2026:
 5. **Cruce: forma A** (pruebas por correo, automático solo con prueba fuerte;
    lo dudoso va a la lista del dueño). Descartadas: parchear el cruce actual
    (B) y dejarlo todo en manos del dueño (C).
+6. **Más protección (2026-11-02):** un correo solo se da a alguien con 3
+   compras buenas o más y al menos el 80 % de las comprobables buenas (no
+   basta con 2), y la comprobación sigue siempre, también después de
+   asignarlo y en los que confirmó el dueño. Pestaña por correo con compras,
+   comprobables, buenas y malas.
+7. **Aviso:** si un correo pasa a «revisar», el bot se lo dice al dueño al
+   momento (una vez por correo) y su fila sale en rojo en el Sheet.
 
 ## Hechos medidos (2026-11-01, base real, solo lectura)
 - **Gratis y pagadas entran con el mismo enlace.** Las 259 entradas a los
@@ -85,22 +92,60 @@ vueltas, un solo cruce que da el correo, etc.):
    `VENTANA_S` (180 s) después del pago. Nunca antes (`ANTES_S` = 0). Fuera:
    quien tenía una gratis de ese canal (punto 2) y quien ya tiene asignada
    otra compra de ese canal (nadie paga dos veces).
-2. **Por correo:** para cada persona, en cuántas compras del correo sale como
-   candidata (n). El correo es de esa persona si:
-   - n ≥ 2,
-   - n ≥ 80 % de las compras del correo que tienen candidatos,
-   - la segunda persona sale como mucho en la mitad de compras que ella,
+2. **Por correo:** cada compra del correo se mira frente a cada persona
+   (definiciones en el punto 3 bis: comprobable, buena, mala). El correo es
+   de esa persona si:
+   - tiene 3 buenas o más,
+   - las buenas son al menos el 80 % de sus comprobables,
+   - la segunda persona tiene como mucho la mitad de buenas que ella,
    - y el nombre no choca.
 3. **Nombre que choca:** el correo trae un nombre de pila reconocible y el
    nombre de Telegram trae otro nombre de pila distinto (p. ej. «victor…» y
    «Raúl»). Entonces nunca se asigna solo: va a la lista del dueño, con la
    prueba por hora al lado.
 4. **Nombre que casa** (como hoy `por_nombre`): asigna el correo salvo que la
-   hora lo contradiga (otra persona cumple el punto 2).
+   hora lo contradiga (otra persona cumple el punto 2). Queda en «vigilar»
+   hasta que tenga 3 buenas (punto 3 bis).
 5. **Lo que diga el dueño** (pestaña «Correos por identificar») manda sobre
    todo.
 6. **El resto** queda sin persona y va a la lista del dueño con sus
    candidatos, ordenada por € gastados.
+
+### 3 bis. Comprobación continua y avisos
+Cada compra de un correo frente a una persona (la asignada o, si no hay, la
+mejor candidata):
+- **Comprobable:** se puede ver si esa persona entró en ese canal después del
+  pago: hay registro del canal a esa hora (desde el 27/10) o la persona sigue
+  en el canal (lista del enlace o miembros con fecha de entrada).
+- **Buena:** comprobable y la persona entró entre 0 s y `VENTANA_S` después
+  del pago.
+- **Mala:** comprobable y la persona no entró en esa ventana (entró a otra
+  hora o, con registro, no entró).
+- Si la persona ya estaba dentro antes del pago (p. ej. por una gratis), esa
+  compra no cuenta ni como buena ni como mala: queda sin comprobar.
+
+En cada sincronización se recalcula todo, también para los correos ya
+asignados y los que confirmó el dueño. Estado del correo:
+- **OK:** cumple la regla del punto 3.2 (o lo confirmó el dueño) y no salta
+  ningún aviso.
+- **Vigilar:** tiene persona pero aún no llega a la regla, o tiene alguna
+  mala suelta.
+- **Revisar:** salta cualquiera de estos avisos:
+  - 2 compras comprobables seguidas que son malas;
+  - las buenas bajan del 80 % de las comprobables;
+  - ninguna buena en sus últimas 5 compras (p. ej. 2 buenas al principio y
+    luego nada en 10 o 20 compras).
+
+Un correo en «revisar» **no pierde a su persona** (sus compras siguen
+contando para ella) hasta que el dueño lo mire: escribe otra persona o «no»
+en «Correos por identificar», o lo deja como está. Al pasar a «revisar», el
+bot avisa al dueño al momento con el correo, la persona y el motivo; una vez
+por correo (tabla nueva con el último estado avisado), y no vuelve a avisar
+de ese correo hasta que haya estado en OK y vuelva a caer.
+
+Pestaña «Correos · comprobación», una fila por correo: correo, usuario de
+Telegram, id de Telegram, compras, comprobables, buenas, malas, fecha de la
+última buena, estado y motivo. Las filas en «revisar» en rojo.
 
 ### 4. Cuentas por persona
 Por persona de Telegram:
@@ -118,8 +163,10 @@ Los correos sin persona también salen, una fila por correo, con sus compras,
 Pestaña nueva «Clientes · cuentas» en el Sheet de captación, una fila por
 persona: nombre y @ de Telegram, sus correos, compras, € pagados, canales
 pagados, canales gratis, canales sin explicar, apuestas, aciertos, unidades,
-simulación 10 € y balance. Debajo, los correos sin persona. Se reescribe con
-la sincronización del Sheet que ya existe (`captacion-sheet`).
+simulación 10 € y balance. Debajo, los correos sin persona. Y la pestaña
+«Correos · comprobación» del punto 3 bis. Las dos se reescriben con la
+sincronización del Sheet que ya existe (`captacion-sheet`), que es también la
+que comprueba los avisos.
 
 ### 6. Examen fijo del cruce
 Un comando que calcula el cruce sin las respuestas del dueño y lo compara con
@@ -148,5 +195,8 @@ de cualquier cambio en el cruce y el resultado va a la bitácora.
 - `unittest` con datos inventados para cada pieza: apuestas de un canal,
   gratis por privado y por canal, cada regla del cruce (incluidos nombre que
   choca, entrada antes del pago, gratis que no es candidata, sombra de la
-  segunda persona) y las cuentas.
+  segunda persona, menos de 3 buenas) y las cuentas.
+- La comprobación continua: buena, mala y sin comprobar; cada aviso de
+  «revisar»; que se avisa una sola vez por correo y vuelve a avisar tras
+  pasar por OK; que un correo en «revisar» conserva su persona.
 - El examen del punto 6 sobre la base real, antes de instalar.
