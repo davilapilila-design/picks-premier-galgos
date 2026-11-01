@@ -55,6 +55,11 @@ class TestResumenCorreo(unittest.TestCase):
         self.assertEqual(r["estado"], cp.REVISAR)
         self.assertIn("últimas 5", r["motivo"])
 
+    def test_sin_ningun_dato_no_es_revisar(self):
+        # Compras antiguas en las que no se puede comprobar nada: falta de
+        # datos, no algo raro (el dueño lo confirmó).
+        self.assertEqual(self.resumen([S] * 8, origen="manual")["estado"], cp.OK)
+
     def test_sin_persona(self):
         self.assertEqual(self.resumen([B, B], origen=None)["estado"], cp.SIN_ASIGNAR)
 

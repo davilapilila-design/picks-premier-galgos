@@ -133,11 +133,17 @@ asignados y los que confirmó el dueño. Estado del correo:
 - **Revisar:** salta cualquiera de estos avisos:
   - 2 compras comprobables seguidas que son malas;
   - las buenas bajan del 80 % de las comprobables;
-  - ninguna buena en sus últimas 5 compras (p. ej. 2 buenas al principio y
-    luego nada en 10 o 20 compras).
+  - tuvo buenas, pero ninguna en sus últimas 5 compras (p. ej. 2 buenas al
+    principio y luego nada en 10 o 20 compras). Sin ninguna buena es falta
+    de datos (compras antiguas sin forma de comprobar), no algo raro: medido
+    el 2026-11-02, marcaba 7 correos confirmados por el dueño sin ningún dato.
 
-Un correo en «revisar» **no pierde a su persona** (sus compras siguen
-contando para ella) hasta que el dueño lo mire: escribe otra persona o «no»
+Los correos que se dan solos (por compras o por nombre) se guardan (tabla
+`pagos_asignados`) y conservan su persona en las siguientes
+sincronizaciones aunque dejen de cumplir la regla; el «no» del dueño bloquea
+cualquier asignación automática de ese correo. Un correo en «revisar» **no
+pierde a su persona** (sus compras siguen contando para ella) hasta que el
+dueño lo mire: escribe otra persona o «no»
 en «Correos por identificar», o lo deja como está. Al pasar a «revisar», el
 bot avisa al dueño al momento con el correo, la persona y el motivo; una vez
 por correo (tabla nueva con el último estado avisado), y no vuelve a avisar

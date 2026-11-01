@@ -3,6 +3,30 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-02 — Captación: cruce nuevo, comprobación continua y avisos
+
+- El dueño vio emparejamientos sin sentido (un correo con un nombre dado a
+  una persona de Telegram con otro). Causa: un solo cruce por hora daba el
+  correo entero, el margen de 30 s antes del pago colaba a quien ya tenía
+  el enlace y el nombre no se usaba en contra.
+- `cruce.py` sustituye la eliminación por vueltas: un correo es de una
+  persona con 3 compras buenas o más (entró 0-180 s después de pagar), el
+  80 % de las comprobables, sin sombra de otra persona, sin nombre que
+  choque (`nombres.choca`) y sin canales ya pagados con otro correo. El
+  «no» del dueño bloquea también la asignación por compras.
+- Examen fijo (`python -m premier_captacion.cruce examen`, solo lectura)
+  contra los 42 correos confirmados por el dueño: el cruce anterior, 287
+  compras bien, 2 mal y 431 sin persona; el nuevo, 585 bien, 0 mal y 135
+  sin persona.
+- `comprobacion.py`: pestaña «Correos · comprobación» (compras,
+  comprobables, buenas, malas, estado OK / vigilar / revisar) y aviso del
+  bot al dueño cuando un correo pasa a «revisar» (una vez por correo). Los
+  correos dados solos se guardan y conservan su persona (migración 11).
+  La regla «ninguna buena en las últimas 5» solo cuenta si tuvo buenas:
+  marcaba 7 correos confirmados sin ningún dato comprobable.
+- Pruebas: 377 (5 fallan solo en Windows, como siempre).
+- Commits: `7f335bd`, `2a5b6b9`, `49bc3f6`, `5825d5e`, `a35b4d2`, (este commit)
+
 ## 2026-11-01 — Captación: diseño de las cuentas por cliente
 
 - El dueño quiere saber, por persona de Telegram, a cuántas apuestas ha

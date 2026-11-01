@@ -6,9 +6,10 @@ En cada sincronización del Sheet se mira cada compra de cada correo frente
 a su persona (o, si no tiene, a su mejor candidata): buena, mala o sin
 comprobar (cruce.Datos.juicio). Con eso, el estado del correo:
 - «revisar» si sus 2 últimas compras comprobables son malas, si con
-  MIN_COMPROBABLES o más las buenas bajan del 80 %, o si ninguna de sus
-  ULTIMAS últimas compras es buena (p. ej. 2 buenas al principio y luego
-  nada en 10 o 20 compras). No pierde a su persona: lo mira el dueño.
+  MIN_COMPROBABLES o más las buenas bajan del 80 %, o si tuvo buenas pero
+  ninguna en sus ULTIMAS últimas compras (p. ej. 2 buenas al principio y
+  luego nada en 10 o 20 compras; sin ninguna buena es falta de datos, no
+  algo raro). No pierde a su persona: lo mira el dueño.
 - «vigilar» si tiene persona pero no llega a la regla del cruce (salvo las
   que dijo el dueño) o tiene alguna mala.
 - «OK» el resto; «sin asignar» si no tiene persona.
@@ -50,8 +51,8 @@ def resumen_correo(juicios, origen):
         motivos.append("sus 2 últimas compras comprobables, sin entrar después de pagar")
     if r["comprobables"] >= MIN_COMPROBABLES and buenas < cruce.PROPORCION * r["comprobables"]:
         motivos.append(f"solo {buenas} buenas de {r['comprobables']} comprobables")
-    if len(juicios) >= ULTIMAS and all(j != cruce.BUENA for _, j in juicios[-ULTIMAS:]):
-        motivos.append(f"ninguna buena en sus últimas {ULTIMAS} compras")
+    if buenas and len(juicios) >= ULTIMAS and all(j != cruce.BUENA for _, j in juicios[-ULTIMAS:]):
+        motivos.append(f"tuvo buenas, pero ninguna en sus últimas {ULTIMAS} compras")
     if motivos:
         return dict(r, estado=REVISAR, motivo="; ".join(motivos))
     if origen != "manual" and not cruce.cumple(buenas, r["comprobables"], 0):
