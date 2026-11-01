@@ -302,8 +302,10 @@ def filas_tipos(con, tz):
 
 # --- Sincronización -----------------------------------------------------------
 
-def sincronizar(con, tz, libro):
+def sincronizar(con, tz, libro, avisar=None):
     """Copia la base de datos al libro. Devuelve un resumen de lo hecho.
+    `avisar(texto) -> bool` manda al dueño los avisos de la comprobación de
+    correos (comprobacion.py); None = sin avisos.
 
     `libro` tiene preparar() y pestana(nombre, filas_cabecera); cada pestaña
     tiene reemplazar(filas, desde_fila, formulas), ids(), anadir(filas) y
@@ -337,7 +339,7 @@ def sincronizar(con, tz, libro):
 
     from . import pagos  # ventas de overoption cruzadas con las entradas
     if pagos.hay_datos(con):
-        pagos.escribir_pestanas(con, tz, libro)
+        pagos.escribir_pestanas(con, tz, libro, avisar=avisar)
 
     return {"usuarios": len(usuarios), "eventos_nuevos": len(nuevos), "dias": len(dias)}
 
@@ -482,7 +484,9 @@ def main(argv=None):
 
     con = db.abrir(cfg.db_path)
     try:
-        resultado = sincronizar(con, cfg.tz, abrir_libro(credencial, cfg.sheet_id))
+        from . import comprobacion
+        resultado = sincronizar(con, cfg.tz, abrir_libro(credencial, cfg.sheet_id),
+                                avisar=comprobacion.aviso_por_bot(cfg))
     except Exception as e:
         texto = str(e)
         if any(c in texto for c in ("403", "404", "PERMISSION_DENIED", "not found")) or type(e).__name__ == "SpreadsheetNotFound":

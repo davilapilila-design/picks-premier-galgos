@@ -440,11 +440,11 @@ def _clave_canal(r):
     return r["canal_id"] if r["canal_id"] is not None else (r["enlace"] or r["producto"])
 
 
-def personas_por_correo(con, ventana_s=VENTANA_S):
+def personas_por_correo(con, ventana_s=VENTANA_S, resultados=None):
     """correo (en minúsculas) -> (nombre, username) de la persona de Telegram de ese correo."""
+    resultados = emparejar_ventas(con, ventana_s=ventana_s) if resultados is None else resultados
     return {_clave_correo(r["correo"]): (r["nombre"], r["username"])
-            for r in emparejar_ventas(con, ventana_s=ventana_s)
-            if r["user_id"] is not None and r["correo"]}
+            for r in resultados if r["user_id"] is not None and r["correo"]}
 
 
 def pagos_por_persona(con, ventana_s=VENTANA_S):
@@ -576,10 +576,10 @@ def filas_por_identificar(con, tz, resultados=None):
     return filas
 
 
-def filas_pagos(con, tz, ventana_s=VENTANA_S):
+def filas_pagos(con, tz, ventana_s=VENTANA_S, resultados=None):
     from . import sheet
     filas = []
-    for r in emparejar_ventas(con, ventana_s=ventana_s):
+    for r in emparejar_ventas(con, ventana_s=ventana_s) if resultados is None else resultados:
         persona = sheet.nombre_visible(r["nombre"], r["username"]) if r["user_id"] else ""
         filas.append([
             sheet.serie_fecha_hora(r["pago_ts"], tz) if r["pago_ts"] else "",
@@ -595,9 +595,9 @@ def filas_pagos(con, tz, ventana_s=VENTANA_S):
     return filas
 
 
-def filas_clientes_sheet(con, tz):
+def filas_clientes_sheet(con, tz, resultados=None):
     from . import sheet
-    quien = personas_por_correo(con)
+    quien = personas_por_correo(con, resultados=resultados)
     filas = []
     for c in filas_clientes(con):
         correo, n, pagado, recibido, canales, primera, ultima = c
@@ -612,20 +612,29 @@ def hay_datos(con):
     return con.execute("SELECT 1 FROM pagos_overoption LIMIT 1").fetchone() is not None
 
 
-def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S):
-    from . import sheet
+def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S, avisar=None):
+    """Las pestañas del cruce, la comprobación de cada correo y, con
+    `avisar(texto) -> bool`, los avisos al dueño de los que pasan a «revisar»."""
+    from . import comprobacion, cruce, sheet
     # Primero, lo que haya escrito el dueño en «Correos por identificar».
     identificar = libro.pestana(TAB_POR_IDENTIFICAR, [CABECERA_POR_IDENTIFICAR])
     with con:
         guardar_manuales(con, leer_manuales(identificar))
+    calculo = cruce.calcular(con, ventana_s=ventana_s)
+    with con:
+        cruce.guardar_asignados(con, calculo)  # los correos dados conservan su persona
+    resultados = calculo.resultados
     p = libro.pestana(TAB_PAGOS, [CABECERA_PAGOS])
-    p.reemplazar(filas_pagos(con, tz, ventana_s=ventana_s), desde_fila=2)
+    p.reemplazar(filas_pagos(con, tz, resultados=resultados), desde_fila=2)
     p.formatear([("A2:A", sheet.FORMATO_FECHA_HORA)])
     p = libro.pestana(TAB_CLIENTES, [CABECERA_CLIENTES])
-    p.reemplazar(filas_clientes_sheet(con, tz), desde_fila=2)
+    p.reemplazar(filas_clientes_sheet(con, tz, resultados=resultados), desde_fila=2)
     p.formatear([("F2:G", sheet.FORMATO_FECHA_HORA)])
-    identificar.reemplazar(filas_por_identificar(con, tz), desde_fila=2)
+    identificar.reemplazar(filas_por_identificar(con, tz, resultados=resultados), desde_fila=2)
     identificar.formatear([("D2:D", sheet.FORMATO_FECHA_HORA)])
+    estados = comprobacion.estados(calculo)
+    comprobacion.escribir_pestana(libro, comprobacion.filas(estados, tz))
+    comprobacion.avisar_cambios(con, estados, avisar)
 
 
 # --- Ejecutable (servicio captacion-pagos@<instancia>) --------------------------------

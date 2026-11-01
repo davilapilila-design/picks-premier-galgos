@@ -192,6 +192,21 @@ MIGRACIONES = [
         visto_ts INTEGER NOT NULL
     );
     """,
+    # 11 (cruce nuevo, 2026-11-02; ver cruce.py y comprobacion.py): el correo
+    # dado solo a una persona la conserva aunque deje de cumplir la regla (lo
+    # cambia el dueño), y los correos en «revisar» de los que ya se avisó.
+    """
+    CREATE TABLE pagos_asignados (
+        correo TEXT PRIMARY KEY,  -- en minúsculas
+        user_id INTEGER NOT NULL,
+        origen TEXT NOT NULL,     -- por_correo / por_nombre
+        ts INTEGER NOT NULL
+    );
+    CREATE TABLE pagos_avisos (
+        correo TEXT PRIMARY KEY,
+        ts INTEGER NOT NULL
+    );
+    """,
 ]
 
 

@@ -25,6 +25,8 @@ Las gratis (compensaciones y gratuita) quedan fuera de los candidatos con
 Examen fijo contra los correos que confirmó el dueño (solo lectura):
     CAPTACION_DB=/var/lib/premier-captacion/real.db python -m premier_captacion.cruce examen
 """
+import sqlite3
+import time
 from collections import Counter, defaultdict
 
 from . import pagos
@@ -134,12 +136,13 @@ def cumple(buenas, comprobables, segunda):
             and segunda <= SOMBRA * buenas)
 
 
-def asignar(datos, manual=None, bloqueados=(), por_nombre=None, choca=None):
+def asignar(datos, manual=None, bloqueados=(), por_nombre=None, choca=None, fijos=None):
     """correo -> (user_id, origen) con origen «manual», «por_correo» (por
-    sus compras) o «por_nombre». Devuelve también `pagado` (user_id ->
-    canales de sus correos) y `por_hora` (correo -> quién da la hora aunque
-    su nombre choque)."""
-    manual, por_nombre = manual or {}, por_nombre or {}
+    sus compras) o «por_nombre». `fijos` (correo -> (user_id, origen)) son
+    los que ya se dieron antes: se quedan aunque ya no cumplan la regla.
+    Devuelve también `pagado` (user_id -> canales de sus correos) y
+    `por_hora` (correo -> quién da la hora aunque su nombre choque)."""
+    manual, por_nombre, fijos = manual or {}, por_nombre or {}, fijos or {}
     choca = choca or (lambda correo, uid: False)
     dueno, pagado, por_hora = {}, defaultdict(set), {}
 
@@ -162,6 +165,9 @@ def asignar(datos, manual=None, bloqueados=(), por_nombre=None, choca=None):
 
     for correo, uid in manual.items():
         dar(correo, uid, "manual")
+    for correo, (uid, origen) in sorted(fijos.items()):
+        if correo not in dueno and correo not in bloqueados:
+            dar(correo, uid, origen)
     libres = [c for c in datos.correos() if c not in dueno and c not in bloqueados]
     # De más a menos buenas; cada correo dado cambia quién queda excluido en
     # los que compraron sus mismos canales, así que solo esos se recalculan.
@@ -205,14 +211,41 @@ class Calculo:
         return tabla[0][0] if tabla else None
 
 
+AUTOMATICOS = ("por_correo", "por_nombre")
+
+
+def asignados(con):
+    """correo -> (user_id, origen) de los correos que ya se dieron solos."""
+    try:
+        return {f[0]: (f[1], f[2]) for f in con.execute(
+            "SELECT correo, user_id, origen FROM pagos_asignados")}
+    except sqlite3.OperationalError:  # base de solo lectura aún sin la migración 11
+        return {}
+
+
+def guardar_asignados(con, calculo, ahora=None):
+    """Apunta los correos dados solos (por compras o por nombre) para que
+    los conserven; quita los que ya no lo son (los cambió el dueño)."""
+    ahora = int(time.time() if ahora is None else ahora)
+    auto = {c: d for c, d in calculo.dueno.items() if d[1] in AUTOMATICOS}
+    con.executemany(
+        "INSERT INTO pagos_asignados (correo, user_id, origen, ts) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (correo) DO UPDATE SET user_id = excluded.user_id, origen = excluded.origen, "
+        "ts = excluded.ts WHERE user_id <> excluded.user_id",
+        [(c, uid, origen, ahora) for c, (uid, origen) in auto.items()])
+    for correo in set(asignados(con)) - set(auto):
+        con.execute("DELETE FROM pagos_asignados WHERE correo = ?", (correo,))
+
+
 def calcular(con, ventana_s=VENTANA_S, solo_ventas=True, con_manual=True):
     """El cruce. Sin `con_manual` no se usa lo que escribió el dueño (ni sus
-    «no»): es lo que mide el examen."""
+    «no») ni los correos ya dados: es lo que mide el examen."""
     from . import nombres
     datos = Datos(con, ventana_s=ventana_s, solo_ventas=solo_ventas)
     personas = pagos._personas(con)
     manual = pagos._manuales(con, personas) if con_manual else {}
     bloqueados = pagos._bloqueados(con) if con_manual else set()
+    fijos = asignados(con) if con_manual else {}
     hora = {c: {u for v in datos.ventas_de(c) for u in (v["candidatos"] or ())} for c in datos.correos()}
     por_nombre = pagos._por_nombre(set(datos.correos()), personas, hora, excluir=set(manual) | bloqueados)
 
@@ -220,7 +253,7 @@ def calcular(con, ventana_s=VENTANA_S, solo_ventas=True, con_manual=True):
         p = personas.get(uid) or {}
         return nombres.choca(correo, p.get("nombre"), p.get("username"))
 
-    dueno, pagado, _ = asignar(datos, manual, bloqueados, por_nombre, choca)
+    dueno, pagado, _ = asignar(datos, manual, bloqueados, por_nombre, choca, fijos)
     resultados = []
     for v in datos.ventas:
         if v["clave"] in dueno:

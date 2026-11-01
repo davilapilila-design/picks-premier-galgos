@@ -315,6 +315,54 @@ class TestPorCompras(unittest.TestCase):
         self.assertEqual((r["estado_cruce"], r["user_id"]), ("sin_canal", None))
 
 
+class TestAsignadosSeQuedan(unittest.TestCase):
+    """Un correo dado a una persona la conserva aunque después deje de
+    cumplir la regla (la comprobación lo marca para que lo mire el dueño);
+    solo lo cambia el dueño."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        persona(self.con, 500, nombre="Ana", username="ana")
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "xk81@example.com", entra=500)
+
+    def sincronizar(self):
+        from premier_captacion import cruce as modulo
+        with self.con:
+            modulo.guardar_asignados(self.con, modulo.calcular(self.con), ahora=1)
+
+    def malas(self):
+        for i in range(4, 7):  # tres compras en las que no entra (el registro las cubre)
+            entra_movimiento(self.con, i, i, 900 + i, 1000 * i - 100, f"https://t.me/+C{i}")
+            compra(self.con, f"m{i}", i, 1000 * i, "xk81@example.com")
+
+    def test_sin_haberse_guardado_deja_de_cumplir_y_no_tiene_persona(self):
+        self.malas()
+        self.assertIsNone(cruce(self.con)["v1"]["user_id"])
+
+    def test_guardado_conserva_su_persona(self):
+        self.sincronizar()
+        self.malas()
+        r = cruce(self.con)["m4"]
+        self.assertEqual((r["user_id"], r["estado_cruce"]), (500, "por_correo"))
+
+    def test_el_no_del_dueno_lo_quita(self):
+        self.sincronizar()
+        indicar(self.con, "xk81@example.com", "no")
+        self.sincronizar()
+        indicar(self.con, "xk81@example.com", "")
+        self.malas()
+        self.assertIsNone(cruce(self.con)["v1"]["user_id"])
+
+    def test_el_examen_no_usa_lo_guardado(self):
+        from premier_captacion import cruce as modulo
+        self.sincronizar()
+        self.malas()
+        indicar(self.con, "xk81@example.com", "@ana")
+        self.assertEqual(modulo.examen(self.con)["sin"], 6)
+
+
 class TestNombreQueChoca(unittest.TestCase):
     """«victor…» no puede ser «Raúl» solo por la hora: lo decide el dueño."""
 
