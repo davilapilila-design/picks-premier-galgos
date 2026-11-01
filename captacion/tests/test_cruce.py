@@ -1,5 +1,6 @@
-"""Cruce de las ventas de overoption con las entradas a los canales de
-Telegram (pagos.emparejar_ventas y agregados). Datos INVENTADOS."""
+"""Cruce de las ventas de overoption con las personas de Telegram (cruce.py,
+pagos.emparejar_ventas y agregados). Reglas del diseño del 2026-11-01. Datos
+INVENTADOS."""
 import unittest
 
 from premier_captacion import db, pagos
@@ -51,15 +52,15 @@ def invitados(con, enlace, canal_id, titulo, filas):
         invitaciones.guardar(con, enlace, canal_id, titulo, filas, ahora=1)
 
 
-def compra(con, vid, n, ts, correo, entra=None, segundos=5, producto=None):
+def compra(con, vid, n, ts, correo, entra=(), segundos=5, producto=None):
     """Una compra del canal n (cada canal con su enlace, como en la realidad:
-    nadie compra dos veces el mismo) y, si `entra`, esa persona entra con el
-    enlace `segundos` después de pagar."""
+    nadie compra dos veces el mismo) y quienes entran con el enlace
+    `segundos` después de pagar (`entra`: un id o varios)."""
     enlace = f"https://t.me/+C{n}"
     if con.execute("SELECT 1 FROM ventas_canales WHERE canal_id = ?", (n,)).fetchone() is None:
         canal(con, n, f"Canal {n}")
-    if entra is not None:
-        entra_movimiento(con, n, ts + segundos, entra, ts + segundos, enlace)
+    for i, uid in enumerate((entra,) if isinstance(entra, int) else entra):
+        entra_movimiento(con, n, ts * 10 + i, uid, ts + segundos + i, enlace)
     venta(con, vid, enlace, ts, producto=producto or f"Canal {n}", correo=correo)
 
 
@@ -70,6 +71,15 @@ def datos(con):
 
 def venta_de(d, vid):
     return next(v for v in d.ventas if v["id"] == vid)
+
+
+def cruce(con):
+    return por_id(pagos.emparejar_ventas(con))
+
+
+def indicar(con, correo, texto):
+    with con:
+        pagos.guardar_manuales(con, {correo: texto}, ahora=1)
 
 
 class TestCandidatos(unittest.TestCase):
@@ -102,6 +112,21 @@ class TestCandidatos(unittest.TestCase):
         entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+L")  # entró y se fue
         venta(self.con, "v1", "https://t.me/+L", 1000)
         self.assertEqual(self.candidatos(), {500})
+
+    def test_registro_con_el_enlace_escrito_de_otra_forma(self):
+        # Pasó con un canal: el registro guardaba el mismo enlace con otro texto
+        # (se nota porque trae las mismas entradas, al segundo, que la lista).
+        invitados(self.con, "https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTROTEXTO")  # entró y se fue
+        entra_movimiento(self.con, 10, 2, 700, 5030, "https://t.me/+OTROTEXTO")  # como en la lista
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.candidatos(), {500})
+
+    def test_enlace_nuevo_se_sabe_el_canal_por_el_registro(self):
+        entra_movimiento(self.con, 10, 1, 500, 1005, "https://t.me/+NUEVO")
+        venta(self.con, "v1", "https://t.me/+NUEVO", 1000, producto="Lunes Tarde 7.00 - 3.00")
+        v = venta_de(datos(self.con), "v1")
+        self.assertEqual((v["candidatos"], v["canal_id"]), ({500}, 10))
 
     def test_canal_que_no_se_sigue_por_la_lista_del_enlace(self):
         invitados(self.con, "https://t.me/+V", 99, "Canal viejo", [(700, "Eva", "eva", 1060)])
@@ -157,484 +182,206 @@ class TestJuicio(unittest.TestCase):
         self.assertEqual(self.juicio(500), "sin")
 
 
-class TestEmparejar(unittest.TestCase):
+class TestVentaSinDueno(unittest.TestCase):
+    """Mientras su correo no sea de nadie, una venta no lleva persona: solo
+    sus candidatos (`posibles`). Un cruce suelto por hora nunca da el correo."""
+
     def setUp(self):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
-
-    def test_empareja_por_enlace_y_hora(self):
         canal(self.con, 10, "Canal X")
         persona(self.con, 500)
+
+    def test_un_cruce_suelto_no_da_persona(self):
         entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
         venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "emparejada")
-        self.assertEqual(r["user_id"], 500)
-        self.assertEqual(r["canal_id"], 10)
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"], r["posibles"], r["canal_id"]),
+                         ("dudosa_varios", None, [500], 10))
 
-    def test_fuera_de_la_ventana_no_empareja(self):
-        canal(self.con, 10, "Canal X")
+    def test_fuera_de_la_ventana_queda_sin_emparejar(self):
         entra_movimiento(self.con, 10, 1, 500, 1000 + 600, "https://t.me/+L")  # 10 min
         venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "sin_emparejar")
-        self.assertIsNone(r["user_id"])
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("sin_emparejar", None))
 
-    def test_varios_en_la_ventana_es_dudosa(self):
-        canal(self.con, 10, "Canal X")
+    def test_entrar_antes_de_pagar_no_cuenta(self):
+        entra_movimiento(self.con, 10, 1, 500, 995, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_emparejar")
+
+    def test_varios_en_la_ventana(self):
         entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
         entra_movimiento(self.con, 10, 2, 501, 1020, "https://t.me/+L")
         venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "dudosa_varios")
-        self.assertIsNone(r["user_id"])
-
-    def test_una_entrada_no_vale_para_dos_ventas(self):
-        # Solo queda dentro uno; el otro comprador se fue y Telegram no lo enseña.
-        canal(self.con, 10, "Canal X")
-        entra_movimiento(self.con, 10, 1, 500, 1100, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000, correo="a@example.com")
-        venta(self.con, "v2", "https://t.me/+L", 1090, correo="b@example.com")
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual((rs["v1"]["estado_cruce"], rs["v2"]["estado_cruce"]),
-                         ("dudosa_varios", "dudosa_varios"))
-        self.assertIsNone(rs["v1"]["user_id"])
-
-    def test_entrar_antes_de_pagar_no_cuenta(self):
-        canal(self.con, 10, "Canal X")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000 + pagos.ANTES_S + 60)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "sin_emparejar")
-
-    def test_unos_segundos_antes_si_cuenta_por_los_relojes(self):
-        canal(self.con, 10, "Canal X")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000 + pagos.ANTES_S - 5)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "emparejada")
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["estado_cruce"], r["posibles"]), ("dudosa_varios", [500, 501]))
 
     def test_sin_canal_identificado(self):
         venta(self.con, "v1", "https://t.me/+DESCONOCIDO", 1000, producto="No existe")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "sin_canal")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
-    def test_empareja_por_nombre_cuando_no_hay_enlace(self):
-        canal(self.con, 10, "Domingo Tarde 25.10")
-        miembro(self.con, 10, 500, 1000)
-        # El nombre del producto en overoption trae tildes/entidades distintas.
+    def test_canal_por_el_nombre_del_producto(self):
+        canal(self.con, 11, "Domingo Tarde 25.10")
+        miembro(self.con, 11, 500, 1000)
         venta(self.con, "v1", None, 1000, producto="Domingo Tarde 25.10")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["canal_id"], 10)
-        self.assertEqual(r["estado_cruce"], "emparejada")
-        self.assertEqual(r["user_id"], 500)
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["canal_id"], r["posibles"]), (11, [500]))
 
-    def test_nombre_repetido_en_dos_canales_no_empareja_por_nombre(self):
-        canal(self.con, 10, "Jueves Central Park")
+    def test_nombre_repetido_en_dos_canales_no_vale_para_saber_el_canal(self):
         canal(self.con, 11, "Jueves Central Park")
-        miembro(self.con, 10, 500, 1000)
+        canal(self.con, 12, "Jueves Central Park")
+        miembro(self.con, 11, 500, 1000)
         venta(self.con, "v1", None, 1000, producto="Jueves Central Park")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "sin_canal")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
 
-class TestPorEnlace(unittest.TestCase):
-    """Con la lista de quién se unió con cada enlace (invitaciones.py), la
-    venta se empareja con quien entró con SU enlace, también en canales
-    antiguos que no se siguen."""
-
-    def setUp(self):
-        self.con = db.abrir(":memory:")
-        self.addCleanup(self.con.close)
-
-    def invitados(self, enlace, canal_id, titulo, filas):
-        from premier_captacion import invitaciones
-        with self.con:
-            invitaciones.guardar(self.con, enlace, canal_id, titulo, filas, ahora=1)
-
-    def test_empareja_en_un_canal_que_no_se_sigue(self):
-        self.invitados("https://t.me/+V", 99, "Canal viejo", [(700, "Eva", "eva", 1060)])
-        venta(self.con, "v1", "https://t.me/+V", 1000, producto="Otro nombre")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "emparejada")
-        self.assertEqual((r["user_id"], r["nombre"]), (700, "Eva"))
-        self.assertEqual((r["canal_id"], r["titulo"]), (99, "Canal viejo"))
-
-    def test_solo_cuentan_los_que_entraron_con_ese_enlace(self):
-        canal(self.con, 10, "Canal X")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+OTRO")  # otro enlace, misma hora
-        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 1030)])
-        venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "emparejada")
-        self.assertEqual(r["user_id"], 700)
-
-    def test_enlace_leido_sin_nadie_en_la_ventana_queda_sin_emparejar(self):
-        self.invitados("https://t.me/+V", 99, "Canal viejo", [(700, "Eva", None, 9000)])
-        venta(self.con, "v1", "https://t.me/+V", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual(r["estado_cruce"], "sin_emparejar")
-
-    def test_enlace_nuevo_se_sabe_el_canal_por_el_registro(self):
-        # El enlace de la venta aún no se ha leído, pero el registro del canal
-        # ya tiene entradas con él: con eso se sabe el canal.
-        canal(self.con, 10, "Lunes Tarde 26.10")
-        persona(self.con, 500, nombre="Ana", username="ana")
-        entra_movimiento(self.con, 10, 1, 500, 1005, "https://t.me/+NUEVO")
-        venta(self.con, "v1", "https://t.me/+NUEVO", 1000, producto="Lunes Tarde 7.00 - 3.00")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual((r["estado_cruce"], r["user_id"], r["canal_id"]), ("emparejada", 500, 10))
-
-    def test_registro_del_canal_con_el_enlace_escrito_de_otra_forma(self):
-        # Pasó con un canal: el registro guardaba el mismo enlace con otro texto
-        # (se nota porque trae las mismas entradas, al segundo, que la lista).
-        canal(self.con, 10, "Canal X")
-        persona(self.con, 500, nombre="Ana", username="ana")
-        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
-        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTROTEXTO")  # Ana entró y se fue
-        entra_movimiento(self.con, 10, 2, 700, 5030, "https://t.me/+OTROTEXTO")  # Eva, como en la lista
-        venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 500))
-
-    def test_no_cuentan_las_entradas_por_el_enlace_de_otro_producto(self):
-        canal(self.con, 10, "Canal X")
-        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 1030)])
-        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTRAVENTA")
-        venta(self.con, "v1", "https://t.me/+L", 1000)
-        venta(self.con, "v2", "https://t.me/+OTRAVENTA", 900, producto="Otro producto")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 700))
-
-    def test_tambien_cuenta_el_registro_del_canal_quien_se_fue(self):
-        # La lista de quién se unió solo trae a quien sigue dentro; el registro
-        # del canal (48 h, lo guarda el lector) trae también a quien se fue.
-        canal(self.con, 10, "Canal X")
-        persona(self.con, 500, nombre="Ana", username="ana")
-        self.invitados("https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
-        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+L")  # Ana entró y se fue
-        venta(self.con, "v1", "https://t.me/+L", 1000)
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v1"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("emparejada", 500))
-
-
-class TestPorCorreo(unittest.TestCase):
-    """Si una venta se empareja con una persona, las demás compras con ese
-    mismo correo son de esa persona (aunque no se sepa el canal o la hora)."""
+class TestPorCompras(unittest.TestCase):
+    """Un correo es de una persona si entró justo después de pagar en 3
+    compras o más, que son al menos el 80 % de las que se pueden comprobar,
+    y nadie le hace sombra."""
 
     def setUp(self):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
-        canal(self.con, 10, "Canal X")
-        persona(self.con, 500, nombre="Ana", username="ana")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000, correo="ana@example.com")
-
-    def test_venta_sin_canal_del_mismo_correo_es_de_esa_persona(self):
-        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="ana@example.com")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
-        self.assertEqual(r["estado_cruce"], "por_correo")
-        self.assertEqual(r["user_id"], 500)
-        self.assertEqual(r["nombre"], "Ana")
-
-    def test_dudosa_y_sin_emparejar_del_mismo_correo_se_resuelven(self):
-        entra_movimiento(self.con, 10, 2, 500, 5000, "https://t.me/+L")
-        entra_movimiento(self.con, 10, 3, 501, 5010, "https://t.me/+L")
-        venta(self.con, "v2", "https://t.me/+L", 5000, correo="ana@example.com")  # dudosa
-        venta(self.con, "v3", "https://t.me/+L", 9000, correo="ana@example.com")  # nadie entra
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        for vid in ("v2", "v3"):
-            self.assertEqual(rs[vid]["estado_cruce"], "por_correo")
-            self.assertEqual(rs[vid]["user_id"], 500)
-
-    def test_otro_correo_no_hereda_la_persona(self):
-        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="otro@example.com")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
-        self.assertEqual(r["estado_cruce"], "sin_canal")
-        self.assertIsNone(r["user_id"])
-
-    def test_correo_con_dos_personas_distintas_no_se_propaga(self):
-        canal(self.con, 11, "Canal Y")
-        entra_movimiento(self.con, 11, 2, 501, 2000, "https://t.me/+Y")
-        venta(self.con, "v2", "https://t.me/+Y", 2000, correo="ana@example.com")
-        venta(self.con, "v3", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="ana@example.com")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v3"]
-        self.assertEqual(r["estado_cruce"], "sin_canal")
-        self.assertIsNone(r["user_id"])
-
-    def test_persona_con_varios_correos_no_se_propaga(self):
-        # Ana sale emparejada con dos correos: uno de los dos cruces puede ser falso.
-        canal(self.con, 11, "Canal Y")
-        entra_movimiento(self.con, 11, 2, 500, 2000, "https://t.me/+Y")
-        venta(self.con, "v2", "https://t.me/+Y", 2000, correo="otro@example.com")
-        venta(self.con, "v3", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="ana@example.com")
-        venta(self.con, "v4", "https://t.me/+VIEJO", 60, producto="Canal viejo",
-              correo="otro@example.com")
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual((rs["v3"]["estado_cruce"], rs["v4"]["estado_cruce"]), ("sin_canal", "sin_canal"))
-
-    def test_pagos_por_persona_suma_las_compras_por_correo(self):
-        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="ana@example.com", neto=50)
-        p = pagos.pagos_por_persona(self.con, ventana_s=180)[500]
-        self.assertEqual(p["canales"], 2)       # Canal X + el canal viejo
-        self.assertAlmostEqual(p["eur"], 77)    # 27 + 50
-
-    def test_fila_de_pagos_dice_por_correo_y_trae_la_persona(self):
-        from zoneinfo import ZoneInfo
-        venta(self.con, "v2", "https://t.me/+VIEJO", 50, producto="Canal viejo",
-              correo="ana@example.com")
-        filas = {f[10]: f for f in pagos.filas_pagos(self.con, ZoneInfo("Europe/Madrid"))}
-        self.assertIn("Ana", filas["v2"][8])
-        self.assertIn("por correo", filas["v2"][9].lower())
-
-    def test_clientes_trae_la_persona_de_telegram_del_correo(self):
-        from zoneinfo import ZoneInfo
-        venta(self.con, "v2", None, 50, correo="otro@example.com")
-        filas = {f[0]: f for f in pagos.filas_clientes_sheet(self.con, ZoneInfo("Europe/Madrid"))}
-        self.assertIn("Ana", filas["ana@example.com"][-1])
-        self.assertEqual(filas["otro@example.com"][-1], "")
-
-    # --- Mayúsculas y mayoría ---
-
-    def segura(self, vid, user_id, ts, correo):
-        """Una venta que se empareja seguro con user_id (entra justo al pagar)."""
-        entra_movimiento(self.con, 10, ts, user_id, ts, "https://t.me/+L")
-        venta(self.con, vid, "https://t.me/+L", ts, correo=correo)
-
-    def vieja(self, vid, correo, ts=50):
-        venta(self.con, vid, "https://t.me/+VIEJO", ts, producto="Canal viejo", correo=correo)
-
-    def test_mayusculas_y_espacios_son_el_mismo_correo(self):
-        self.vieja("v2", " Ana@Example.COM ")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v2"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
-
-    def test_el_mismo_correo_en_mayusculas_no_cuenta_como_dos_correos(self):
-        # Pagó unas veces como Ana@ y otras como ana@: es un solo correo.
-        self.segura("v2", 500, 5000, "Ana@example.com")
-        self.vieja("v3", "ana@example.com")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v3"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
-
-    def test_mayoria_clara_se_propaga_aunque_haya_un_cruce_en_contra(self):
-        persona(self.con, 501, nombre="Luis", username=None)
-        for i, ts in enumerate((5000, 9000, 13000)):
-            self.segura(f"a{i}", 500, ts, "ana@example.com")  # Ana: 4 con v1
-        self.segura("l1", 501, 17000, "ana@example.com")      # Luis: 1 (el que se fue era Ana)
-        self.vieja("v9", "ana@example.com")
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual((rs["v9"]["estado_cruce"], rs["v9"]["user_id"]), ("por_correo", 500))
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_correo", 500))
-        self.assertEqual((rs["a0"]["estado_cruce"], rs["a0"]["user_id"]), ("emparejada", 500))
-
-    def test_mayoria_floja_no_se_propaga(self):
-        persona(self.con, 501, nombre="Luis", username=None)
-        self.segura("a1", 500, 5000, "ana@example.com")  # Ana: 2 con v1
-        self.segura("l1", 501, 9000, "ana@example.com")  # Luis: 1 → 67 %
-        self.vieja("v9", "ana@example.com")
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("emparejada", 501))
-
-    def test_correo_firme_se_propaga_aunque_la_persona_salga_con_otro_suelto(self):
-        self.segura("a1", 500, 5000, "ana@example.com")    # ana@: 2 seguras → firme
-        self.segura("o1", 500, 9000, "otro@example.com")   # otro@: 1 suelta → no
-        self.vieja("v8", "ana@example.com")
-        self.vieja("v9", "otro@example.com", ts=60)
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual((rs["v8"]["estado_cruce"], rs["v8"]["user_id"]), ("por_correo", 500))
-        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
-
-    def test_correo_que_compro_los_mismos_canales_es_otro_comprador(self):
-        # Un amigo de Ana compra los mismos canales a la vez; dos veces se fue
-        # y la entrada de Ana cayó en su venta. Nadie paga dos veces un canal.
-        self.segura("a1", 500, 5000, "ana@example.com")
-        self.segura("l1", 500, 9000, "luis@example.com")
-        self.segura("l2", 500, 13000, "luis@example.com")
-        self.vieja("v8", "ana@example.com")
-        self.vieja("v9", "luis@example.com", ts=60)
-        rs = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-        self.assertEqual((rs["v8"]["estado_cruce"], rs["v8"]["user_id"]), ("por_correo", 500))
-        self.assertEqual(rs["v9"]["estado_cruce"], "sin_canal")
-        # Y sus dos cruces con Ana eran falsos: quedan dudosos, sin persona.
-        for vid in ("l1", "l2"):
-            self.assertEqual((rs[vid]["estado_cruce"], rs[vid]["user_id"]), ("dudosa_varios", None))
-
-    def test_segundo_correo_con_canales_distintos_si_es_suyo(self):
-        canal(self.con, 11, "Canal Y")
-        self.segura("a1", 500, 5000, "ana@example.com")
-        for vid, ts in (("n1", 9000), ("n2", 13000)):
-            entra_movimiento(self.con, 11, ts, 500, ts, "https://t.me/+Y")
-            venta(self.con, vid, "https://t.me/+Y", ts, correo="ana.nueva@example.com")
-        self.vieja("v9", "ana.nueva@example.com")
-        r = por_id(pagos.emparejar_ventas(self.con, ventana_s=180))["v9"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
-
-    def test_clientes_junta_el_correo_escrito_con_mayusculas(self):
-        from zoneinfo import ZoneInfo
-        self.vieja("v2", "Ana@Example.com")
-        filas = pagos.filas_clientes_sheet(self.con, ZoneInfo("Europe/Madrid"))
-        self.assertEqual([f[0] for f in filas], ["ana@example.com"])
-        self.assertEqual(filas[0][1], 2)  # compras
-        self.assertIn("Ana", filas[0][-1])
-
-
-class TestEliminacion(unittest.TestCase):
-    """Compras a la vez: si ya se sabe quiénes son los demás que entraron a
-    esa hora (nadie paga dos veces un canal), la venta es del que queda."""
-
-    L, M = "https://t.me/+L", "https://t.me/+M"
-
-    def setUp(self):
-        self.con = db.abrir(":memory:")
-        self.addCleanup(self.con.close)
-        for cid, titulo in ((10, "Canal X"), (11, "Canal Y"), (12, "Canal Z")):
-            canal(self.con, cid, titulo)
         persona(self.con, 500, nombre="Ana", username="ana")
         persona(self.con, 501, nombre="Luis", username="luis")
-        persona(self.con, 502, nombre="Marta", username=None)
-        # Ana ya se sabe por su correo (venta segura en otro canal).
-        entra_movimiento(self.con, 11, 1, 500, 1000, "https://t.me/+Y")
-        venta(self.con, "a0", "https://t.me/+Y", 1000, correo="ana@example.com")
-        # Ana y Luis compran el Canal X a la vez y entran a la vez: dudosas.
-        venta(self.con, "a1", self.L, 5000, correo="ana@example.com")
-        venta(self.con, "l1", self.L, 5010, correo="luis@example.com")
-        entra_movimiento(self.con, 10, 2, 500, 5005, self.L)
-        entra_movimiento(self.con, 10, 3, 501, 5012, self.L)
 
-    def cruce(self):
-        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
+    def compras(self, correo, entra, desde=1, n=3, base=1000):
+        for i in range(desde, desde + n):
+            compra(self.con, f"{correo[:4]}{i}", i, base * i, correo, entra=entra)
 
-    def test_si_los_demas_de_esa_hora_ya_se_saben_queda_el_que_falta(self):
-        rs = self.cruce()
-        self.assertEqual((rs["a1"]["estado_cruce"], rs["a1"]["user_id"]), ("por_correo", 500))
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
-        self.assertEqual(rs["l1"]["nombre"], "Luis")
+    def test_tres_buenas_dan_el_correo_y_todas_sus_compras(self):
+        self.compras("ana@example.com", 500)
+        venta(self.con, "vieja", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="ana@example.com")
+        rs = cruce(self.con)
+        for vid in ("ana@1", "ana@2", "ana@3", "vieja"):
+            self.assertEqual((rs[vid]["estado_cruce"], rs[vid]["user_id"]), ("por_correo", 500), vid)
+        self.assertEqual(rs["vieja"]["nombre"], "Ana")
 
-    def test_resuelto_uno_se_resuelven_todas_las_compras_de_su_correo(self):
-        venta(self.con, "l9", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="luis@example.com")
-        r = self.cruce()["l9"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 501))
+    def test_dos_buenas_no_bastan(self):
+        self.compras("ana@example.com", 500, n=2)
+        rs = cruce(self.con)
+        self.assertEqual((rs["ana@1"]["estado_cruce"], rs["ana@1"]["user_id"], rs["ana@1"]["posibles"]),
+                         ("dudosa_varios", None, [500]))
 
-    def test_en_cadena(self):
-        # Luis y Marta compran el Canal Z a la vez: Luis se sabe por eliminación
-        # en el Canal X, así que la de Marta sale en la vuelta siguiente.
-        venta(self.con, "l2", self.M, 9000, correo="luis@example.com")
-        venta(self.con, "m1", self.M, 9005, correo="marta@example.com")
-        entra_movimiento(self.con, 12, 4, 501, 9008, self.M)
-        entra_movimiento(self.con, 12, 5, 502, 9010, self.M)
-        rs = self.cruce()
-        self.assertEqual((rs["l2"]["estado_cruce"], rs["l2"]["user_id"]), ("por_correo", 501))
-        self.assertEqual((rs["m1"]["estado_cruce"], rs["m1"]["user_id"]), ("por_eliminacion", 502))
+    def test_hace_falta_el_80_por_ciento_de_las_comprobables(self):
+        self.compras("ana@example.com", 500)
+        compra(self.con, "mala", 9, 9000, "ana@example.com")
+        miembro(self.con, 9, 500, 9000 + 600)  # entró, pero 10 min después
+        self.assertIsNone(cruce(self.con)["ana@1"]["user_id"])  # 3 de 4 = 75 %
+        compra(self.con, "otra", 8, 8000, "ana@example.com", entra=500)
+        self.assertEqual(cruce(self.con)["ana@1"]["user_id"], 500)  # 4 de 5 = 80 %
 
-    def test_dos_ventas_con_el_mismo_unico_candidato_no_se_asignan(self):
-        # Pepe también compró a esa hora pero se fue del canal: Luis podría ser
-        # el de su venta o el de la de Pepe.
-        venta(self.con, "p1", self.L, 5020, correo="pepe@example.com")
-        rs = self.cruce()
-        self.assertEqual(rs["l1"]["estado_cruce"], "dudosa_varios")
-        self.assertEqual(rs["p1"]["estado_cruce"], "dudosa_varios")
-        self.assertIsNone(rs["l1"]["user_id"])
+    def test_si_otra_persona_le_hace_sombra_no(self):
+        self.compras("ana@example.com", (500, 501), n=3)
+        compra(self.con, "ana@4", 4, 4000, "ana@example.com", entra=500)
+        self.assertIsNone(cruce(self.con)["ana@1"]["user_id"])  # 4 frente a 3
 
-    def test_eliminacion_que_no_confirma_su_correo_se_descarta(self):
-        # Luis ya es seguro el de luis@ (venta segura + la de eliminación). En el
-        # Canal Z pagan Ana y Pepe; Pepe se fue y queda Luis, que entró por su
-        # cuenta: Luis saldría con un segundo correo de un solo cruce, así que
-        # esa eliminación no vale.
-        entra_movimiento(self.con, 11, 7, 501, 40000, "https://t.me/+Y")
-        venta(self.con, "lx", "https://t.me/+Y", 40000, correo="luis@example.com")
-        venta(self.con, "a2", self.M, 30000, correo="ana@example.com")
-        venta(self.con, "p2", self.M, 30005, correo="pepe@example.com")
-        entra_movimiento(self.con, 12, 8, 500, 30003, self.M)
-        entra_movimiento(self.con, 12, 9, 501, 30008, self.M)
-        rs = self.cruce()
-        self.assertEqual((rs["p2"]["estado_cruce"], rs["p2"]["user_id"]), ("dudosa_varios", None))
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
+    def test_sombra_pequena_si(self):
+        self.compras("ana@example.com", (500, 501), n=2)
+        self.compras("ana@example.com", 500, desde=3, n=2)
+        self.assertEqual(cruce(self.con)["ana@1"]["user_id"], 500)  # 4 frente a 2
 
-    def test_si_no_entro_nunca_en_otro_canal_que_compro_su_correo_no_vale(self):
-        # luis@ compra después el Canal Y, del que se tiene el registro entero
-        # (desde la venta de Ana), y Luis no entra nunca: quien quedó en el
-        # Canal X no era el comprador.
-        venta(self.con, "l2", "https://t.me/+Y", 7000, correo="luis@example.com")
-        rs = self.cruce()
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("dudosa_varios", None))
-        self.assertIsNone(rs["l2"]["user_id"])
+    def test_nadie_paga_dos_veces_el_mismo_canal(self):
+        # Luis compra los mismos canales que Ana a la vez: la entrada de Ana
+        # cae también en sus compras, pero ella ya pagó esos canales.
+        self.compras("ana@example.com", 500)
+        for i in range(1, 4):
+            venta(self.con, f"luis{i}", f"https://t.me/+C{i}", 1000 * i + 2, producto=f"Canal {i}",
+                  correo="luis@example.com")
+        rs = cruce(self.con)
+        self.assertEqual(rs["ana@1"]["user_id"], 500)
+        for i in range(1, 4):
+            r = rs[f"luis{i}"]
+            self.assertEqual((r["user_id"], r["posibles"], r["estado_cruce"]), (None, [], "sin_emparejar"))
 
-    def test_si_entro_en_ese_canal_aunque_fuera_tarde_vale(self):
-        venta(self.con, "l2", "https://t.me/+Y", 7000, correo="luis@example.com")
-        entra_movimiento(self.con, 11, 9, 501, 20000, "https://t.me/+Y")
-        rs = self.cruce()
-        self.assertEqual((rs["l1"]["estado_cruce"], rs["l1"]["user_id"]), ("por_eliminacion", 501))
-        self.assertEqual((rs["l2"]["estado_cruce"], rs["l2"]["user_id"]), ("por_correo", 501))
+    def test_una_persona_puede_tener_dos_correos_con_canales_distintos(self):
+        self.compras("ana@example.com", 500)
+        self.compras("ana.nueva@example.com", 500, desde=4)
+        rs = cruce(self.con)
+        self.assertEqual((rs["ana@1"]["user_id"], rs["ana.4"]["user_id"]), (500, 500))
 
-    def test_compra_de_antes_del_registro_del_canal_no_cuenta(self):
-        # De antes del registro solo se sabe quién sigue dentro: no estar no dice nada.
-        venta(self.con, "l2", "https://t.me/+Y", 500, correo="luis@example.com")
-        self.assertEqual(self.cruce()["l1"]["user_id"], 501)
+    def test_mayusculas_y_espacios_son_el_mismo_correo(self):
+        compra(self.con, "v1", 1, 1000, " Ana@Example.COM ", entra=500)
+        compra(self.con, "v2", 2, 2000, "ana@example.com", entra=500)
+        compra(self.con, "v3", 3, 3000, "ANA@example.com", entra=500)
+        self.assertEqual(cruce(self.con)["v1"]["user_id"], 500)
 
-    def test_la_dudosa_trae_quien_queda_posible(self):
-        venta(self.con, "p1", self.L, 5020, correo="pepe@example.com")
-        rs = self.cruce()
-        self.assertEqual(rs["p1"]["posibles"], [501])  # Ana ya compró ese canal
+    def test_otro_correo_no_hereda_la_persona(self):
+        self.compras("ana@example.com", 500)
+        venta(self.con, "otro", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="otro@example.com")
+        r = cruce(self.con)["otro"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("sin_canal", None))
 
-    def test_fila_de_pagos_dice_por_eliminacion(self):
-        from zoneinfo import ZoneInfo
-        filas = {f[10]: f for f in pagos.filas_pagos(self.con, ZoneInfo("Europe/Madrid"))}
-        self.assertIn("Luis", filas["l1"][8])
-        self.assertIn("eliminación", filas["l1"][9])
+
+class TestNombreQueChoca(unittest.TestCase):
+    """«victor…» no puede ser «Raúl» solo por la hora: lo decide el dueño."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+
+    def tres_buenas(self, nombre):
+        persona(self.con, 500, nombre=nombre, username=None)
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "victorlopez@example.com", entra=500)
+        return cruce(self.con)["v1"]
+
+    def test_otro_nombre_no_se_asigna(self):
+        r = self.tres_buenas("Raul")
+        self.assertEqual((r["user_id"], r["posibles"]), (None, [500]))
+
+    def test_su_nombre_si(self):
+        self.assertEqual(self.tres_buenas("Victor Lopez")["user_id"], 500)
 
 
 class TestManual(unittest.TestCase):
-    """El dueño dice de quién es un correo: todas sus compras son de esa persona."""
+    """El dueño dice de quién es un correo: todas sus compras son de esa
+    persona; con «no», ese correo no se asigna solo."""
 
     def setUp(self):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
-        canal(self.con, 10, "Canal X")
         persona(self.con, 500, nombre="Ana", username="ana")
         persona(self.con, 501, nombre="Luis", username="Luis_99")
         venta(self.con, "v1", "https://t.me/+VIEJO", 50, producto="Canal viejo", correo="luis@example.com")
         venta(self.con, "v2", "https://t.me/+VIEJO2", 60, producto="Otro viejo", correo="Luis@Example.com")
 
-    def indicar(self, correo, texto):
-        with self.con:
-            pagos.guardar_manuales(self.con, {correo: texto}, ahora=1)
-
-    def cruce(self):
-        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-
     def test_con_usuario_asigna_todas_sus_compras(self):
-        self.indicar("luis@example.com", "@luis_99")  # sin distinguir mayúsculas
-        rs = self.cruce()
+        indicar(self.con, "luis@example.com", "@luis_99")  # sin distinguir mayúsculas
+        rs = cruce(self.con)
         for vid in ("v1", "v2"):
             self.assertEqual((rs[vid]["estado_cruce"], rs[vid]["user_id"]), ("manual", 501))
         self.assertEqual(rs["v1"]["nombre"], "Luis")
 
     def test_con_id_o_enlace(self):
         for texto in ("501", "https://t.me/Luis_99", " Luis_99 "):
-            self.indicar("luis@example.com", texto)
-            self.assertEqual(self.cruce()["v1"]["user_id"], 501, texto)
+            indicar(self.con, "luis@example.com", texto)
+            self.assertEqual(cruce(self.con)["v1"]["user_id"], 501, texto)
 
     def test_persona_que_no_ha_entrado_en_tus_canales_no_se_asigna(self):
-        self.indicar("luis@example.com", "@nadie")
-        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        indicar(self.con, "luis@example.com", "@nadie")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
-    def test_lo_tuyo_manda_sobre_el_cruce_por_hora(self):
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v3", "https://t.me/+L", 1000, correo="luis@example.com")
-        self.indicar("luis@example.com", "@luis_99")
-        r = self.cruce()["v3"]
+    def test_lo_tuyo_manda_sobre_las_compras_de_otra_persona(self):
+        for i in range(1, 4):
+            compra(self.con, f"c{i}", i, 1000 * i, "luis@example.com", entra=500)
+        indicar(self.con, "luis@example.com", "@luis_99")
+        r = cruce(self.con)["c1"]
         self.assertEqual((r["estado_cruce"], r["user_id"]), ("manual", 501))
 
+    def test_no_bloquea_tambien_las_compras(self):
+        for i in range(1, 4):
+            compra(self.con, f"c{i}", i, 1000 * i, "xk81@example.com", entra=500)
+        self.assertEqual(cruce(self.con)["c1"]["user_id"], 500)
+        indicar(self.con, "xk81@example.com", "no")
+        self.assertIsNone(cruce(self.con)["c1"]["user_id"])
+
     def test_borrar_quita_la_asignacion(self):
-        self.indicar("luis@example.com", "@luis_99")
-        self.indicar("luis@example.com", "")
-        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        indicar(self.con, "luis@example.com", "@luis_99")
+        indicar(self.con, "luis@example.com", "")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
 
 class TestPorNombre(unittest.TestCase):
@@ -656,57 +403,48 @@ class TestPorNombre(unittest.TestCase):
         with self.con:
             self.nombres.guardar_chats(self.con, personas, ahora=1)
 
-    def cruce(self):
-        return por_id(pagos.emparejar_ventas(self.con, ventana_s=180))
-
-    def segura(self, vid, user_id, ts, correo):
-        entra_movimiento(self.con, 10, ts, user_id, ts, "https://t.me/+L")
-        venta(self.con, vid, "https://t.me/+L", ts, correo=correo)
-
     def test_nombre_y_apellido_de_un_chat_privado(self):
         self.chats((800, "Luis Ferrandiz", None))
-        r = self.cruce()["v1"]
+        r = cruce(self.con)["v1"]
         self.assertEqual((r["estado_cruce"], r["user_id"], r["nombre"]), ("por_nombre", 800, "Luis Ferrandiz"))
 
     def test_si_le_falta_un_apellido_hace_falta_la_hora(self):
         self.chats((800, "Luis Ferrandiz Gimeno", None))  # «gimeno» no está en el correo
-        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
         # Entró a la hora de una de sus compras (junto con Ana): ahora sí.
         venta(self.con, "v2", "https://t.me/+L", 5000, correo=self.CORREO)
         entra_movimiento(self.con, 10, 1, 500, 5002, "https://t.me/+L")
         entra_movimiento(self.con, 10, 2, 800, 5004, "https://t.me/+L")
-        rs = self.cruce()
-        self.assertEqual((rs["v1"]["estado_cruce"], rs["v1"]["user_id"]), ("por_nombre", 800))
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_nombre", 800))
 
     def test_dos_personas_que_casan_igual_no_se_aplica(self):
         self.chats((800, "Luis Ferrandiz", None), (801, "Luis Ferrandiz", None))
-        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
-    def test_corrige_un_cruce_suelto_con_otra_persona(self):
+    def test_un_cruce_suelto_con_otra_persona_no_lo_impide(self):
         self.chats((800, "Luis Ferrandiz", None))
-        self.segura("v2", 500, 5000, self.CORREO)  # una sola vez con Ana
-        rs = self.cruce()
-        self.assertEqual((rs["v2"]["estado_cruce"], rs["v2"]["user_id"]), ("por_nombre", 800))
+        compra(self.con, "v2", 1, 5000, self.CORREO, entra=500)  # una sola vez con Ana
+        r = cruce(self.con)["v2"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_nombre", 800))
 
-    def test_si_la_hora_dice_otra_cosa_con_fuerza_no(self):
+    def test_si_la_hora_da_otra_persona_no_se_aplica_el_nombre(self):
         self.chats((800, "Luis Ferrandiz", None))
-        self.segura("v2", 500, 5000, self.CORREO)
-        self.segura("v3", 500, 9000, self.CORREO)  # dos veces con Ana
-        r = self.cruce()["v1"]
-        self.assertEqual((r["estado_cruce"], r["user_id"]), ("por_correo", 500))
+        for i in range(1, 4):
+            compra(self.con, f"c{i}", i, 1000 * i, self.CORREO, entra=500)  # tres veces Ana
+        r = cruce(self.con)["v1"]
+        self.assertEqual((r["estado_cruce"], r["user_id"]), ("sin_canal", None))  # lo decide el dueño
 
     def test_lo_que_dice_el_dueno_manda(self):
         self.chats((800, "Luis Ferrandiz", None), (801, "Pepe", "pepe_otro"))
-        with self.con:
-            pagos.guardar_manuales(self.con, {self.CORREO: "@pepe_otro"}, ahora=1)
-        r = self.cruce()["v1"]
+        indicar(self.con, self.CORREO, "@pepe_otro")
+        r = cruce(self.con)["v1"]
         self.assertEqual((r["estado_cruce"], r["user_id"]), ("manual", 801))  # también de los chats
 
     def test_escribir_no_lo_bloquea(self):
         self.chats((800, "Luis Ferrandiz", None))
-        with self.con:
-            pagos.guardar_manuales(self.con, {self.CORREO: "no"}, ahora=1)
-        self.assertEqual(self.cruce()["v1"]["estado_cruce"], "sin_canal")
+        indicar(self.con, self.CORREO, "no")
+        self.assertEqual(cruce(self.con)["v1"]["estado_cruce"], "sin_canal")
 
     def test_la_pestana_lo_ensena_y_dice_como_quitarlo(self):
         from zoneinfo import ZoneInfo
@@ -715,8 +453,7 @@ class TestPorNombre(unittest.TestCase):
         f = next(f for f in pagos.filas_por_identificar(self.con, tz) if f[0] == self.CORREO)
         self.assertIn("🤖", f[pagos.COLUMNA_MANUAL + 1])
         self.assertIn("Luis Ferrandiz", f[pagos.COLUMNA_MANUAL + 1])
-        with self.con:
-            pagos.guardar_manuales(self.con, {self.CORREO: "no"}, ahora=1)
+        indicar(self.con, self.CORREO, "no")
         f = next(f for f in pagos.filas_por_identificar(self.con, tz) if f[0] == self.CORREO)
         self.assertIn("🚫", f[pagos.COLUMNA_MANUAL + 1])
 
@@ -734,11 +471,10 @@ class TestPestanaPorIdentificar(unittest.TestCase):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
         self.tz = ZoneInfo("Europe/Madrid")
-        canal(self.con, 10, "Canal X")
         persona(self.con, 500, nombre="Ana", username="ana")
         persona(self.con, 501, nombre="Luis", username="luis")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "a1", "https://t.me/+L", 1000, correo="ana@example.com")  # resuelto
+        for i in range(1, 4):  # resuelto
+            compra(self.con, f"a{i}", 10 + i, 1000 * i, "ana@example.com", entra=500)
         for i in range(3):
             venta(self.con, f"l{i}", "https://t.me/+VIEJO", 50 + i, correo="luis@example.com", neto=10)
         venta(self.con, "p1", "https://t.me/+VIEJO", 70, correo="pepe@example.com", neto=10)
@@ -794,16 +530,12 @@ class TestAgregados(unittest.TestCase):
         self.addCleanup(self.con.close)
 
     def test_pagos_por_persona_cuenta_canales_distintos(self):
-        canal(self.con, 10, "Canal A")
-        canal(self.con, 11, "Canal B")
         persona(self.con, 500)
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+A")
-        entra_movimiento(self.con, 11, 2, 500, 2000, "https://t.me/+B")
-        venta(self.con, "v1", "https://t.me/+A", 1000, neto=27)
-        venta(self.con, "v2", "https://t.me/+B", 2000, neto=50)
-        por_persona = pagos.pagos_por_persona(self.con, ventana_s=180)
-        self.assertEqual(por_persona[500]["canales"], 2)
-        self.assertAlmostEqual(por_persona[500]["eur"], 77)
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "cli@example.com", entra=500)
+        por_persona = pagos.pagos_por_persona(self.con)
+        self.assertEqual(por_persona[500]["canales"], 3)
+        self.assertAlmostEqual(por_persona[500]["eur"], 81)
 
     def test_filas_clientes_por_correo(self):
         venta(self.con, "v1", None, 1000, correo="cli@example.com", importe=30, neto=27)
@@ -818,35 +550,43 @@ class TestAgregados(unittest.TestCase):
         # el que más compra va primero
         self.assertEqual(filas[0][0], "cli@example.com")
 
+    def test_clientes_trae_la_persona_de_telegram_del_correo(self):
+        from zoneinfo import ZoneInfo
+        persona(self.con, 500, nombre="Ana", username="ana")
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "Ana@Example.com", entra=500)
+        venta(self.con, "o1", None, 50, correo="otro@example.com")
+        filas = {f[0]: f for f in pagos.filas_clientes_sheet(self.con, ZoneInfo("Europe/Madrid"))}
+        self.assertIn("Ana", filas["ana@example.com"][-1])
+        self.assertEqual(filas["ana@example.com"][1], 3)  # el mismo correo con mayúsculas
+        self.assertEqual(filas["otro@example.com"][-1], "")
+
 
 class TestPersonasPagos(unittest.TestCase):
-    """Las columnas nuevas de la pestaña Personas: cuántos canales pagó cada
-    persona y cuánto suma (de las ventas emparejadas)."""
+    """Las columnas de la pestaña Personas: cuántos canales pagó cada
+    persona y cuánto suma (de las ventas con persona)."""
 
     def setUp(self):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
         from zoneinfo import ZoneInfo
         self.tz = ZoneInfo("Europe/Madrid")
+        persona(self.con, 500, nombre="Ana", username="ana")
 
     def test_personas_trae_canales_pagados_y_euros(self):
         from premier_captacion import ventas
-        canal(self.con, 10, "Canal X")
-        persona(self.con, 500, nombre="Ana", username="ana")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000, neto=27)
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "ana@example.com", entra=500)
         fila = ventas.filas_personas(self.con, self.tz, set())[0]
         # las dos últimas columnas: canales pagados, € pagado (recibido)
-        self.assertEqual(fila[-2], 1)
-        self.assertAlmostEqual(fila[-1], 27)
+        self.assertEqual(fila[-2], 3)
+        self.assertAlmostEqual(fila[-1], 81)
 
-    def test_persona_sin_pago_emparejado_va_a_cero(self):
+    def test_persona_sin_pago_con_persona_va_a_cero(self):
         from premier_captacion import ventas
         canal(self.con, 10, "Canal X")
-        persona(self.con, 500, nombre="Ana", username="ana")
         entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        # venta en otra hora: no empareja
-        venta(self.con, "v1", "https://t.me/+L", 9999, neto=27)
+        venta(self.con, "v1", "https://t.me/+L", 9999, neto=27)  # en otra hora
         fila = ventas.filas_personas(self.con, self.tz, set())[0]
         self.assertEqual(fila[-2], 0)
         self.assertEqual(fila[-1], "")
@@ -859,30 +599,27 @@ class TestFilasPagos(unittest.TestCase):
         from zoneinfo import ZoneInfo
         self.tz = ZoneInfo("Europe/Madrid")
 
-    def test_fila_de_venta_emparejada(self):
-        canal(self.con, 10, "Canal X")
+    def test_fila_de_venta_con_persona(self):
         persona(self.con, 500, nombre="Ana", username="ana")
-        entra_movimiento(self.con, 10, 1, 500, 1000, "https://t.me/+L")
-        venta(self.con, "v1", "https://t.me/+L", 1000, producto="Canal X",
-              correo="ana@example.com", importe=30, neto=27)
-        filas = pagos.filas_pagos(self.con, self.tz)
-        f = filas[0]
+        for i in range(1, 4):
+            compra(self.con, f"v{i}", i, 1000 * i, "ana@example.com", entra=500)
+        f = {f[10]: f for f in pagos.filas_pagos(self.con, self.tz)}["v1"]
         # [fecha(serie), producto, importe, moneda, €recibido, método,
         #  correo, canal, persona, estado, id]
         self.assertGreater(f[0], 0)              # fecha como número de serie
-        self.assertEqual(f[1], "Canal X")
+        self.assertEqual(f[1], "Canal 1")
         self.assertEqual(f[2], 30)
         self.assertEqual(f[4], 27)
         self.assertEqual(f[6], "ana@example.com")
-        self.assertIn("Ana", f[8])              # persona emparejada
-        self.assertIn("emparejada", f[9].lower())
-        self.assertEqual(f[10], "v1")
+        self.assertEqual(f[7], "Canal 1")
+        self.assertIn("Ana", f[8])
+        self.assertIn("por compras", f[9].lower())
 
-    def test_fila_sin_emparejar_no_inventa_persona(self):
+    def test_fila_sin_canal_no_inventa_persona(self):
         venta(self.con, "v1", "https://t.me/+DESCONOCIDO", 1000, producto="No existe")
         f = pagos.filas_pagos(self.con, self.tz)[0]
         self.assertEqual(f[8], "")              # sin persona
-        self.assertNotIn("emparejada", f[9].lower())
+        self.assertIn("canal no identificado", f[9])
 
 
 if __name__ == "__main__":

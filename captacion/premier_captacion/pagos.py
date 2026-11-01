@@ -43,11 +43,6 @@ from . import db
 log = logging.getLogger("captacion.pagos")
 
 VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
-ANTES_S = 30  # margen por si los relojes de overoption y Telegram no van iguales
-POR_CORREO_MIN = 2  # ventas emparejadas con la misma persona para fiarse del correo...
-POR_CORREO_PROPORCION = 0.8  # ...si son al menos este tanto de las emparejadas del correo
-SEGURAS = ("emparejada", "por_eliminacion")  # cruces que cuentan para saber de quién es un correo
-MAX_VUELTAS = 10  # de eliminación + correo (cada vuelta usa lo que resolvió la anterior)
 PUNTOS_HORA = 5  # por nombre: entrar a la hora de una de sus compras pesa más que una palabra
 BLOQUEO = frozenset({"no", "-", "nadie", "ninguno"})  # lo que escribe el dueño para que no se empareje
 
@@ -329,103 +324,14 @@ def _invitados_por_enlace(con):
     return {e: sorted(v, key=lambda x: x[1]) for e, v in inv.items()}
 
 
-def _quien_entro(con, entradas, invitados, por_enlace):
-    """canal_id -> (desde_ts, {user_id}) de los canales con registro: desde
-    cuándo se sabe todo el que entra (el registro trae también a quien se fue)
-    y quién entró alguna vez."""
-    desde = {f["canal_id"]: f["desde"] for f in con.execute(
-        "SELECT canal_id, MIN(ts) AS desde FROM ventas_movimientos GROUP BY canal_id")}
-    quienes = {cid: {uid for uid, _ in entradas.get(cid, [])} for cid in desde}
-    for enlace, lista in invitados.items():
-        if por_enlace.get(enlace) in quienes:
-            quienes[por_enlace[enlace]] |= {uid for uid, _ in lista}
-    return {cid: (desde[cid], quienes[cid]) for cid in desde}
-
-
 def emparejar_ventas(con, ventana_s=VENTANA_S, solo_ventas=True):
-    """Para cada venta de overoption, busca a la persona de Telegram que entró
-    después de pagar (hasta ventana_s, con ANTES_S de margen por los relojes):
-    con el enlace de la venta si se sabe quién se unió con él; si no, al mismo
-    canal. Telegram solo enseña a quien sigue dentro, así que el que entró a
-    esa hora puede no ser el comprador (que se fue): solo es «emparejada» si
-    es el único que entró y esa entrada no la reclama otra venta. Devuelve una
-    lista de dicts con el resultado y su estado: emparejada / dudosa_varios /
-    sin_emparejar / sin_canal (y por_correo, ver _propagar_por_correo)."""
-    por_enlace, por_titulo, canales = _mapa_canales(con)
-    entradas = _entradas_por_canal(con)
-    invitados = _invitados_por_enlace(con)
-    personas = _personas(con)
-    registro = _quien_entro(con, entradas, invitados, por_enlace)
-
-    filtro = "WHERE es_propina = 0 AND estado = 'SUCCESS'" if solo_ventas else ""
-    ventas = []  # (venta, canal_id, grupo, entradas cerca o None si no se sabe el canal)
-    for v in con.execute(f"SELECT * FROM pagos_overoption {filtro} ORDER BY pago_ts"):
-        v = dict(v)
-        canal_id = _canal_de_venta(v, por_enlace, por_titulo)
-        fuente = invitados.get(v["enlace"]) if v["enlace"] else None
-        if fuente is None and canal_id is not None:
-            fuente = entradas.get(canal_id, [])
-        cerca = None if fuente is None else [
-            (uid, ts) for uid, ts in fuente
-            if v["pago_ts"] is not None and -ANTES_S <= ts - v["pago_ts"] <= ventana_s]
-        ventas.append((v, canal_id, canal_id if canal_id is not None else v["enlace"], cerca))
-    # Cuántas ventas reclaman cada entrada (en el mismo canal).
-    reclamada = Counter((grupo, e) for _, _, grupo, cerca in ventas for e in set(cerca or []))
-
-    base = []
-    candidatos = {}  # id de venta dudosa -> quiénes entraron a esa hora
-    grupos = {}  # id de venta -> canal (o enlace si no se sabe el canal)
-    entraron = {}  # id de venta -> quiénes entraron alguna vez en su canal (si se sabe entero)
-    for v, canal_id, grupo, cerca in ventas:
-        if canal_id in registro and v["pago_ts"] is not None and v["pago_ts"] >= registro[canal_id][0]:
-            entraron[v["id"]] = registro[canal_id][1]
-        user_id = None
-        quienes = list(dict.fromkeys(uid for uid, _ in cerca or []))  # sin repetir usuario
-        if cerca is None:
-            estado = "sin_canal"
-        elif len(quienes) == 1 and all(reclamada[(grupo, e)] == 1 for e in cerca):
-            estado = "emparejada"
-            user_id = quienes[0]
-        elif quienes:
-            estado = "dudosa_varios"
-            candidatos[v["id"]] = set(quienes)
-        else:
-            estado = "sin_emparejar"
-        grupos[v["id"]] = grupo
-        base.append({
-            "id": v["id"], "producto": v["producto"], "correo": v["correo"],
-            "importe": v["importe"], "moneda": v["moneda"], "neto": v["neto"],
-            "metodo": v["metodo"], "pago_ts": v["pago_ts"], "enlace": v["enlace"],
-            "canal_id": canal_id, "titulo": canales.get(canal_id),
-            "user_id": user_id, **_quien(personas, user_id),
-            "estado_cruce": estado, "posibles": [],
-        })
-    manual = _manuales(con, personas)
-    # Quién entró a la hora de alguna compra de cada correo (desempata el nombre).
-    hora = defaultdict(set)
-    for r in base:
-        correo = _clave_correo(r["correo"])
-        if r["estado_cruce"] == "emparejada":
-            hora[correo].add(r["user_id"])
-        hora[correo] |= candidatos.get(r["id"], set())
-    nombre = _por_nombre({_clave_correo(r["correo"]) for r in base if r["correo"]}, personas, hora,
-                         excluir=set(manual) | _bloqueados(con))
-    # Por vueltas: lo que se sabe por correo deja a otras ventas de esa hora
-    # con una sola persona posible, y esa persona resuelve su correo.
-    eliminadas = {}  # id de venta -> user_id
-    for _ in range(MAX_VUELTAS):
-        resultados = [dict(r) for r in base]
-        for r in resultados:
-            if r["id"] in eliminadas:
-                r.update(user_id=eliminadas[r["id"]], **_quien(personas, eliminadas[r["id"]]),
-                         estado_cruce="por_eliminacion")
-        _propagar_por_correo(resultados, personas, manual, nombre, entraron)
-        nuevas = {vid: uid for vid, uid in _eliminar(resultados, candidatos, grupos).items()
-                  if vid not in eliminadas}
-        if not nuevas:
-            break
-        eliminadas.update(nuevas)
-    return resultados
+    """Para cada venta de overoption, la persona de Telegram de su correo si
+    se sabe (cruce.py: lo que dice el dueño, 3 compras buenas o más, o el
+    nombre). Devuelve una lista de dicts con el resultado y su estado:
+    manual / por_correo / por_nombre / dudosa_varios (sin persona, con
+    candidatos en `posibles`) / sin_emparejar / sin_canal."""
+    from . import cruce
+    return cruce.emparejar(con, ventana_s=ventana_s, solo_ventas=solo_ventas)
 
 
 def _quien(personas, user_id):
@@ -472,112 +378,9 @@ def _por_nombre(correos, personas, hora, excluir=()):
     return elegidos
 
 
-def _eliminar(resultados, candidatos, grupos):
-    """Pone en cada venta dudosa sin persona quién puede ser todavía
-    (`posibles`): los que entraron a esa hora menos los que ya se sabe que
-    pagaron ese canal con otra venta (nadie paga dos veces un canal).
-    Devuelve {id: user_id} de las que solo les queda una persona que no es
-    posible para ninguna otra venta de ese canal."""
-    comprado = {(grupos[r["id"]], r["user_id"]) for r in resultados
-                if r["user_id"] is not None and grupos[r["id"]] is not None}
-    posibles = {}
-    for r in resultados:
-        if r["user_id"] is None and r["id"] in candidatos:
-            g = grupos[r["id"]]
-            r["posibles"] = posibles[r["id"]] = sorted(
-                u for u in candidatos[r["id"]] if (g, u) not in comprado)
-    veces = Counter((grupos[vid], u) for vid, ps in posibles.items() for u in ps)
-    return {vid: ps[0] for vid, ps in posibles.items()
-            if len(ps) == 1 and veces[(grupos[vid], ps[0])] == 1}
-
-
 def _clave_correo(correo):
     """El mismo correo escrito con mayúsculas o espacios es el mismo correo."""
     return correo.strip().lower() if correo else None
-
-
-def _propagar_por_correo(resultados, personas, manual=None, nombre=None, entraron=None):
-    """Las compras de un correo cuya persona se sabe pasan a ser de esa
-    persona (estado por_correo, o manual si lo dijo el dueño: `manual` es
-    {correo: user_id} y manda sobre todo lo demás). Un cruce suelto puede ser
-    falso (el comprador se fue y entró otro a esa hora), así que el correo es
-    de una persona si:
-    - POR_CORREO_MIN o más ventas seguras (emparejadas o por eliminación)
-      apuntan a ella y son al menos POR_CORREO_PROPORCION de las del correo
-      (el cruce en contra también pasa a ella), o
-    - solo hay una segura, esa persona no sale con ningún otro correo y no
-      falta en ningún canal que compró el correo del que se sabe todo el que
-      entró (`entraron`: id de venta -> quiénes entraron alguna vez en su
-      canal): quien compra entra.
-    Y nadie paga dos veces el mismo canal: si un correo compró canales que la
-    persona ya pagó con otro correo suyo (con más cruces), es otro comprador
-    (p. ej. un amigo que compra lo mismo a la vez) y sus cruces con ella eran
-    falsos: pasan a dudosos."""
-    manual = manual or {}
-    entraron = entraron or {}
-    seguras = defaultdict(Counter)  # correo -> {user_id: nº de ventas seguras}
-    canales_de = defaultdict(set)  # correo -> canales que compró
-    ventas_de = defaultdict(list)  # correo -> ids de sus ventas
-    for r in resultados:
-        correo = _clave_correo(r["correo"])
-        if not correo:
-            continue
-        canales_de[correo].add(_clave_canal(r))
-        ventas_de[correo].append(r["id"])
-        if r["estado_cruce"] in SEGURAS:
-            seguras[correo][r["user_id"]] += 1
-    dueno, pagado = {}, defaultdict(set)  # pagado: user_id -> canales de sus correos
-    for correo, uid in manual.items():
-        dueno[correo] = uid
-        pagado[uid] |= canales_de[correo]
-    # Por nombre (nombre=): manda sobre un cruce por hora suelto, pero no si la
-    # hora dice otra persona con fuerza ni choca con lo que pagó con otro correo.
-    por_nombre = set()
-    for correo, uid in (nombre or {}).items():
-        if correo in dueno or canales_de[correo] & pagado[uid]:
-            continue
-        if any(u != uid and n >= POR_CORREO_MIN for u, n in seguras[correo].items()):
-            continue
-        dueno[correo] = uid
-        pagado[uid] |= canales_de[correo]
-        por_nombre.add(correo)
-    correos_de = defaultdict(set)
-    for correo, cuantas in seguras.items():
-        for uid in cuantas:
-            correos_de[uid].add(correo)
-    for correo, uid in dueno.items():
-        correos_de[uid].add(correo)
-    candidatos = []
-    for correo, cuantas in seguras.items():
-        if correo in dueno:
-            continue
-        uid, n = cuantas.most_common(1)[0]
-        total = sum(cuantas.values())
-        if ((n >= POR_CORREO_MIN and n >= POR_CORREO_PROPORCION * total)
-                or (total == 1 and len(correos_de[uid]) == 1
-                    and all(uid in entraron.get(vid, {uid}) for vid in ventas_de[correo]))):
-            candidatos.append((n, correo, uid))
-    falsos = set()  # (correo, user_id) de otro comprador
-    for n, correo, uid in sorted(candidatos, key=lambda c: (-c[0], c[1])):
-        if canales_de[correo] & pagado[uid]:
-            falsos.add((correo, uid))
-            continue
-        dueno[correo] = uid
-        pagado[uid] |= canales_de[correo]
-    for r in resultados:
-        correo = _clave_correo(r["correo"])
-        if r["estado_cruce"] in SEGURAS and (correo, r["user_id"]) in falsos:
-            r.update(user_id=None, nombre=None, username=None, estado_cruce="dudosa_varios")
-        elif r["estado_cruce"] == "por_eliminacion" and dueno.get(correo) != r["user_id"]:
-            # La eliminación falla si el comprador se fue y quedó otro que
-            # entró a esa hora: solo vale si su correo acaba siendo de esa persona.
-            r.update(user_id=None, nombre=None, username=None, estado_cruce="dudosa_varios")
-        uid = dueno.get(correo)
-        if uid is None or (r["estado_cruce"] in SEGURAS and r["user_id"] == uid):
-            continue
-        r.update(user_id=uid, **_quien(personas, uid),
-                 estado_cruce="manual" if correo in manual
-                 else "por_nombre" if correo in por_nombre else "por_correo")
 
 
 # --- Correos que el dueño dice de quién son (pestaña «Correos por identificar») ------
@@ -646,7 +449,7 @@ def personas_por_correo(con, ventana_s=VENTANA_S):
 
 def pagos_por_persona(con, ventana_s=VENTANA_S):
     """user_id -> {canales: nº canales distintos pagados, eur: total recibido,
-    n: nº de ventas} de las ventas emparejadas (por hora o por correo)."""
+    n: nº de ventas} de las ventas con persona."""
     por_persona = {}
     for r in emparejar_ventas(con, ventana_s=ventana_s):
         if r["user_id"] is None:
@@ -696,12 +499,10 @@ CABECERA_PAGOS = ["Fecha y hora", "Producto (overoption)", "Importe", "Moneda", 
 CABECERA_CLIENTES = ["Correo", "Compras", "Total pagado", "Total recibido", "Canales distintos",
                      "Primera compra", "Última compra", "Persona de Telegram"]
 _ESTADO_TEXTO = {
-    "emparejada": "✅ emparejada",
-    "por_correo": "✅ por correo (misma persona)",
-    "dudosa_varios": "⚠️ dudosa (varias ventas o entradas a la vez)",
-    "sin_emparejar": "— sin emparejar",
+    "por_correo": "✅ por compras (entró justo después de pagar 3 veces o más)",
+    "dudosa_varios": "⚠️ sin confirmar (entraron a esa hora; ver «Correos por identificar»)",
+    "sin_emparejar": "— nadie entró justo después de pagar",
     "sin_canal": "⚠️ canal no identificado",
-    "por_eliminacion": "✅ por eliminación (los demás de esa hora ya se saben)",
     "manual": "✅ indicado por ti",
     "por_nombre": "✅ por nombre (el correo y su Telegram coinciden)",
 }
@@ -712,9 +513,9 @@ CABECERA_POR_IDENTIFICAR = ["Correo", "Compras", "Te llegó", "Última compra", 
                             "Su Telegram (escríbelo tú: @usuario, id, o «no»)", "Resultado"]
 COLUMNA_MANUAL = 6  # (contando desde 0) la columna que escribe el dueño
 _ESTADO_CORTO = {
-    "dudosa_varios": "dudosas", "sin_canal": "canal no identificado",
-    "sin_emparejar": "sin nadie que encaje", "emparejada": "seguras", "por_correo": "por correo",
-    "por_eliminacion": "por eliminación", "manual": "indicadas por ti", "por_nombre": "por nombre",
+    "dudosa_varios": "sin confirmar", "sin_canal": "canal no identificado",
+    "sin_emparejar": "sin nadie que encaje", "por_correo": "por compras",
+    "manual": "indicadas por ti", "por_nombre": "por nombre",
 }
 
 
@@ -787,8 +588,8 @@ def filas_pagos(con, tz, ventana_s=VENTANA_S):
             _ESTADO_TEXTO.get(r["estado_cruce"], r["estado_cruce"]), r["id"],
         ])
     # Las dudosas y sin emparejar, arriba del todo, para que el dueño las revise.
-    orden = {"dudosa_varios": 0, "sin_canal": 1, "sin_emparejar": 2, "emparejada": 3,
-             "por_eliminacion": 4, "por_correo": 5, "por_nombre": 6, "manual": 7}
+    orden = {"dudosa_varios": 0, "sin_canal": 1, "sin_emparejar": 2, "por_correo": 3,
+             "por_nombre": 4, "manual": 5}
     filas.sort(key=lambda f: (orden.get(
         {v: k for k, v in _ESTADO_TEXTO.items()}.get(f[9], ""), 9), -(f[0] or 0)))
     return filas

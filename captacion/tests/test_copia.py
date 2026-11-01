@@ -59,7 +59,9 @@ class TestExportar(unittest.TestCase):
     def test_resultado_del_cruce(self):
         self.exportar()
         fila = self.leer("cruce_ventas.csv")[0]
-        self.assertEqual((fila["id"], fila["estado_cruce"], fila["user_id"]), ("v1", "emparejada", "500"))
+        # Un cruce suelto no da persona: sale como candidata en «posibles».
+        self.assertEqual((fila["id"], fila["estado_cruce"], fila["user_id"], fila["posibles"]),
+                         ("v1", "dudosa_varios", "", "500"))
         self.assertIn("pago_ts_fecha", fila)
 
     def test_leeme_y_nunca_la_sesion_de_telegram(self):
