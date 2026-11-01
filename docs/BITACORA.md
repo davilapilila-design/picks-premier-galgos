@@ -3,6 +3,21 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-01 — Captación: diseño de las cuentas por cliente
+
+- El dueño quiere saber, por persona de Telegram, a cuántas apuestas ha
+  entrado (pagadas y gratis), unidades ganadas o perdidas, € pagados y una
+  simulación a 10 € por unidad, desde el 22/07/2026. Las gratis
+  (compensaciones y gratuita) cuentan, así que el cruce correo ↔ Telegram
+  hace falta.
+- Medido antes de diseñar: gratis y pagadas entran con el mismo enlace;
+  nadie entra antes de pagar (sobra el margen de 30 s); el cruce actual
+  falla en los cruces sueltos por hora y no usa el nombre en contra.
+- Diseño en `docs/superpowers/specs/2026-11-01-cuentas-por-cliente-design.md`
+  (cruce nuevo con las gratis fuera, mínimo 2 compras, veto por nombre y
+  examen fijo contra los correos que confirmó el dueño). Sin código aún.
+- Commits: `c88ad82`
+
 ## 2026-10-30 — Captación: quien compra entra (un solo cruce no vale si falta en un canal)
 
 - Al apuntar el dueño 8 correos a mano, las eliminaciones en cadena dieron
