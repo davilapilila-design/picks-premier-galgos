@@ -44,6 +44,119 @@ def por_id(resultados):
     return {r["id"]: r for r in resultados}
 
 
+def invitados(con, enlace, canal_id, titulo, filas):
+    """Quién se unió con un enlace (lista de Telegram): filas [(uid, nombre, @, ts)]."""
+    from premier_captacion import invitaciones
+    with con:
+        invitaciones.guardar(con, enlace, canal_id, titulo, filas, ahora=1)
+
+
+def compra(con, vid, n, ts, correo, entra=None, segundos=5, producto=None):
+    """Una compra del canal n (cada canal con su enlace, como en la realidad:
+    nadie compra dos veces el mismo) y, si `entra`, esa persona entra con el
+    enlace `segundos` después de pagar."""
+    enlace = f"https://t.me/+C{n}"
+    if con.execute("SELECT 1 FROM ventas_canales WHERE canal_id = ?", (n,)).fetchone() is None:
+        canal(con, n, f"Canal {n}")
+    if entra is not None:
+        entra_movimiento(con, n, ts + segundos, entra, ts + segundos, enlace)
+    venta(con, vid, enlace, ts, producto=producto or f"Canal {n}", correo=correo)
+
+
+def datos(con):
+    from premier_captacion import cruce
+    return cruce.Datos(con)
+
+
+def venta_de(d, vid):
+    return next(v for v in d.ventas if v["id"] == vid)
+
+
+class TestCandidatos(unittest.TestCase):
+    """Candidatos de una venta: quienes entraron entre 0 s y 3 min después
+    de pagar (nadie entra antes de pagar: medido en 519 compras)."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 10, "Canal X")
+
+    def candidatos(self, vid="v1"):
+        return venta_de(datos(self.con), vid)["candidatos"]
+
+    def test_de_0_a_180_segundos_despues_del_pago(self):
+        for i, (uid, ts) in enumerate(((500, 1000), (501, 1180), (502, 1181), (503, 995))):
+            entra_movimiento(self.con, 10, i, uid, ts, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.candidatos(), {500, 501})
+
+    def test_con_la_lista_del_enlace_solo_cuentan_los_de_ese_enlace(self):
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+OTRAVENTA")
+        invitados(self.con, "https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 1030)])
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        venta(self.con, "v2", "https://t.me/+OTRAVENTA", 900, producto="Otro producto")
+        self.assertEqual(self.candidatos(), {700})
+
+    def test_el_registro_trae_tambien_a_quien_se_fue(self):
+        invitados(self.con, "https://t.me/+L", 10, "Canal X", [(700, "Eva", None, 5030)])
+        entra_movimiento(self.con, 10, 1, 500, 1003, "https://t.me/+L")  # entró y se fue
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.candidatos(), {500})
+
+    def test_canal_que_no_se_sigue_por_la_lista_del_enlace(self):
+        invitados(self.con, "https://t.me/+V", 99, "Canal viejo", [(700, "Eva", "eva", 1060)])
+        venta(self.con, "v1", "https://t.me/+V", 1000, producto="Otro nombre")
+        v = venta_de(datos(self.con), "v1")
+        self.assertEqual((v["candidatos"], v["canal_id"]), ({700}, 99))
+
+    def test_sin_canal_no_hay_candidatos_que_mirar(self):
+        venta(self.con, "v1", "https://t.me/+DESCONOCIDO", 1000, producto="No existe")
+        self.assertIsNone(self.candidatos())
+
+
+class TestJuicio(unittest.TestCase):
+    """Cada compra frente a una persona: buena (entró justo después de
+    pagar), mala (se podía ver y no entró después de pagar) o sin comprobar."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 10, "Canal X")
+
+    def juicio(self, uid, vid="v1"):
+        d = datos(self.con)
+        return d.juicio(venta_de(d, vid), uid)
+
+    def test_buena(self):
+        entra_movimiento(self.con, 10, 1, 500, 1008, "https://t.me/+L")
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.juicio(500), "buena")
+
+    def test_mala_si_entro_a_otra_hora(self):
+        miembro(self.con, 10, 500, 1600)  # 10 min después
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.juicio(500), "mala")
+
+    def test_mala_si_el_registro_cubria_la_hora_y_no_entro(self):
+        entra_movimiento(self.con, 10, 1, 501, 900, "https://t.me/+L")  # el registro empieza antes
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.juicio(500), "mala")
+
+    def test_sin_comprobar_si_no_hay_registro_ni_sigue_dentro(self):
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        miembro(self.con, 10, 501, 1005)
+        self.assertEqual(self.juicio(500), "sin")
+
+    def test_sin_comprobar_si_ya_estaba_dentro_antes_de_pagar(self):
+        miembro(self.con, 10, 500, 400)
+        venta(self.con, "v1", "https://t.me/+L", 1000)
+        self.assertEqual(self.juicio(500), "sin")
+
+    def test_sin_comprobar_si_no_se_sabe_el_canal(self):
+        venta(self.con, "v1", "https://t.me/+DESCONOCIDO", 1000, producto="No existe")
+        self.assertEqual(self.juicio(500), "sin")
+
+
 class TestEmparejar(unittest.TestCase):
     def setUp(self):
         self.con = db.abrir(":memory:")
