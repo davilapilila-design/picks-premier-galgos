@@ -72,6 +72,29 @@ def puntos(correo, nombre, username):
     return puntos_preparados(*preparar_correo(correo), *preparar(nombre, username))
 
 
+def _pila_del_correo(letras):
+    """El nombre de pila más largo por el que empieza el correo, o None."""
+    return max((p for p in PILA if letras.startswith(p)), key=len, default=None)
+
+
+def choca(correo, nombre, username):
+    """El correo empieza por un nombre de pila y el nombre de Telegram por
+    otro distinto (ni diminutivo: «dani»/«daniel»), sin que ninguna palabra
+    de su nombre esté en el correo ni su @usuario case con él. Entonces la
+    hora sola no basta para darle ese correo (lo decide el dueño)."""
+    letras, alnum = preparar_correo(correo)
+    palabras, usuario = preparar(nombre, username)
+    del_correo = _pila_del_correo(letras)
+    if del_correo is None or not palabras or palabras[0] not in PILA:
+        return False
+    de_telegram = palabras[0]
+    if del_correo.startswith(de_telegram) or de_telegram.startswith(del_correo):
+        return False
+    if any(len(p) >= 4 and p in letras for p in palabras):
+        return False
+    return puntos_preparados(letras, alnum, palabras, usuario) is None
+
+
 # --- Chats privados del dueño ---------------------------------------------------------
 
 def guardar_chats(con, personas, ahora=None):

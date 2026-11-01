@@ -57,6 +57,33 @@ class TestCasa(unittest.TestCase):
         self.assertGreater(mas, menos)
 
 
+class TestChoca(unittest.TestCase):
+    """El nombre del correo dice una persona y el de Telegram otra distinta:
+    el cruce por hora no puede darle ese correo solo (diseño 2026-11-01)."""
+
+    def test_otro_nombre_de_pila_choca(self):
+        self.assertTrue(nombres.choca("victorlopez@example.com", "Raul", None))
+
+    def test_mismo_nombre_no_choca(self):
+        self.assertFalse(nombres.choca("victorlopez@example.com", "Victor Lopez", None))
+
+    def test_un_nombre_que_no_es_de_pila_no_choca(self):
+        self.assertFalse(nombres.choca("victorlopez@example.com", "Vic", None))
+
+    def test_diminutivo_no_choca(self):
+        self.assertFalse(nombres.choca("danirojo@example.com", "Daniel", None))
+        self.assertFalse(nombres.choca("danielrojo@example.com", "Dani", None))
+
+    def test_si_su_apellido_esta_en_el_correo_no_choca(self):
+        self.assertFalse(nombres.choca("rosalesmanuel@example.com", "Pedro Rosales", None))
+
+    def test_correo_sin_nombre_de_pila_no_choca(self):
+        self.assertFalse(nombres.choca("xk81@example.com", "Raul", None))
+
+    def test_usuario_que_casa_con_el_correo_no_choca(self):
+        self.assertFalse(nombres.choca("victorlopez@example.com", "Raul", "victorlopez"))
+
+
 class TestChats(unittest.TestCase):
     def setUp(self):
         self.con = db.abrir(":memory:")
