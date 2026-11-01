@@ -247,3 +247,52 @@ def calcular(con, ventana_s=VENTANA_S, solo_ventas=True, con_manual=True):
 def emparejar(con, ventana_s=VENTANA_S, solo_ventas=True):
     """Una fila por venta (las claves de siempre de pagos.emparejar_ventas)."""
     return calcular(con, ventana_s=ventana_s, solo_ventas=solo_ventas).resultados
+
+
+def examen(con):
+    """Examen fijo: el cruce sin lo que escribió el dueño, comparado venta a
+    venta con lo que escribió (los correos que confirmó). Un cruce nuevo no
+    se instala si tiene más «mal» que el que hay."""
+    verdad = pagos._manuales(con, pagos._personas(con))
+    nota = {"correos": len(verdad), "bien": 0, "mal": 0, "sin": 0}
+    correos_mal = set()
+    for r in calcular(con, con_manual=False).resultados:
+        correo = pagos._clave_correo(r["correo"])
+        if correo not in verdad:
+            continue
+        if r["user_id"] is None:
+            nota["sin"] += 1
+        elif r["user_id"] == verdad[correo]:
+            nota["bien"] += 1
+        else:
+            nota["mal"] += 1
+            correos_mal.add(correo)
+    nota["correos_mal"] = sorted(correos_mal)
+    return nota
+
+
+def main(argv=None):
+    import os
+    import sqlite3
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
+    if argv != ["examen"]:
+        print("Uso: CAPTACION_DB=<base> python -m premier_captacion.cruce examen")
+        return 2
+    ruta = os.environ.get("CAPTACION_DB", "/var/lib/premier-captacion/real.db")
+    con = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)  # solo lectura
+    con.row_factory = sqlite3.Row
+    try:
+        nota = examen(con)
+    finally:
+        con.close()
+    print(f"Correos confirmados por el dueño: {nota['correos']}")
+    print(f"Sus compras: bien {nota['bien']} | mal {nota['mal']} | sin persona {nota['sin']}")
+    for correo in nota["correos_mal"]:
+        print(f"  mal: {correo}")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

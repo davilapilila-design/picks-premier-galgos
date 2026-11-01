@@ -458,6 +458,36 @@ class TestPorNombre(unittest.TestCase):
         self.assertIn("🚫", f[pagos.COLUMNA_MANUAL + 1])
 
 
+class TestExamen(unittest.TestCase):
+    """El cruce sin lo que escribió el dueño, comparado con lo que escribió."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        persona(self.con, 500, nombre="Ana", username="ana")
+        persona(self.con, 501, nombre="Luis", username="luis")
+        for i in range(1, 4):
+            compra(self.con, f"a{i}", i, 1000 * i, "ana@example.com", entra=500)  # lo acierta
+        for i in range(4, 6):
+            compra(self.con, f"l{i}", i, 1000 * i, "luis@example.com", entra=501)  # no llega
+        indicar(self.con, "ana@example.com", "@ana")
+        indicar(self.con, "luis@example.com", "@luis")
+
+    def examen(self):
+        from premier_captacion import cruce as modulo
+        return modulo.examen(self.con)
+
+    def test_cuenta_bien_y_sin_persona(self):
+        self.assertEqual(self.examen(), {"correos": 2, "bien": 3, "mal": 0, "sin": 2, "correos_mal": []})
+
+    def test_cuenta_mal_y_dice_el_correo(self):
+        for i in range(6, 9):
+            compra(self.con, f"p{i}", i, 1000 * i, "pepe@example.com", entra=500)
+        indicar(self.con, "pepe@example.com", "@luis")  # el dueño dice Luis; la hora, Ana
+        e = self.examen()
+        self.assertEqual((e["mal"], e["correos_mal"]), (3, ["pepe@example.com"]))
+
+
 class TestPestanaPorIdentificar(unittest.TestCase):
     """Pestaña del Sheet con los correos sin persona, de más a menos compras,
     con una columna para que el dueño escriba su @usuario de Telegram."""
