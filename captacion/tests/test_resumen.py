@@ -76,10 +76,13 @@ class TestDiario(Base):
         textos.guardar(self.con, "bienvenida", "Hola v2", ts(2026, 10, 14, 15, 0))
         self.evento(ts(2026, 10, 14, 16, 0), "bienvenida_enviada", 7, tipo_mensaje="bot_b_v2")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas (0 de las 2 que entraron)", texto)
+        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas", texto.split("\n"))  # ninguno entró ese día
         self.evento(ts(2026, 10, 14, 17, 0), "faq", 2, tema="menu")  # el 2 entró ese día
+        self.evento(ts(2026, 10, 14, 17, 0), "solicitud", 8)
+        self.evento(ts(2026, 10, 14, 17, 0), "ya_recibida", 8)  # ya estaba en el canal
+        self.evento(ts(2026, 10, 14, 17, 1), "faq", 8, tema="menu")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 3 personas (1 de las 2 que entraron)", texto)
+        self.assertIn("📚 Miraron las dudas frecuentes: 4 personas (1 nueva, 1 ya estaba o volvió, 2 de antes)", texto)
         # Con dos versiones de bienvenida en el día, sale el desglose con sus nombres.
         self.assertIn("   · Bienvenida del bot, versión 2 (cambiada desde el bot el 14/10/2026): 1", texto)
         self.assertIn(f"   · {mensajes.TIPOS_MENSAJE['bot_b_v1']}: 1", texto)

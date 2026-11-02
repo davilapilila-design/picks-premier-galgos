@@ -52,6 +52,7 @@ def calcular(eventos):
         "por_tipo": Counter(),
         "sin_bienvenida": Counter(),
         "ya_recibida": 0,
+        "volvieron": set(),  # quienes recibieron la bienvenida sin gratuita
         "aceptadas": 0,
         "sin_aceptar": Counter(),
         "escribieron_bot": set(),
@@ -74,6 +75,7 @@ def calcular(eventos):
             est["sin_bienvenida"][d.get("motivo") or "?"] += 1
         elif tipo == "ya_recibida":
             est["ya_recibida"] += 1
+            est["volvieron"].add(ev["user_id"])
         elif tipo == "aceptada":
             est["aceptadas"] += 1
         elif tipo == "aceptacion_fallida":
@@ -138,12 +140,18 @@ def _cuerpo(est, anterior=None, nombres_tipo=None):
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
     def de_los_nuevos(clave):
-        # Cuántos de ellos son de los que pidieron entrar en este periodo
-        # (2026-11-02, el dueño: para ver cuántos nuevos llegan a escribir).
-        if not est["personas"]:
-            return ""
-        nuevos, total = len(est[clave] & est["personas"]), len(est["personas"])
-        return f" ({nuevos} de la que entró)" if total == 1 else f" ({nuevos} de las {total} que entraron)"
+        # De quién son (2026-11-02, el dueño): nuevos que entraron en el
+        # periodo, los que ya estaban en el canal o volvieron a entrar, y el
+        # resto (de antes).
+        quienes = est[clave]
+        nuevas = len(quienes & (est["personas"] - est["volvieron"]))
+        volvieron = len(quienes & est["volvieron"])
+        antes = len(quienes) - nuevas - volvieron
+        partes = [f"{nuevas} {'nueva' if nuevas == 1 else 'nuevas'}" if nuevas else "",
+                  f"{volvieron} ya {'estaba o volvió' if volvieron == 1 else 'estaban o volvieron'}" if volvieron else "",
+                  f"{antes} de antes" if antes else ""]
+        partes = [p for p in partes if p]
+        return f" ({', '.join(partes)})" if partes and (nuevas or volvieron) else ""
 
     lineas.append(f"🤖 Escribieron al bot: {_personas(len(est['escribieron_bot']))}")
     if est["dudas"]:

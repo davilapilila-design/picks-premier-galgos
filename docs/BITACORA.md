@@ -6,8 +6,11 @@ Entradas más recientes arriba.
 ## 2026-11-02 — Captación: en el resumen, cuántos de los que entraron escribieron o miraron las dudas
 
 - El dueño quiere saber, de los «Te escribieron» y «Miraron las dudas», cuántos
-  son de los que pidieron entrar ese día (o esa semana). Ahora sale
-  «… (3 de las 17 que entraron)».
+  son de los que pidieron entrar ese día (o esa semana). Primero salía
+  «(3 de las 17 que entraron)»; el dueño lo quiere separado: ahora sale
+  «(1 nueva, 3 ya estaban o volvieron, 2 de antes)» (nuevas = entraron en el
+  periodo con la gratuita; volvieron = bienvenida sin gratuita en el
+  periodo; de antes = el resto).
 - Commits: ab517ce
 
 ## 2026-11-02 — Captación: gratis, apuestas y pestaña «Clientes · cuentas»
