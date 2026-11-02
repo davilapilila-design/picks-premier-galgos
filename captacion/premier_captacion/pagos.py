@@ -612,10 +612,12 @@ def hay_datos(con):
     return con.execute("SELECT 1 FROM pagos_overoption LIMIT 1").fetchone() is not None
 
 
-def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S, avisar=None):
+def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S, avisar=None, picks=None):
     """Las pestañas del cruce, la comprobación de cada correo y, con
-    `avisar(texto) -> bool`, los avisos al dueño de los que pasan a «revisar»."""
-    from . import comprobacion, cruce, sheet
+    `avisar(texto) -> bool`, los avisos al dueño de los que pasan a «revisar».
+    También las cuentas por persona, con los resultados de la hoja de picks
+    (`picks`, apuestas.leer_picks; None = sin unidades)."""
+    from . import apuestas, comprobacion, cruce, cuentas, sheet
     # Primero, lo que haya escrito el dueño en «Correos por identificar».
     identificar = libro.pestana(TAB_POR_IDENTIFICAR, [CABECERA_POR_IDENTIFICAR])
     with con:
@@ -635,6 +637,9 @@ def escribir_pestanas(con, tz, libro, ventana_s=VENTANA_S, avisar=None):
     estados = comprobacion.estados(calculo)
     comprobacion.escribir_pestana(libro, comprobacion.filas(estados, tz))
     comprobacion.avisar_cambios(con, estados, avisar)
+    por_canal = apuestas.por_canal(con, picks or {}, tz)
+    personas, sin_persona = cuentas.calcular(con, calculo, por_canal, cuentas.desde_ts(tz))
+    cuentas.escribir_pestana(libro, cuentas.filas(personas, sin_persona, calculo.personas))
 
 
 # --- Ejecutable (servicio captacion-pagos@<instancia>) --------------------------------

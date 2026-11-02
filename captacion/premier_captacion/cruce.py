@@ -19,8 +19,8 @@ docs/superpowers/specs/2026-11-01-cuentas-por-cliente-design.md
 - Lo que escribe el dueño en «Correos por identificar» manda; su «no»
   bloquea cualquier asignación automática de ese correo.
 
-Las gratis (compensaciones y gratuita) quedan fuera de los candidatos con
-`gratis` (plan siguiente: se leerán de los chats y los canales).
+Las gratis (compensaciones y gratuita: enlace por privado o publicado en
+el canal fallado, gratis.py) quedan fuera de los candidatos.
 
 Examen fijo contra los correos que confirmó el dueño (solo lectura):
     CAPTACION_DB=/var/lib/premier-captacion/real.db python -m premier_captacion.cruce examen
@@ -29,6 +29,7 @@ import sqlite3
 import time
 from collections import Counter, defaultdict
 
+from . import gratis as _gratis
 from . import pagos
 
 VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
@@ -45,7 +46,8 @@ class Datos:
 
     def __init__(self, con, ventana_s=VENTANA_S, solo_ventas=True, gratis=None):
         self.ventana_s = ventana_s
-        self.gratis = gratis or set()  # {(grupo, user_id)} de entradas gratis
+        # {(canal, user_id)} de quien entró después de tener el canal gratis.
+        self.gratis = _gratis.para_cruce(con) if gratis is None else gratis
         por_enlace, por_titulo, self.canales = pagos._mapa_canales(con)
         self._por_canal = pagos._entradas_por_canal(con)  # canal -> [(user_id, ts)]
         self._por_enlace = pagos._invitados_por_enlace(con)  # enlace -> [(user_id, ts)]

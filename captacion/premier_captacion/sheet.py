@@ -302,10 +302,11 @@ def filas_tipos(con, tz):
 
 # --- Sincronización -----------------------------------------------------------
 
-def sincronizar(con, tz, libro, avisar=None):
+def sincronizar(con, tz, libro, avisar=None, picks=None):
     """Copia la base de datos al libro. Devuelve un resumen de lo hecho.
     `avisar(texto) -> bool` manda al dueño los avisos de la comprobación de
-    correos (comprobacion.py); None = sin avisos.
+    correos (comprobacion.py); None = sin avisos. `picks`: resultados de la
+    hoja de picks para las cuentas por cliente (apuestas.leer_picks).
 
     `libro` tiene preparar() y pestana(nombre, filas_cabecera); cada pestaña
     tiene reemplazar(filas, desde_fila, formulas), ids(), anadir(filas) y
@@ -339,7 +340,7 @@ def sincronizar(con, tz, libro, avisar=None):
 
     from . import pagos  # ventas de overoption cruzadas con las entradas
     if pagos.hay_datos(con):
-        pagos.escribir_pestanas(con, tz, libro, avisar=avisar)
+        pagos.escribir_pestanas(con, tz, libro, avisar=avisar, picks=picks)
 
     return {"usuarios": len(usuarios), "eventos_nuevos": len(nuevos), "dias": len(dias)}
 
@@ -482,11 +483,16 @@ def main(argv=None):
         log.error("Falta gspread: lo instala deploy/instalar.sh en /opt/premier-captacion/venv")
         return 2
 
+    from . import apuestas, comprobacion
+    try:
+        picks = apuestas.leer_picks(apuestas.abrir_picks(credencial))
+    except Exception as e:
+        picks = None
+        log.warning("No pude leer la hoja de picks (las cuentas saldrán sin unidades): %s", e)
     con = db.abrir(cfg.db_path)
     try:
-        from . import comprobacion
         resultado = sincronizar(con, cfg.tz, abrir_libro(credencial, cfg.sheet_id),
-                                avisar=comprobacion.aviso_por_bot(cfg))
+                                avisar=comprobacion.aviso_por_bot(cfg), picks=picks)
     except Exception as e:
         texto = str(e)
         if any(c in texto for c in ("403", "404", "PERMISSION_DENIED", "not found")) or type(e).__name__ == "SpreadsheetNotFound":
