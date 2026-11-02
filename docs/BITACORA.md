@@ -12,7 +12,7 @@ Entradas más recientes arriba.
   nuevos), quién entró al canal (nuevos con gratuita, ya estaban o volvieron,
   por enlace) y acaba en una línea con aceptadas, mensajes al bot y enlaces
   de venta. Los avisos (sin bienvenida, pausa, sin aceptar) solo si pasan.
-- Commits: (este commit)
+- Commits: bb0bd3e
 
 ## 2026-11-02 — Captación: en el resumen, cuántos de los que entraron escribieron o miraron las dudas
 
