@@ -8,7 +8,8 @@ Entradas más recientes arriba.
 - El dueño quiere saber, de los «Te escribieron» y «Miraron las dudas», cuántos
   son de los que pidieron entrar ese día (o esa semana). Ahora sale
   «… (3 de las 17 que entraron)».
-- Commits: (este commit)
+- Commits: ab517ce
+
 ## 2026-11-02 — Captación: gratis, apuestas y pestaña «Clientes · cuentas»
 
 - `gratis.py`: un canal es gratis para una persona desde que el dueño le
