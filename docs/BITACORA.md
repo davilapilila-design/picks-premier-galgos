@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-02 — Captación: resumen rehecho, primero quién te escribió por primera vez
+
+- Lo que más le importa al dueño es cuántas personas le escriben por primera
+  vez: el resumen (diario y semanal) empieza por ahí («Te escribieron por
+  primera vez», cuántos de los nuevos del día y cuántos de otros días, y el
+  total con los que ya habían escrito), sigue con las dudas (cuántos de los
+  nuevos), quién entró al canal (nuevos con gratuita, ya estaban o volvieron,
+  por enlace) y acaba en una línea con aceptadas, mensajes al bot y enlaces
+  de venta. Los avisos (sin bienvenida, pausa, sin aceptar) solo si pasan.
+- Commits: (este commit)
+
 ## 2026-11-02 — Captación: en el resumen, cuántos de los que entraron escribieron o miraron las dudas
 
 - El dueño quiere saber, de los «Te escribieron» y «Miraron las dudas», cuántos

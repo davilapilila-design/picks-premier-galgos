@@ -44,15 +44,14 @@ class TestDiario(Base):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
         lineas = texto.split("\n")
         self.assertEqual(lineas[0], "📊 Resumen del miércoles 14.10")
-        self.assertIn("👥 Solicitudes: 2 (2 personas)", lineas)
-        self.assertIn("   · landing: 1", lineas)
-        self.assertIn("   · descripcion-web: 1", lineas)
-        self.assertIn("👋 Bienvenidas enviadas: 1", lineas)
+        self.assertIn("👥 Entraron al canal: 2 personas", lineas)
+        self.assertIn("   · 2 nuevos (bienvenida con gratuita)", lineas)
+        self.assertIn("   · Por el enlace «landing»: 1", lineas)
+        self.assertIn("   · Por el enlace «descripcion-web»: 1", lineas)
         self.assertIn("⚠️ Sin bienvenida por algún problema: 1", lineas)
         self.assertIn("   · llegaron con más de 5 min de espera (¿bot parado?): 1", lineas)
-        self.assertIn("🔁 Ya estaban o volvieron (bienvenida sin gratuita): 0", lineas)
-        self.assertIn("✅ Aceptadas: 2", lineas)
-        self.assertIn("🤖 Escribieron al bot: 1 persona", lineas)
+        self.assertIn("   · 0 ya estaban o volvieron (bienvenida sin gratuita)", lineas)
+        self.assertIn("✅ Aceptadas: 2 · 🤖 Escribieron al bot: 1", lineas)
 
     def test_pausa(self):
         self.evento(ts(2026, 10, 14, 13, 0), "solicitud_en_pausa", 5)
@@ -76,25 +75,37 @@ class TestDiario(Base):
         textos.guardar(self.con, "bienvenida", "Hola v2", ts(2026, 10, 14, 15, 0))
         self.evento(ts(2026, 10, 14, 16, 0), "bienvenida_enviada", 7, tipo_mensaje="bot_b_v2")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas", texto.split("\n"))  # ninguno entró ese día
+        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas\n   · 0 de los 2 nuevos del día", texto)  # ninguno de los que entraron
         self.evento(ts(2026, 10, 14, 17, 0), "faq", 2, tema="menu")  # el 2 entró ese día
         self.evento(ts(2026, 10, 14, 17, 0), "solicitud", 8)
         self.evento(ts(2026, 10, 14, 17, 0), "ya_recibida", 8)  # ya estaba en el canal
         self.evento(ts(2026, 10, 14, 17, 1), "faq", 8, tema="menu")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 4 personas (1 nueva, 1 ya estaba o volvió, 2 de antes)", texto)
+        self.assertIn("📚 Miraron las dudas frecuentes: 4 personas\n   · 1 de los 2 nuevos del día", texto)
+        self.assertIn("   · 1 ya estaban o volvieron (bienvenida sin gratuita)", texto)
         # Con dos versiones de bienvenida en el día, sale el desglose con sus nombres.
         self.assertIn("   · Bienvenida del bot, versión 2 (cambiada desde el bot el 14/10/2026): 1", texto)
         self.assertIn(f"   · {mensajes.TIPOS_MENSAJE['bot_b_v1']}: 1", texto)
 
+    def test_primero_los_que_te_escriben_por_primera_vez(self):
+        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 2, primera_vez=True)  # nuevo de ese día
+        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 9, primera_vez=True)  # entró otro día
+        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 10)  # ya te había escrito
+        lineas = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14)).split("\n")
+        self.assertEqual(lineas[2:6], ["✉️ Te escribieron por primera vez: 2 personas",
+                                       "   · 1 de los 2 nuevos del día (50 %)",
+                                       "   · 1 que entraron otros días",
+                                       "   (en total te escribieron 3: 1 ya te habían escrito antes)"])
+        self.assertIn("✅ Aceptadas: 2 · 🤖 Escribieron al bot: 1 · 🔗 Enlaces de venta enviados: 0", lineas)
+
     def test_lo_que_va_de_dia(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14), ahora_ts=ts(2026, 10, 14, 11, 0))
         self.assertTrue(texto.startswith("📊 Hoy, miércoles 14.10 (hasta las 11:00)"))
-        self.assertIn("👥 Solicitudes: 1 (1 persona)", texto)
+        self.assertIn("👥 Entraron al canal: 1 persona", texto)
 
     def test_dia_vacio_no_falla(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 1, 1))
-        self.assertIn("👥 Solicitudes: 0 (0 personas)", texto)
+        self.assertIn("👥 Entraron al canal: 0 personas", texto)
         self.assertNotIn("⚠️", texto)
 
     def test_cambio_de_hora_de_octubre(self):
@@ -103,7 +114,7 @@ class TestDiario(Base):
         self.evento(ts(2026, 10, 25, 23, 30), "solicitud", 9, enlace="landing")
         self.evento(ts(2026, 10, 26, 0, 10), "solicitud", 10, enlace="landing")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 25))
-        self.assertIn("👥 Solicitudes: 1 (1 persona)", texto)
+        self.assertIn("👥 Entraron al canal: 1 persona", texto)
 
 
 class TestSemanal(Base):
@@ -117,8 +128,7 @@ class TestSemanal(Base):
         texto = resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12))
         lineas = texto.split("\n")
         self.assertEqual(lineas[0], "📅 Resumen semanal: lunes 12.10 – domingo 18.10")
-        self.assertIn("👥 Solicitudes: 3 (3 personas)  ↗️ +50 % vs semana anterior (2)", lineas)
-        self.assertIn("👋 Bienvenidas enviadas: 3 (semana anterior: 0)", lineas)
+        self.assertIn("👥 Entraron al canal: 3 personas  ↗️ +50 % vs semana anterior (2)", lineas)
         self.assertIn("   · Bienvenida del bot, versión B (dos botones), desde 2026-10: 3", lineas)
         self.assertEqual(lineas[-1], "📈 Solicitudes por día: lun 2 · mar 0 · mié 0 · jue 0 · vie 0 · sáb 0 · dom 1")
 
@@ -129,7 +139,7 @@ class TestSemanal(Base):
         texto = resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12), ahora_ts=ts(2026, 10, 13, 12, 0))
         self.assertTrue(texto.startswith("📅 Semana en curso, desde el lunes 12.10"))
         # Hasta el martes a las 12:00 en ambas semanas: 1 frente a 1.
-        self.assertIn("👥 Solicitudes: 1 (1 persona)  ➡️ +0 % vs semana anterior (1)", texto)
+        self.assertIn("👥 Entraron al canal: 1 persona  ➡️ +0 % vs semana anterior (1)", texto)
 
 
 class TestMain(unittest.TestCase):

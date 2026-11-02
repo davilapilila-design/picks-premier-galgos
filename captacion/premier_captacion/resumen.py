@@ -57,6 +57,7 @@ def calcular(eventos):
         "sin_aceptar": Counter(),
         "escribieron_bot": set(),
         "te_escribieron": set(),
+        "primera_vez": set(),  # te escribieron por primera vez
         "enlaces_venta": 0,
         "en_pausa": 0,
         "dudas": set(),
@@ -90,6 +91,8 @@ def calcular(eventos):
         # (fase 4) tiene fechas pasadas y no cae en el día del resumen.
         elif tipo == "te_escribe":
             est["te_escribieron"].add(ev["user_id"])
+            if d.get("primera_vez"):
+                est["primera_vez"].add(ev["user_id"])
         elif tipo == "enlace_venta":
             est["enlaces_venta"] += 1
     return est
@@ -119,47 +122,56 @@ def _num(est, clave):
     return len(valor) if isinstance(valor, set) else valor
 
 
-def _cuerpo(est, anterior=None, nombres_tipo=None):
+def _porcentaje(parte, total):
+    return f" ({round(parte * 100 / total)} %)" if total else ""
+
+
+def _cuerpo(est, anterior=None, nombres_tipo=None, periodo="del día"):
+    """Lo primero, cuántos te escribieron por primera vez (lo que más le
+    importa al dueño, 2026-11-02); después las dudas, quién entró y lo demás."""
     def cmp(clave):
         return _comparar(_num(est, clave), _num(anterior, clave)) if anterior else ""
 
+    nuevos = est["personas"] - est["volvieron"]
     lineas = []
-    lineas.append(f"👥 Solicitudes: {est['solicitudes']} ({_personas(len(est['personas']))}){cmp('solicitudes')}")
-    lineas += _desglose(est["por_enlace"])
-    lineas.append(f"👋 Bienvenidas enviadas: {est['bienvenidas']}{cmp('bienvenidas')}")
-    if anterior or len(est["por_tipo"]) > 1:
+    if est["con_lector"]:
+        primera = est["primera_vez"]
+        de_nuevos = len(primera & nuevos)
+        lineas.append(f"✉️ Te escribieron por primera vez: {_personas(len(primera))}{cmp('primera_vez')}")
+        if primera:
+            lineas.append(f"   · {de_nuevos} de los {len(nuevos)} nuevos {periodo}{_porcentaje(de_nuevos, len(nuevos))}")
+            if len(primera) - de_nuevos:
+                lineas.append(f"   · {len(primera) - de_nuevos} que entraron otros días")
+        repiten = len(est["te_escribieron"] - primera)
+        lineas.append(f"   (en total te escribieron {len(est['te_escribieron'])}"
+                      + (f": {repiten} ya te habían escrito antes)" if repiten else ")"))
+        lineas.append("")
+    if est["dudas"]:
+        lineas.append(f"📚 Miraron las dudas frecuentes: {_personas(len(est['dudas']))}")
+        lineas.append(f"   · {len(est['dudas'] & nuevos)} de los {len(nuevos)} nuevos {periodo}")
+        lineas.append("")
+
+    lineas.append(f"👥 Entraron al canal: {_personas(len(est['personas']))}{cmp('personas')}")
+    lineas.append(f"   · {len(nuevos)} {'nuevo' if len(nuevos) == 1 else 'nuevos'} (bienvenida con gratuita)")
+    lineas.append(f"   · {len(est['volvieron'] & est['personas'])} ya estaban o volvieron (bienvenida sin gratuita)")
+    for enlace, n in est["por_enlace"].most_common():
+        lineas.append(f"   · Por el enlace «{enlace}»: {n}")
+    if est["por_tipo"] and (anterior or len(est["por_tipo"]) > 1):
+        lineas.append("   Versiones de la bienvenida:")
         lineas += _desglose(est["por_tipo"], nombres_tipo or mensajes.TIPOS_MENSAJE)
     if est["sin_bienvenida"]:
         lineas.append(f"⚠️ Sin bienvenida por algún problema: {sum(est['sin_bienvenida'].values())}")
         lineas += _desglose(est["sin_bienvenida"], MOTIVOS)
-    lineas.append(f"🔁 Ya estaban o volvieron (bienvenida sin gratuita): {est['ya_recibida']}")
-    lineas.append(f"✅ Aceptadas: {est['aceptadas']}")
     if est["en_pausa"]:
         lineas.append(f"⏸️ Sin atender por la pausa (para aceptar a mano): {est['en_pausa']}")
     if est["sin_aceptar"]:
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
-    def de_los_nuevos(clave):
-        # De quién son (2026-11-02, el dueño): nuevos que entraron en el
-        # periodo, los que ya estaban en el canal o volvieron a entrar, y el
-        # resto (de antes).
-        quienes = est[clave]
-        nuevas = len(quienes & (est["personas"] - est["volvieron"]))
-        volvieron = len(quienes & est["volvieron"])
-        antes = len(quienes) - nuevas - volvieron
-        partes = [f"{nuevas} {'nueva' if nuevas == 1 else 'nuevas'}" if nuevas else "",
-                  f"{volvieron} ya {'estaba o volvió' if volvieron == 1 else 'estaban o volvieron'}" if volvieron else "",
-                  f"{antes} de antes" if antes else ""]
-        partes = [p for p in partes if p]
-        return f" ({', '.join(partes)})" if partes and (nuevas or volvieron) else ""
-
-    lineas.append(f"🤖 Escribieron al bot: {_personas(len(est['escribieron_bot']))}")
-    if est["dudas"]:
-        lineas.append(f"📚 Miraron las dudas frecuentes: {_personas(len(est['dudas']))}{de_los_nuevos('dudas')}")
+    lineas.append("")
+    pie = [f"✅ Aceptadas: {est['aceptadas']}", f"🤖 Escribieron al bot: {len(est['escribieron_bot'])}"]
     if est["con_lector"]:
-        lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{de_los_nuevos('te_escribieron')}"
-                      f"{cmp('te_escribieron')}")
-        lineas.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}{cmp('enlaces_venta')}")
+        pie.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}")
+    lineas.append(" · ".join(pie))
     return lineas
 
 
@@ -234,7 +246,7 @@ def texto_semanal(con, tz, lunes, ahora_ts=None):
     dias = " · ".join(f"{DIAS[i][:3]} {por_dia[i]}" for i in range(7))
 
     _marcar_lector(con, est, anterior)
-    cuerpo = _cuerpo(est, anterior, nombres_tipo=_nombres_tipo(con, tz, est, anterior))
+    cuerpo = _cuerpo(est, anterior, nombres_tipo=_nombres_tipo(con, tz, est, anterior), periodo="de la semana")
     return "\n".join([cabecera, ""] + cuerpo + ["", f"📈 Solicitudes por día: {dias}"]
                      + _recordatorio_pausa(con, tz))
 
