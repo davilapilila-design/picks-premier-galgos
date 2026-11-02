@@ -65,19 +65,22 @@ venta desde el 22/07/2026:
   (`analisis.en_grupo`: reenviado, mismo texto, o misma hora y galgo) y de ahí
   salen `stake`, `cuota`, `resultado_final` y `unidades_netas` (pestañas
   `apuestas` y `apuestas_exoticas`).
-- Se guarda en una tabla nueva `canales_apuestas` (canal, mensaje, fecha,
-  texto, fila de la hoja de picks, stake, resultado, unidades). Las que no se
-  encuentren en la hoja salen marcadas «sin resultado» y no suman unidades.
-- **Por comprobar al empezar:** que la cuenta de servicio de captación pueda
-  leer la hoja de picks. Si no, el dueño la comparte en modo lector.
+- Al final no tiene tabla propia: se calcula en cada sincronización del
+  Sheet (`apuestas.por_canal`) con los mensajes que el lector guarda cada hora
+  (tabla `publicaciones`). Las que no se encuentren en la hoja salen marcadas
+  «sin resultado» y no suman unidades.
+- La cuenta de servicio de captación ya podía leer la hoja de picks
+  (comprobado el 2026-11-02).
 
 ### 2. Entradas gratis
-Tabla nueva `entradas_gratis` (persona, canal, desde cuándo, origen,
-referencia):
+Al final no tiene tabla propia: se calcula en cada sincronización
+(`gratis.ofertas`) con lo que el lector guarda cada hora (`publicaciones` y
+`enlaces_privados`):
 - **Por privado:** cada mensaje del dueño en un chat privado con el enlace de
-  un canal de venta. El lector ya ve esos mensajes en directo (`al_enviar`);
-  se apunta cada enlace, no solo el primero (`usuarios.enlace_venta` guarda
-  solo la gratuita). Lo anterior se recupera una vez leyendo los chats.
+  un canal de venta. El lector repasa cada hora los chats con actividad
+  (`publicaciones.leer_privados`) y apunta cada enlace, no solo el primero
+  (`usuarios.enlace_venta` guarda solo la gratuita); la primera vez leyó desde
+  el 22/07.
 - **En el canal fallado:** un mensaje de un canal de venta con el enlace de
   otro canal de venta. Reciben esa gratis quienes estaban en el canal fallado
   cuando se publicó.
