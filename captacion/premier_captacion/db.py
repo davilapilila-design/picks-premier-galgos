@@ -207,6 +207,28 @@ MIGRACIONES = [
         ts INTEGER NOT NULL
     );
     """,
+    # 12 (cuentas por cliente, 2026-11-02; ver publicaciones.py): mensajes de
+    # los canales de venta y del grupo de picks (apuestas y enlaces de
+    # compensación), y enlaces de canales que el dueño manda por privado.
+    """
+    CREATE TABLE publicaciones (
+        chat_id INTEGER NOT NULL,
+        msg_id INTEGER NOT NULL,
+        ts INTEGER NOT NULL,
+        texto TEXT,
+        enlaces TEXT,          -- hashes de invitación, separados por espacios
+        reenvio_chat INTEGER,  -- en el grupo de picks: de qué canal se reenvió
+        reenvio_msg INTEGER,
+        PRIMARY KEY (chat_id, msg_id)
+    );
+    CREATE TABLE enlaces_privados (
+        user_id INTEGER NOT NULL,
+        msg_id INTEGER NOT NULL,
+        ts INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        PRIMARY KEY (user_id, msg_id, hash)
+    );
+    """,
 ]
 
 

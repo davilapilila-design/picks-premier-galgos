@@ -374,7 +374,7 @@ async def servicio(cfg, entorno):
                     await client.disconnect()
                     return
 
-        from . import invitaciones, nombres, ventas  # (ventas importa analisis, que importa este módulo)
+        from . import invitaciones, nombres, publicaciones, ventas  # (ventas importa analisis, que importa este módulo)
 
         tarea = asyncio.ensure_future(revisar())
         tarea_modo = asyncio.ensure_future(vigilar_modo())
@@ -383,6 +383,10 @@ async def servicio(cfg, entorno):
         tarea_chats = asyncio.ensure_future(nombres.lectura_periodica(client, con))
         # Quién se unió con los enlaces de las ventas nuevas de overoption.
         tarea_enlaces = asyncio.ensure_future(invitaciones.lectura_periodica(client, con))
+        # Mensajes de los canales de venta y del grupo de picks, y enlaces
+        # enviados por privado (gratuitas y compensaciones), cada hora.
+        tarea_publicaciones = asyncio.ensure_future(
+            publicaciones.lectura_periodica(client, con, cfg, tg_real.destino_enlace))
         parada = asyncio.Event()
 
         def parar():  # systemctl stop: salir limpio, sin dejar la unidad en "failed"
@@ -398,6 +402,7 @@ async def servicio(cfg, entorno):
             tarea_ventas.cancel()
             tarea_chats.cancel()
             tarea_enlaces.cancel()
+            tarea_publicaciones.cancel()
         if cambio.is_set():
             return 1  # systemd lo rearranca con el modo nuevo
         return 0 if parada.is_set() else 1  # desconexión inesperada: systemd lo rearranca

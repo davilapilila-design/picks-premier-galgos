@@ -81,6 +81,10 @@ async def canales(client, cfg):
     no interesan (2026-10-28, el dueño). Cada vez se vuelve a mirar la
     carpeta, así que los canales nuevos entran solos."""
     todos, _ = await analisis.canales_de_venta(client, cfg)
+    return filtrar(todos, cfg)
+
+
+def filtrar(todos, cfg):
     desde = datetime.combine(analisis.DESDE, datetime.min.time(), tzinfo=cfg.tz).timestamp()
     return [c for c in todos
             if (getattr(c, "date", None) is None or c.date.timestamp() >= desde)

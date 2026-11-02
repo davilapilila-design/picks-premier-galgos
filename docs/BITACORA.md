@@ -3,6 +3,22 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-02 — Captación: lectura de los canales y de los enlaces por privado
+
+- Primera parte de las cuentas por cliente (plan
+  `docs/superpowers/plans/2026-11-02-gratis-apuestas-cuentas.md`). Medido
+  antes: de 1.520 entradas a canales desde el 22/07, 640 no las explica
+  ninguna compra con persona ni enlace apuntado; 319 llegan en tandas (el
+  enlace publicado en un canal fallado). Los enlaces por privado apuntados
+  eran solo los de las personas del embudo.
+- `publicaciones.py`, dentro del lector, cada hora y solo lectura (leer
+  chats y comprobar enlaces, ya permitidos): mensajes nuevos de los canales
+  de venta y del grupo de picks (apuestas, enlaces publicados, reenvíos) y
+  enlaces de invitación que manda el dueño por privado a cualquier persona.
+  Migración 12 (`publicaciones`, `enlaces_privados`).
+- Pruebas: 385 (5 fallan solo en Windows, como siempre).
+- Commits: (este commit)
+
 ## 2026-11-02 — Captación: cruce nuevo, comprobación continua y avisos
 
 - El dueño vio emparejamientos sin sentido (un correo con un nombre dado a
