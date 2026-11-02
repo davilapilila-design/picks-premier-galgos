@@ -3,6 +3,12 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-02 — Captación: en el resumen, cuántos de los que entraron escribieron o miraron las dudas
+
+- El dueño quiere saber, de los «Te escribieron» y «Miraron las dudas», cuántos
+  son de los que pidieron entrar ese día (o esa semana). Ahora sale
+  «… (3 de las 17 que entraron)».
+- Commits: (este commit)
 ## 2026-11-02 — Captación: gratis, apuestas y pestaña «Clientes · cuentas»
 
 - `gratis.py`: un canal es gratis para una persona desde que el dueño le

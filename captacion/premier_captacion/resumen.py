@@ -137,11 +137,20 @@ def _cuerpo(est, anterior=None, nombres_tipo=None):
     if est["sin_aceptar"]:
         lineas.append(f"⚠️ Sin aceptar: {sum(est['sin_aceptar'].values())}")
         lineas += _desglose(est["sin_aceptar"], MOTIVOS)
+    def de_los_nuevos(clave):
+        # Cuántos de ellos son de los que pidieron entrar en este periodo
+        # (2026-11-02, el dueño: para ver cuántos nuevos llegan a escribir).
+        if not est["personas"]:
+            return ""
+        nuevos, total = len(est[clave] & est["personas"]), len(est["personas"])
+        return f" ({nuevos} de la que entró)" if total == 1 else f" ({nuevos} de las {total} que entraron)"
+
     lineas.append(f"🤖 Escribieron al bot: {_personas(len(est['escribieron_bot']))}")
     if est["dudas"]:
-        lineas.append(f"📚 Miraron las dudas frecuentes: {_personas(len(est['dudas']))}")
+        lineas.append(f"📚 Miraron las dudas frecuentes: {_personas(len(est['dudas']))}{de_los_nuevos('dudas')}")
     if est["con_lector"]:
-        lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{cmp('te_escribieron')}")
+        lineas.append(f"✉️ Te escribieron: {_personas(len(est['te_escribieron']))}{de_los_nuevos('te_escribieron')}"
+                      f"{cmp('te_escribieron')}")
         lineas.append(f"🔗 Enlaces de venta enviados: {est['enlaces_venta']}{cmp('enlaces_venta')}")
     return lineas
 
