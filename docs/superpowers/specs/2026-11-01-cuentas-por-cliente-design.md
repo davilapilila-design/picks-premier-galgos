@@ -161,6 +161,12 @@ Por persona de Telegram:
   ser la compra de un correo sin persona). Se cuenta aparte.
 - Apuestas y aciertos de esos canales; unidades = suma de `unidades_netas`;
   simulación = unidades × 10 €; balance = simulación − € pagados.
+- Solo cuentan las apuestas a las que llegó a tiempo: entró (o pagó) antes
+  de la primera carrera del mensaje (hora de Reino Unido, la de las
+  carreras). Así una compensación que entra tarde no se lleva un acierto
+  que ya se había corrido.
+- € pagado = importe de overoption (lo que pagó el cliente; todo en EUR).
+- El equipo (administradores y `CAPTACION_EQUIPO`) no sale.
 
 Los correos sin persona también salen, una fila por correo, con sus compras,
 €, apuestas, unidades y simulación, para que no se pierda ningún €.

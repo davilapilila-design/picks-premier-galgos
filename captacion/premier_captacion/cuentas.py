@@ -16,13 +16,11 @@ canales que compraron, para que no se pierda ningún €. El equipo no sale.
 """
 from collections import defaultdict
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from . import analisis, apuestas, gratis, ventas
 
 TAB = "Clientes · cuentas"
 EUROS_POR_UNIDAD = 10
-HORA_CARRERAS = ZoneInfo("Europe/London")
 PAGADO, GRATIS, SIN_EXPLICAR = "pagado", "gratis", "sin_explicar"
 CABECERA = ["Persona", "ID de Telegram", "Correos", "Compras", "€ pagado", "Canales pagados", "Canales gratis",
             "Canales sin explicar", "Apuestas", "Ganadas", "Perdidas", "Sin resultado", "Unidades",
@@ -35,17 +33,6 @@ def desde_ts(tz):
     return datetime.combine(analisis.DESDE, datetime.min.time(), tzinfo=tz).timestamp()
 
 
-def hora_carrera(a):
-    """Cuándo empieza la (primera) carrera de una apuesta: la primera hora
-    del mensaje ese día en hora de Reino Unido; si no hay, cuando se publicó."""
-    horas = sorted(analisis.horas(a["texto"]))
-    if not horas:
-        return a["ts"]
-    dia = datetime.fromtimestamp(a["ts"], HORA_CARRERAS).date()
-    h, m = map(int, horas[0].split(":"))
-    return datetime(dia.year, dia.month, dia.day, h, m, tzinfo=HORA_CARRERAS).timestamp()
-
-
 def _cuenta():
     return {"correos": set(), "compras": 0, "euros": 0.0, "accesos": {}}
 
@@ -54,7 +41,7 @@ def _sumar_apuestas(c, apuestas_canal):
     c.update(apuestas=0, ganadas=0, perdidas=0, sin_resultado=0, unidades=0.0)
     for canal_id, (desde, _) in c["accesos"].items():
         for a in apuestas_canal.get(canal_id, ()):
-            if hora_carrera(a) < desde:
+            if apuestas.hora_carrera(a) < desde:
                 continue  # la carrera ya se había corrido cuando entró
             c["apuestas"] += 1
             if a["unidades"] is None:

@@ -3,6 +3,29 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-02 — Captación: gratis, apuestas y pestaña «Clientes · cuentas»
+
+- `gratis.py`: un canal es gratis para una persona desde que el dueño le
+  manda su enlace por privado o lo publica en un canal donde ella estaba
+  (entró antes y no salió). Quien entra después de tenerlo gratis ya no es
+  candidato a la compra de nadie en el cruce.
+- Examen del cruce en la base real: sin gratis, 585 compras bien, 0 mal y
+  135 sin persona; con gratis, 633 bien, 0 mal y 87 sin persona.
+- `apuestas.py`: las apuestas de cada canal (316 desde el 22/07; 310
+  reenviadas al grupo de picks, 1 por hora y galgo, 5 que no están) con
+  `resultado_final` y `unidades_netas` de la hoja de picks (la cuenta de
+  servicio de captación ya la puede leer). Un mensaje cuya hora ya había
+  pasado al publicarse es un aviso, no una apuesta.
+- `cuentas.py`: pestaña «Clientes · cuentas», por persona: correos,
+  compras, € pagado (importe), canales pagados / gratis / sin explicar,
+  apuestas a las que llegó antes de la carrera, ganadas, perdidas,
+  unidades, simulación a 10 €/unidad y balance; debajo, los correos sin
+  persona. Medido: 214 personas (35.809 €), 93 correos sin persona
+  (9.306 €); canales pagados 1.340, gratis 577, sin explicar 85 (eran 640
+  antes de leer los canales y los privados).
+- Pruebas: 404 (5 fallan solo en Windows, como siempre).
+- Commits: `f30a1bc`, (este commit)
+
 ## 2026-11-02 — Captación: lectura de los canales y de los enlaces por privado
 
 - Primera parte de las cuentas por cliente (plan
@@ -17,7 +40,7 @@ Entradas más recientes arriba.
   enlaces de invitación que manda el dueño por privado a cualquier persona.
   Migración 12 (`publicaciones`, `enlaces_privados`).
 - Pruebas: 385 (5 fallan solo en Windows, como siempre).
-- Commits: (este commit)
+- Commits: `c996353`
 
 ## 2026-11-02 — Captación: cruce nuevo, comprobación continua y avisos
 
@@ -398,7 +421,7 @@ Entradas más recientes arriba.
   `/estado` dice también cuántos hay en la lista de suscriptores (`e7788f3`).
 - También: la ficha de /gratuita dice si estaba en el canal y si volvió a
   pedir entrar (`182158f`).
-- Commits: (este commit)
+- Commits: `c996353`
 
 ## 2026-10-24 — Captación: el aviso de gratuita repetida también salta cuando la piden con sus palabras
 - **Qué**: hasta ahora solo saltaba con la frase exacta de los botones. Con
@@ -412,7 +435,7 @@ Entradas más recientes arriba.
 - Comprobado contra los chats reales: tras la gratuita habría avisado de 16
   clientes (22 mensajes), casi todos pidiéndola de nuevo o preguntando por
   apuestas gratis.
-- Commits: (este commit)
+- Commits: `c996353`
 
 ## 2026-10-24 — Captación: dudas frecuentes rehechas a partir de los chats con clientes
 - **Análisis de los chats** (CSV de la pestaña «Análisis · Chats clientes»,
@@ -471,7 +494,7 @@ Entradas más recientes arriba.
   pestañas «Análisis · …» del Sheet de pruebas de captación (las demás
   pestañas no se tocan), que puedo leer con el conector de Google Drive.
 - Pruebas: 198, pasan en Python 3.9, 3.12 y 3.13.
-- Commits: (este commit)
+- Commits: `c996353`
 
 ## 2026-10-23 — Captación: bienvenida sin gratuita a quien ya estaba en el canal o vuelve
 - **Qué**: el dueño ha visto que algunos salen y vuelven a entrar al canal
@@ -1035,7 +1058,7 @@ sincroniza ese código con el repo (quedó unos días sin commitear).
   hasta 1h40 de retraso innecesario al aviso de Telegram.
 - De paso: `.clasp.json` con `fileExtension: "gs"` para que `clasp pull`
   escriba directo en `.gs` (antes creaba duplicados `.js`).
-- Commits: (este commit)
+- Commits: `c996353`
 
 ## 2026-09-08 — Soporte para gemela y trío (forecast/tricast)
 Nuevo tipo de apuesta: gemela (1º y 2º de una carrera) y trío (1º, 2º y

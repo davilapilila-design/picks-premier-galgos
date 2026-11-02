@@ -14,6 +14,7 @@ diseño del 2026-11-01, punto 1). Solo lectura.
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from . import analisis, db, publicaciones
 
@@ -21,6 +22,19 @@ from . import analisis, db, publicaciones
 PICKS_SHEET_ID = os.environ.get("CAPTACION_PICKS_SHEET_ID") or "1axZnIIIXBpqVhhb6RVGawNaWpSLVLBwXK079MxcOfF4"
 PESTANAS = {"apuestas": "stake", "apuestas_exoticas": "stake_total"}
 GANO, PERDIO = "gano", "perdio"
+HORA_CARRERAS = ZoneInfo("Europe/London")
+YA_CORRIDA_S = 300  # una «apuesta» cuya carrera ya pasó al publicarla es un aviso o un resumen
+
+
+def hora_carrera(a):
+    """Cuándo empieza la (primera) carrera de una apuesta: la primera hora
+    del mensaje ese día en hora de Reino Unido; si no hay, cuando se publicó."""
+    horas = sorted(analisis.horas(a["texto"]))
+    if not horas:
+        return a["ts"]
+    dia = datetime.fromtimestamp(a["ts"], HORA_CARRERAS).date()
+    h, m = map(int, horas[0].split(":"))
+    return datetime(dia.year, dia.month, dia.day, h, m, tzinfo=HORA_CARRERAS).timestamp()
 
 
 def _num(x):
@@ -99,6 +113,8 @@ def por_canal(con, picks, tz):
             continue
         a = {"canal_id": chat_id, "msg_id": msg_id, "ts": ts, "texto": texto,
              "fecha": datetime.fromtimestamp(ts, tz).date()}
+        if hora_carrera(a) < ts - YA_CORRIDA_S:
+            continue
         estado, p = buscar(a)
         r = picks.get(p["msg_id"]) if p is not None else None
         suma = r is not None and not r["oculta"] and r["resultado"] in (GANO, PERDIO)

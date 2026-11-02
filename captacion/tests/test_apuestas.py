@@ -97,6 +97,12 @@ class TestPorCanal(unittest.TestCase):
         a = apuestas.por_canal(self.con, self.picks, MADRID)[10][0]
         self.assertEqual((a["resultado"], a["unidades"], a["oculta"]), ("perdio", None, True))
 
+    def test_un_aviso_con_una_hora_ya_pasada_no_es_apuesta(self):
+        # Publicado a las 21:00: «mañana rondando las 11:00» no es una carrera de hoy.
+        noche = datetime(2026, 9, 10, 20, 0, tzinfo=timezone.utc).timestamp()
+        mensaje(self.con, 10, 1, noche, "Chicos empezaremos mañana rondando las 11:00, el stake lo digo luego")
+        self.assertEqual(apuestas.por_canal(self.con, self.picks, MADRID), {})
+
     def test_mensajes_de_otros_chats_no_cuentan(self):
         mensaje(self.con, 99, 1, T, "14:37 Harlow T5 Cuota 4 Stake 1")  # no es canal de venta
         self.assertEqual(apuestas.por_canal(self.con, self.picks, MADRID), {})
