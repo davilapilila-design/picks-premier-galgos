@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-03 — `resultados_galgos` duplicaba las carreras de los días 1-9 de cada mes
+- **Qué fallaba**: desde el 01/11 cada pasada volvía a escribir las mismas carreras (27 filas
+  cada 20 min, 9 carreras del 1 y el 2/11). El job decide qué carreras ya tienen resultado
+  comparando el texto de la fecha: su clave era «01/11/2026» y la hoja enseñaba «1/11/2026».
+- **Por qué ahora**: las filas que añade `escribir_filas` (29/10) heredan el formato de la fila
+  de arriba (`d/m/yyyy`), mientras que las filas antiguas tenían `dd/mm/yyyy`. Con días de dos
+  cifras no se notaba. Las apuestas se resolvieron bien: las filas repetidas eran idénticas.
+- **Arreglo** (`scripts/vm_job_resultados_galgos.py`): `clave_carrera` compara canódromo, fecha
+  (como fecha) y hora (normalizada a `HH:MM`), así que el formato de la hoja ya no importa;
+  `carreras_cubiertas` la usa para las filas existentes. Tests: 2 nuevos (fecha sin cero, hora
+  `9:05` frente a `09:05`, y que otra hora u otro día siguen pendientes).
+
 ## 2026-10-29 (cont. 2) — `resultados_galgos` llena: el job no podía escribir filas nuevas
 - **Qué fallaba**: desde las 17:35 de Madrid cada pasada de `picks-resultados` acababa en
   «exceeds grid limits». La pestaña tenía 1012 filas, todas ocupadas, y el job escribía las
