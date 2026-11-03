@@ -14,6 +14,9 @@ Entradas más recientes arriba.
   (como fecha) y hora (normalizada a `HH:MM`), así que el formato de la hoja ya no importa;
   `carreras_cubiertas` la usa para las filas existentes. Tests: 2 nuevos (fecha sin cero, hora
   `9:05` frente a `09:05`, y que otra hora u otro día siguen pendientes).
+- **Limpieza** (03/11, tras desplegar): borradas de la hoja las 783 filas repetidas (9
+  carreras del 1 y 2/11), dejando la primera de cada una; quedan 1089 filas. Copia previa en la
+  VM (`/root/picks-backups/`). Las apuestas de esos días no cambian.
 
 ## 2026-10-29 (cont. 2) — `resultados_galgos` llena: el job no podía escribir filas nuevas
 - **Qué fallaba**: desde las 17:35 de Madrid cada pasada de `picks-resultados` acababa en
