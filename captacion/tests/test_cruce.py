@@ -700,5 +700,46 @@ class TestFilasPagos(unittest.TestCase):
         self.assertIn("canal no identificado", f[9])
 
 
+class TestCompraRecienteSinLeer(unittest.TestCase):
+    """Con lecturas cada 20 min, una compra puede llegar antes de que se lea
+    quién entró: no cuenta como mala hasta que se lea su enlace después del
+    pago (diseño del 2026-11-03, punto 4)."""
+
+    PAGO = 2_000_000_000
+    ENLACE = "https://t.me/+C7"
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+        canal(self.con, 7, "Canal 7")
+        entra_movimiento(self.con, 7, 1, 99, self.PAGO - 600, self.ENLACE)  # hay registro del canal
+        venta(self.con, "v1", self.ENLACE, self.PAGO)
+
+    def juicio(self, ahora):
+        from premier_captacion import cruce
+        d = cruce.Datos(self.con, ahora=ahora)
+        return d.juicio(venta_de(d, "v1"), 5)
+
+    def leido(self, ts):
+        from premier_captacion import invitaciones
+        with self.con:
+            invitaciones.guardar(self.con, self.ENLACE, 7, "Canal 7", [], ahora=ts)
+
+    def test_sin_leer_el_enlace_queda_sin_comprobar(self):
+        from premier_captacion import cruce
+        self.assertEqual(self.juicio(self.PAGO + 1200), cruce.SIN)
+        self.leido(self.PAGO + 60)  # leído antes de acabar la ventana: aún no vale
+        self.assertEqual(self.juicio(self.PAGO + 1200), cruce.SIN)
+
+    def test_leido_despues_del_pago_ya_es_mala(self):
+        from premier_captacion import cruce
+        self.leido(self.PAGO + 900)
+        self.assertEqual(self.juicio(self.PAGO + 1200), cruce.MALA)
+
+    def test_una_compra_antigua_se_juzga_como_siempre(self):
+        from premier_captacion import cruce
+        self.assertEqual(self.juicio(self.PAGO + 3 * 24 * 3600), cruce.MALA)
+
+
 if __name__ == "__main__":
     unittest.main()

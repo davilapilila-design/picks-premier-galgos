@@ -9,7 +9,9 @@ docs/superpowers/specs/2026-11-01-cuentas-por-cliente-design.md
   ya tenía el enlace y no es el comprador.
 - Juicio de una venta frente a una persona: «buena» (es candidata),
   «mala» (se podía ver y no entró después de pagar) o «sin» (no se puede
-  comprobar: sin canal, sin datos o ya estaba dentro).
+  comprobar: sin canal, sin datos o ya estaba dentro). Una compra de las
+  últimas 48 h no es «mala» mientras no se haya leído quién se unió con su
+  enlace después del pago (RECIENTE_S; diseño del 2026-11-03).
 - Un correo es de una persona por sus compras si tiene MIN_BUENAS buenas o
   más, son al menos PROPORCION de sus comprobables, la segunda persona no
   pasa de SOMBRA de sus buenas, el nombre no choca (nombres.choca) y esa
@@ -36,6 +38,10 @@ VENTANA_S = 180  # hasta 3 min después del pago para entrar al canal
 MIN_BUENAS = 3
 PROPORCION = 0.8
 SOMBRA = 0.5
+# Una compra de las últimas 48 h no cuenta como mala mientras no se haya leído
+# quién se unió con su enlace después del pago (con las ventas cada 20 min puede
+# llegar antes que esa lectura, que el lector hace cada 30 min).
+RECIENTE_S = 48 * 3600
 BUENA, MALA, SIN = "buena", "mala", "sin"
 
 
@@ -44,8 +50,11 @@ class Datos:
     consultas del cruce: candidatos de cada venta y juicio frente a una
     persona."""
 
-    def __init__(self, con, ventana_s=VENTANA_S, solo_ventas=True, gratis=None):
+    def __init__(self, con, ventana_s=VENTANA_S, solo_ventas=True, gratis=None, ahora=None):
         self.ventana_s = ventana_s
+        self.ahora = time.time() if ahora is None else ahora
+        # Cuándo se leyó por última vez quién se unió con cada enlace.
+        self._leido = {f[0]: f[1] for f in con.execute("SELECT enlace, leido_ts FROM pagos_enlaces")}
         # {(canal, user_id)} de quien entró después de tener el canal gratis.
         self.gratis = _gratis.para_cruce(con) if gratis is None else gratis
         por_enlace, por_titulo, self.canales = pagos._mapa_canales(con)
@@ -99,15 +108,23 @@ class Datos:
             return SIN
         pago, entradas = v["pago_ts"], self._entradas.get((v["grupo"], uid), ())
         if any(t > pago + self.ventana_s for t in entradas):
-            return MALA  # entró, pero a otra hora
+            return SIN if self._sin_leer(v) else MALA  # entró, pero a otra hora
         if any(t >= pago for t in entradas):
             return SIN  # entró a esa hora por otro enlace: no se sabe
         if any(t < pago for t in entradas):
             return SIN  # ya estaba dentro antes de pagar
         desde = self.registro_desde.get(v["canal_id"])
         if desde is not None and pago >= desde:
-            return MALA  # el registro lo habría visto entrar
+            return SIN if self._sin_leer(v) else MALA  # el registro lo habría visto entrar
         return SIN
+
+    def _sin_leer(self, v):
+        """Compra reciente cuyo enlace aún no se ha leído después del pago:
+        todavía no se sabe si entró."""
+        if not v["enlace"] or v["pago_ts"] < self.ahora - RECIENTE_S:
+            return False
+        leido = self._leido.get(v["enlace"])
+        return leido is None or leido < v["pago_ts"] + self.ventana_s
 
     def correos(self):
         return sorted(self._de)
