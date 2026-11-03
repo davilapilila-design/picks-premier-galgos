@@ -28,14 +28,25 @@ class TestConsulta(unittest.TestCase):
         persona(self.con, 2, "Josefa Ruiz")
         persona(self.con, 3, "Ana", "ana_g")
 
-    def test_por_arroba_exacta_aunque_otros_lo_contengan(self):
-        self.assertEqual([f["user_id"] for f in consulta.buscar(self.con, "@JOSEP")], [1])
+    def ids(self, dato, contiene=False):
+        return [f["user_id"] for f in consulta.buscar(self.con, dato, contiene=contiene)]
 
-    def test_por_parte_del_nombre_sin_tildes_ni_mayusculas(self):
-        self.assertEqual(sorted(f["user_id"] for f in consulta.buscar(self.con, "jose")), [1, 2])
-        self.assertEqual([f["user_id"] for f in consulta.buscar(self.con, "PEREZ")], [1])
-        self.assertEqual([f["user_id"] for f in consulta.buscar(self.con, "3")], [3])
-        self.assertEqual(consulta.buscar(self.con, "nadie"), [])
+    def test_por_arroba_exacta_aunque_otros_lo_contengan(self):
+        self.assertEqual(self.ids("@JOSEP"), [1])
+        self.assertEqual(self.ids("josep"), [1])
+
+    def test_por_nombre_exacto_sin_tildes_ni_mayusculas(self):
+        self.assertEqual(self.ids("jose perez"), [1])
+        self.assertEqual(self.ids("  JOSÉ   Pérez "), [1])
+        self.assertEqual(self.ids("ana"), [3])
+        self.assertEqual(self.ids("3"), [3])
+        self.assertEqual(self.ids("jose"), [])  # nadie se llama solo «jose»
+        self.assertEqual(self.ids("nadie"), [])
+
+    def test_por_parte_del_nombre_si_se_pide(self):
+        self.assertEqual(sorted(self.ids("jose", contiene=True)), [1, 2])
+        self.assertEqual(self.ids("PEREZ", contiene=True), [1])
+        self.assertEqual(sorted(self.ids("@jos", contiene=True)), [1, 2])
 
     def test_ficha_con_la_gratuita_y_los_envios_posteriores(self):
         texto = consulta.ficha(self.con, db.obtener_usuario(self.con, 1), TZ)
@@ -49,18 +60,52 @@ class TestConsulta(unittest.TestCase):
         texto = consulta.ficha(self.con, db.obtener_usuario(self.con, 3), TZ)
         self.assertIn("No le consta ninguna apuesta gratuita", texto)
 
-    def test_varias_coincidencias_dan_botones_con_la_gratuita_primero(self):
+    def test_un_nombre_exacto_da_la_ficha_y_el_boton_de_contiene(self):
+        texto, teclado = consulta.respuesta(self.con, "Ana", TZ)
+        self.assertTrue(texto.startswith("👤 Nombre: Ana\n"), texto)
+        self.assertEqual(teclado, {"inline_keyboard": [
+            [{"text": "🔎 Buscar los que contienen «Ana»", "callback_data": "grc:Ana"}]]})
+
+    def test_por_id_no_ofrece_buscar_los_que_contienen(self):
+        self.assertIsNone(consulta.respuesta(self.con, "3", TZ)[1])
+
+    def test_sin_nadie_exacto_busca_los_que_lo_contienen(self):
         texto, teclado = consulta.respuesta(self.con, "jos", TZ)
-        self.assertIn("Hay 2 personas", texto)
+        self.assertTrue(texto.startswith("Nadie se llama exactamente «jos».\nHay 2 personas que contienen «jos»"),
+                        texto)
         botones = [fila[0] for fila in teclado["inline_keyboard"]]
         self.assertEqual(botones[0], {"text": "🎁 José Pérez (@josep)", "callback_data": "gra:1"})
-        self.assertEqual(botones[1]["callback_data"], "gra:2")
+        self.assertEqual([b["callback_data"] for b in botones], ["gra:1", "gra:2"])  # sin botón de contiene
+
+    def test_sin_nadie_exacto_y_una_que_lo_contiene_da_su_ficha(self):
+        texto, teclado = consulta.respuesta(self.con, "ruiz", TZ)
+        self.assertTrue(texto.startswith("Nadie se llama exactamente «ruiz». Lo contiene:\n\n👤 Nombre: Josefa Ruiz"),
+                        texto)
+        self.assertIsNone(teclado)
+
+    def test_varias_exactas_dan_botones_y_el_de_contiene(self):
+        persona(self.con, 4, "ana")
+        texto, teclado = consulta.respuesta(self.con, "ANA", TZ)
+        self.assertIn("Hay 2 personas que se llaman «ANA»", texto)
+        self.assertEqual([fila[0]["callback_data"] for fila in teclado["inline_keyboard"]],
+                         ["gra:3", "gra:4", "grc:ANA"])
+
+    def test_buscar_los_que_contienen(self):
+        texto, _ = consulta.respuesta(self.con, "jos", TZ, contiene=True)
+        self.assertTrue(texto.startswith("Hay 2 personas que contienen «jos»"), texto)
+
+    def test_el_boton_de_contiene_cabe_en_telegram(self):
+        largo = "Á" * 40  # 80 bytes: no cabe en los 64 de un botón
+        persona(self.con, 5, largo)
+        texto, teclado = consulta.respuesta(self.con, largo, TZ)
+        self.assertIn("🆔 Id de Telegram: 5", texto)
+        self.assertIsNone(teclado)
 
     def test_demasiadas_coincidencias_se_recortan(self):
         for uid in range(10, 25):
             persona(self.con, uid, f"Luis {uid}")
         texto, teclado = consulta.respuesta(self.con, "luis", TZ)
-        self.assertIn("Hay 15 personas", texto)
+        self.assertIn("Hay 15 personas que contienen «luis»", texto)
         self.assertEqual(len(teclado["inline_keyboard"]), consulta.MAX_OPCIONES)
 
 
@@ -88,8 +133,14 @@ class TestOrdenGratuita(Base):
     def test_un_cliente_no_puede_consultar(self):
         self.bot.procesar(update_mensaje(1, uid=500, texto="/gratuita jos"))
         self.bot.procesar(update_boton(2, "gra:1", uid=500))
-        self.assertFalse(any("VIP Galgos" in e["text"] for e in self.api.envios_a(500)))
+        self.bot.procesar(update_boton(3, "grc:jos", uid=500))
+        self.assertFalse(any("VIP Galgos" in e["text"] or "Josefa" in e["text"] for e in self.api.envios_a(500)))
         self.assertEqual(self.api.envios_a(PROPIETARIO), [])
+
+    def test_el_boton_de_contiene_da_la_lista(self):
+        self.bot.procesar(update_boton(1, "grc:jos", uid=PROPIETARIO))
+        self.assertTrue(self.ultimo()["text"].startswith("Hay 2 personas que contienen «jos»"))
+        self.assertIn("reply_markup", self.ultimo())
 
     def test_el_boton_da_la_ficha_de_quien_no_paso_por_la_bienvenida(self):
         with self.con:
@@ -112,14 +163,17 @@ class TestSinBienvenida(unittest.TestCase):
             ventas.guardar_persona(self.con, 41, "Marta Gil", "martag")
             ventas.guardar_persona(self.con, 40, "M", None)
 
-    def ids(self, dato):
-        return [f["user_id"] for f in consulta.buscar(self.con, dato)]
+    def ids(self, dato, contiene=False):
+        return [f["user_id"] for f in consulta.buscar(self.con, dato, contiene=contiene)]
 
     def test_se_encuentran_por_id_arroba_o_nombre_sin_repetirse(self):
         self.assertEqual(self.ids("40"), [40])
         self.assertEqual(self.ids("@martag"), [41])
-        self.assertEqual(self.ids("marta"), [41])
-        self.assertEqual(self.ids("jose"), [1])
+        self.assertEqual(self.ids("marta gil"), [41])
+        self.assertEqual(self.ids("m"), [40])
+        self.assertEqual(self.ids("marta"), [])
+        self.assertEqual(self.ids("marta", contiene=True), [41])
+        self.assertEqual(self.ids("jose", contiene=True), [1])
 
     def test_ficha_sin_gratuita(self):
         texto, teclado = consulta.respuesta(self.con, "40", TZ)

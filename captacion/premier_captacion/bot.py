@@ -61,7 +61,8 @@ AYUDA_PROPIETARIO = (
     "/arrancar – que actúe: bienvenida y aceptar, y el lector ordena tus carpetas de verdad (también /reanudar)\n"
     "/textos – cambiar la bienvenida, las respuestas y las dudas frecuentes\n"
     "/dudas – ver las dudas frecuentes como las ve un cliente\n"
-    "/gratuita @usuario (o parte del nombre) – si se le dio la gratuita, cuándo y a qué canal\n"
+    "/gratuita @usuario, id o nombre completo (con botón para ver los que lo contienen) – "
+    "si se le dio la gratuita, cuándo y a qué canal\n"
     "/probador @cuenta – en simulación, el bot le contesta a esa cuenta (para probar); "
     "/probador quitar @cuenta; /probador solo – ver la lista\n"
     "/miid – tu id de Telegram"
@@ -531,6 +532,10 @@ class BotCaptacion:
             fila = consulta.persona(self.con, int(uid_buscado)) if uid_buscado.isdigit() else None
             if fila is not None:
                 self._responder(uid, consulta.ficha(self.con, fila, self.cfg.tz))
+        elif datos.startswith(consulta.CALLBACK_CONTIENE) and uid == self.cfg.propietario_id:
+            texto, teclado = consulta.respuesta(self.con, datos[len(consulta.CALLBACK_CONTIENE):], self.cfg.tz,
+                                                contiene=True)
+            self._responder(uid, texto, teclado)
 
     # --- Cuentas de prueba (/probador, solo el dueño) ---------------------------
     # En simulación el bot no habla con nadie salvo con estas cuentas: así se

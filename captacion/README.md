@@ -366,8 +366,13 @@ menú como lo ve un cliente.
       secundaria.
 - [ ] `/textos` → la misma → «↩️ Volver al anterior» → ✅ Guardar.
 
-**Consultar la gratuita de alguien** (solo tú): `/gratuita @usuario`, o
-parte del nombre (`/gratuita Juan`; sin importar mayúsculas ni tildes). El
+**Consultar la gratuita de alguien** (solo tú): `/gratuita @usuario`, su id
+de Telegram o su nombre completo (`/gratuita Juan Pérez`; sin importar
+mayúsculas ni tildes). Busca el nombre **exacto**; debajo sale el botón
+«🔎 Buscar los que contienen…» para ampliar, y si nadie se llama exactamente
+así, busca directamente los que lo contienen. También encuentra a los clientes
+que no pasaron por la bienvenida. La ficha empieza con el nombre, el id de
+Telegram y el @ (o «no tiene @»). El
 bot te dice cuándo recibió la bienvenida, cuándo te escribió y con qué botón,
 y **cuándo le diste la gratuita, a qué canal de venta y con qué enlace** (y
 los enlaces de venta que le mandaste después). Si hay varias personas con ese nombre, te

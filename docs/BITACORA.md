@@ -12,7 +12,11 @@ Entradas más recientes arriba.
   usa la misma búsqueda.
 - La ficha empieza con el nombre, el id de Telegram y el @ (o «no tiene @»),
   que pidió el dueño.
-- Commits: 8b39cfc, (este commit)
+- Búsqueda exacta por defecto (pedido del dueño): id, @ o nombre completo, sin
+  mayúsculas, tildes ni espacios de más. Debajo, el botón «🔎 Buscar los que
+  contienen…» (`grc:` + lo buscado, si cabe en los 64 bytes de Telegram); si
+  nadie encaja exacto, busca directamente los que lo contienen y lo dice.
+- Commits: 8b39cfc, da01dca, (este commit)
 
 ## 2026-11-03 — Captación: ventas cada 20 min mientras hay una venta abierta; rama `captacion`
 

@@ -14,6 +14,7 @@ from .carpetas import normalizar
 
 MAX_OPCIONES = 8
 CALLBACK = "gra:"  # + user_id: ficha de una de las opciones
+CALLBACK_CONTIENE = "grc:"  # + lo buscado: los que lo contienen
 
 _BOTONES = {"ya_apostado": "«Ya he apostado»", "primera_vez": "«Es mi primera vez»", "otro": "otro texto"}
 
@@ -41,24 +42,34 @@ def persona(con, user_id):
     return otras[0] if otras else None
 
 
-def buscar(con, dato):
-    """Personas que encajan con `dato`: @usuario exacto, id, o parte del nombre o del @
-    (sin importar mayúsculas ni tildes). Las de enlace exacto van primero; las que
-    no pasaron por la bienvenida, al final."""
+def _es_id(dato):
+    return dato.strip().lstrip("-").isdigit()
+
+
+def _comparable(texto):
+    """Sin mayúsculas, tildes ni espacios de más."""
+    return " ".join(normalizar(texto).split())
+
+
+def buscar(con, dato, contiene=False):
+    """Personas que encajan con `dato` (sin importar mayúsculas ni tildes): id,
+    @usuario exacto o nombre completo exacto; con `contiene`, las que llevan
+    `dato` en el nombre o en el @. Las de gratuita van primero; las que no
+    pasaron por la bienvenida, al final."""
     dato = dato.strip()
-    if dato.lstrip("-").isdigit():
+    if _es_id(dato):
         fila = persona(con, int(dato))
         return [fila] if fila else []
-    buscado = normalizar(dato.lstrip("@"))
+    buscado = _comparable(dato.lstrip("@"))
     if not buscado:
         return []
     filas = con.execute("SELECT * FROM usuarios ORDER BY COALESCE(enlace_venta_ts, 0) DESC, user_id").fetchall()
     filas += _sin_bienvenida(con)
-    exactas = [f for f in filas if normalizar(f["username"]) == buscado]
-    if exactas:
-        return exactas
-    return [f for f in filas
-            if buscado in normalizar(f["nombre"]) or buscado in normalizar(f["username"])]
+    if contiene:
+        return [f for f in filas
+                if buscado in _comparable(f["nombre"]) or buscado in _comparable(f["username"])]
+    exactas = [f for f in filas if _comparable(f["username"]) == buscado]
+    return exactas or [f for f in filas if _comparable(f["nombre"]) == buscado]
 
 
 def nombre(fila):
@@ -109,19 +120,38 @@ def ficha(con, fila, tz):
     return "\n".join(lineas)
 
 
-def respuesta(con, dato, tz):
-    """(texto, teclado o None) para «/gratuita <dato>»."""
-    if not dato.strip():
-        return ("Dime a quién: /gratuita @usuario, o parte de su nombre (por ejemplo /gratuita Juan).", None)
-    filas = buscar(con, dato)
+def _boton_contiene(dato):
+    """El botón «Buscar los que contienen», si cabe en los 64 bytes de Telegram."""
+    datos = f"{CALLBACK_CONTIENE}{dato}"
+    if len(datos.encode()) > 64:
+        return []
+    return [[{"text": f"🔎 Buscar los que contienen «{dato}»", "callback_data": datos}]]
+
+
+def respuesta(con, dato, tz, contiene=False):
+    """(texto, teclado o None) para «/gratuita <dato>» (exacto) o para el botón
+    «Buscar los que contienen» (`contiene`). Si nadie encaja exacto, busca los
+    que lo contienen."""
+    dato = dato.strip()
+    if not dato:
+        return ("Dime a quién: /gratuita con su @, su id o su nombre completo (por ejemplo /gratuita Juan Pérez). "
+                "Si no lo encuentro exacto, busco los que lo contienen.", None)
+    filas = buscar(con, dato, contiene)
+    aviso = ""
+    if not filas and not contiene and not _es_id(dato):
+        filas, contiene = buscar(con, dato, contiene=True), True
+        aviso = f"Nadie se llama exactamente «{dato}»."
     if not filas:
-        return (f"No encuentro a nadie con «{dato.strip()}». Prueba con su @ o con otra parte del nombre.", None)
+        return (f"No encuentro a nadie con «{dato}». Prueba con su @ o con otra parte del nombre.", None)
+    ampliar = [] if contiene or _es_id(dato) else _boton_contiene(dato)
     if len(filas) == 1:
-        return ficha(con, filas[0], tz), None
-    texto = f"Hay {len(filas)} personas con «{dato.strip()}». ¿Cuál?"
+        texto = (f"{aviso} Lo contiene:\n\n" if aviso else "") + ficha(con, filas[0], tz)
+        return texto, ({"inline_keyboard": ampliar} if ampliar else None)
+    texto = (f"{aviso}\n" if aviso else "") + (
+        f"Hay {len(filas)} personas que {'contienen' if contiene else 'se llaman'} «{dato}». ¿Cuál?")
     if len(filas) > MAX_OPCIONES:
         texto += f"\n(Te enseño las {MAX_OPCIONES} primeras; si no está, afina más el nombre.)"
     teclado = {"inline_keyboard": [
         [{"text": ("🎁 " if f["enlace_venta_ts"] is not None else "") + nombre(f)[:60],
-          "callback_data": f"{CALLBACK}{f['user_id']}"}] for f in filas[:MAX_OPCIONES]]}
+          "callback_data": f"{CALLBACK}{f['user_id']}"}] for f in filas[:MAX_OPCIONES]] + ampliar}
     return texto, teclado
