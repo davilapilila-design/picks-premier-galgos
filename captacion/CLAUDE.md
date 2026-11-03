@@ -4,7 +4,7 @@ Subsistema de captación (bot de bienvenida + organización de chats). Ver
 `PLAN.md` en esta carpeta para decisiones y fases. Además de las reglas del
 `CLAUDE.md` raíz (español de España, nunca commitear secrets, bitácora):
 
-- **Solo esta carpeta y la rama `captacion-bienvenida`**. No tocar `src/`
+- **Solo esta carpeta y la rama `captacion`**. No tocar `src/`
   ni nada del sistema de picks.
 - **Nada de producción sin el visto bueno explícito del dueño**: ni el canal
   real PREMIER GALGOS, ni el bot real, ni su cuenta personal de Telegram.

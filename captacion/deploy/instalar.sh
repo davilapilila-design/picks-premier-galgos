@@ -2,7 +2,7 @@
 # Instala o actualiza el bot de captación en la VM. Se ejecuta como root.
 #
 # Primera vez:
-#   curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion-bienvenida/captacion/deploy/instalar.sh
+#   curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion/captacion/deploy/instalar.sh
 #   bash /tmp/instalar-captacion.sh prueba
 #
 # Para actualizar más adelante a la última versión del código:
@@ -15,7 +15,7 @@
 # Se puede repetir sin miedo. Pasos:
 #   1. Comprueba Python 3.9+ y las zonas horarias.
 #   2. Crea el usuario de sistema "captacion" (sin privilegios) si no existe.
-#   3. Descarga el código de GitHub (rama captacion-bienvenida, o la que
+#   3. Descarga el código de GitHub (rama captacion, o la que
 #      diga CAPTACION_RAMA) y lo deja en /opt/premier-captacion.
 #   4. Instala los servicios de systemd.
 #   5. Crea /etc/premier-captacion/<instancia>.env (solo root) si no existe,
@@ -31,7 +31,7 @@
 set -euo pipefail
 
 REPO=davilapilila-design/picks-premier-galgos
-RAMA="${CAPTACION_RAMA:-captacion-bienvenida}"
+RAMA="${CAPTACION_RAMA:-captacion}"
 DESTINO=/opt/premier-captacion
 DIR_CONFIG=/etc/premier-captacion
 DIR_UNIDADES=/etc/systemd/system

@@ -1,7 +1,7 @@
 # Captación PREMIER GALGOS — plan aprobado
 
 Aprobado por el dueño el 2026-10-14. Subsistema independiente del de picks:
-vive solo en `captacion/` (rama `captacion-bienvenida`), no toca `src/`.
+vive solo en `captacion/` (rama `captacion`, antes `captacion-bienvenida`), no toca `src/`.
 
 ## Objetivo
 1. **Bienvenida automática**: las solicitudes de unión al canal (unas 20-30

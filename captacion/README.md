@@ -65,7 +65,7 @@ con el bot como simple miembro y no sirve.
 Entra en la VM por SSH (`ssh root@galgos-vm.tailc02685.ts.net`; si Tailscale
 pide verificar en el navegador, se acepta) y ejecuta:
 ```bash
-curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion-bienvenida/captacion/deploy/instalar.sh
+curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion/captacion/deploy/instalar.sh
 bash /tmp/instalar-captacion.sh prueba
 ```
 El instalador comprueba la VM, descarga el código de GitHub, lo instala en
@@ -232,7 +232,7 @@ bloqueador de anuncios, o con otro *Short name*.
 
 ### Paso 2. Actualizar la VM
 ```bash
-curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion-bienvenida/captacion/deploy/instalar.sh
+curl -fsSLo /tmp/instalar-captacion.sh https://raw.githubusercontent.com/davilapilila-design/picks-premier-galgos/captacion/captacion/deploy/instalar.sh
 bash /tmp/instalar-captacion.sh prueba
 ```
 No conecta ninguna cuenta.
