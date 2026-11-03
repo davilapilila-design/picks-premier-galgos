@@ -1,0 +1,30 @@
+# Lee las ventas de overoption (solo lectura) mientras hay una venta abierta:
+# desde que se anuncia en el canal principal hasta 15 min después de la última
+# carrera de su canal (anuncios.py). Sin venta abierta no pide nada a
+# overoption. La lanza captacion-pagos-venta@<instancia>.timer cada 20 min.
+#   journalctl -u captacion-pagos-venta@real -n 30
+[Unit]
+Description=Premier Galgos captacion: ventas de overoption si hay una venta abierta (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=captacion
+Group=captacion
+WorkingDirectory=/opt/premier-captacion
+EnvironmentFile=/etc/premier-captacion/%i.env
+# Credenciales de overoption (solo root puede leer el archivo; systemd se las
+# pasa al proceso por el entorno). Ver deploy/configurar.sh.
+EnvironmentFile=/etc/premier-captacion/overoption.env
+Environment="CAPTACION_DB=/var/lib/premier-captacion/%i.db"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+ExecStart=/opt/premier-captacion/venv/bin/python -m premier_captacion.pagos --si-hay-venta
+TimeoutStartSec=10m
+StateDirectory=premier-captacion
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

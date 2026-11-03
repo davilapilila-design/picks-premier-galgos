@@ -22,6 +22,11 @@ Seguridad:
 
 Uso en la VM (normalmente lo lanza captacion-pagos@<instancia>.timer):
     systemctl start captacion-pagos@real
+
+Con `--si-hay-venta` (captacion-pagos-venta@<instancia>.timer, cada 20 min)
+solo entra en overoption si hay una venta abierta: desde que se anuncia en el
+canal principal hasta 15 min después de la última carrera de su canal
+(anuncios.py, diseño del 2026-11-03).
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 import unicodedata
 import urllib.error
@@ -665,10 +671,22 @@ def credenciales(entorno=None):
             entorno.get("OVEROPTION_PASSWORD", "") or None)
 
 
+def toca_leer(con, cfg, ahora=None):
+    """Las ventas abiertas ahora [(ts del anuncio, hasta)]: si hay alguna, la
+    lectura de cada 20 min entra en overoption."""
+    from . import anuncios, carpetas
+
+    principal = carpetas.id_canal_puro(cfg.canal_id)
+    if principal is None:
+        return []
+    return anuncios.abiertas(con, principal, time.time() if ahora is None else ahora)
+
+
 def main(argv=None):
     import socket
 
     from .config import ErrorConfig, cargar_config
+    argv = sys.argv[1:] if argv is None else argv
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     socket.setdefaulttimeout(TIMEOUT_S + 30)
     try:
@@ -676,13 +694,20 @@ def main(argv=None):
     except ErrorConfig as e:
         log.error("Configuración incorrecta: %s", e)
         return 2
-    email, password = credenciales()
-    if not email or not password:
-        log.error("Faltan las credenciales de overoption (OVEROPTION_EMAIL / "
-                  "OVEROPTION_PASSWORD en /etc/premier-captacion/overoption.env)")
-        return 2
     con = db.abrir(cfg.db_path)
     try:
+        if "--si-hay-venta" in argv:
+            abiertas = toca_leer(con, cfg)
+            if not abiertas:
+                log.info("Sin venta abierta: no se lee overoption")
+                return 0
+            anuncio, fin = (datetime.fromtimestamp(t, cfg.tz).strftime("%H:%M") for t in abiertas[-1])
+            log.info("Venta abierta (anuncio de las %s, hasta las %s): leo overoption", anuncio, fin)
+        email, password = credenciales()
+        if not email or not password:
+            log.error("Faltan las credenciales de overoption (OVEROPTION_EMAIL / "
+                      "OVEROPTION_PASSWORD en /etc/premier-captacion/overoption.env)")
+            return 2
         n = bajar_y_guardar(con, ClienteOveroption(), email, password)
     except ErrorOveroption as e:
         log.error("No se pudieron leer las ventas de overoption: %s", e)
@@ -694,5 +719,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())

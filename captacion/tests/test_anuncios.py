@@ -1,10 +1,13 @@
 """Anuncios de venta del canal principal y cuándo hay una venta abierta
 (anuncios.py). Datos INVENTADOS."""
+import os
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
+from unittest import mock
 from zoneinfo import ZoneInfo
 
-from premier_captacion import anuncios, db, publicaciones
+from premier_captacion import anuncios, db, pagos, publicaciones
 
 from .test_cruce import canal, venta
 
@@ -99,6 +102,35 @@ class TestAbiertas(unittest.TestCase):
 
     def test_un_anuncio_antiguo_no_abre_nada(self):
         self.assertEqual(self.abiertas(A + 9 * H), [])
+
+
+class TestLecturaCadaVeinteMinutos(unittest.TestCase):
+    """pagos --si-hay-venta (captacion-pagos-venta@, cada 20 min): solo entra
+    en overoption si hay una venta abierta."""
+
+    CFG = SimpleNamespace(canal_id=-1000000000500, db_path=":memory:", tz=LONDRES)
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+
+    def test_toca_leer(self):
+        self.assertEqual(pagos.toca_leer(self.con, self.CFG, ahora=A + 60), [])
+        mensaje(self.con, PRINCIPAL, 1, A, ANUNCIO)
+        self.assertEqual(pagos.toca_leer(self.con, self.CFG, ahora=A + 60), [(A, A + 4 * H)])
+        self.assertEqual(pagos.toca_leer(self.con, SimpleNamespace(canal_id=None), ahora=A + 60), [])
+
+    def main(self, ahora, leidas=3):
+        bajar = mock.Mock(return_value=leidas)
+        with mock.patch("premier_captacion.config.cargar_config", return_value=self.CFG),                 mock.patch.object(pagos.db, "abrir", return_value=self.con),                 mock.patch.object(pagos, "bajar_y_guardar", bajar),                 mock.patch.object(pagos.time, "time", return_value=ahora),                 mock.patch.dict(os.environ, {"OVEROPTION_EMAIL": "yo@example.com", "OVEROPTION_PASSWORD": "x"}):
+            return pagos.main(["--si-hay-venta"]), bajar.call_count
+
+    def test_sin_venta_abierta_no_entra_en_overoption(self):
+        self.assertEqual(self.main(A + 60), (0, 0))
+
+    def test_con_venta_abierta_lee(self):
+        mensaje(self.con, PRINCIPAL, 1, A, ANUNCIO)
+        self.assertEqual(self.main(A + 60), (0, 1))
 
 
 if __name__ == "__main__":

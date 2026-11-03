@@ -234,8 +234,8 @@ fi
 # el dueño con: configurar.sh <instancia> overoption). Sin ellas, el timer
 # fallaría al arrancar, así que se deja sin activar.
 if [ "$VENV_OK" = 1 ] && [ -f "$DIR_CONFIG/overoption.env" ]; then
-    systemctl enable --quiet --now "captacion-pagos@$INSTANCIA.timer"
-    echo "   ventas de overoption: activadas (3 veces al día) ✓"
+    systemctl enable --quiet --now "captacion-pagos@$INSTANCIA.timer" "captacion-pagos-venta@$INSTANCIA.timer"
+    echo "   ventas de overoption: activadas (3 veces al día, y cada 20 min con una venta abierta) ✓"
 else
     echo "   ℹ️  Ventas de overoption sin activar (faltan las credenciales:"
     echo "       bash $DESTINO/configurar.sh $INSTANCIA overoption)."

@@ -1,0 +1,12 @@
+[Unit]
+Description=Timer: ventas de overoption cada 20 min si hay una venta abierta (%i)
+
+[Timer]
+# Cada 20 min; el servicio solo entra en overoption si hay una venta abierta.
+# Las lecturas fijas (captacion-pagos@, a las :10) siguen aparte.
+OnCalendar=*:00/20
+AccuracySec=1min
+Persistent=false
+
+[Install]
+WantedBy=timers.target
