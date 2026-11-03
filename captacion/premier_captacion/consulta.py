@@ -18,17 +18,42 @@ CALLBACK = "gra:"  # + user_id: ficha de una de las opciones
 _BOTONES = {"ya_apostado": "«Ya he apostado»", "primera_vez": "«Es mi primera vez»", "otro": "otro texto"}
 
 
+def _sin_bienvenida(con, user_id=None):
+    """Quienes no pasaron por la bienvenida (clientes de antes, o que entraron
+    por otro camino) pero se conocen por el chat privado con el dueño o por los
+    canales de venta, como filas de `usuarios` con todo lo demás vacío."""
+    columnas = [d[0] for d in con.execute("SELECT * FROM usuarios LIMIT 0").description]
+    filtro, params = ("AND user_id = ?", (user_id,)) if user_id is not None else ("", ())
+    filas = {}
+    for tabla in ("personas_chat", "ventas_personas"):
+        for f in con.execute(f"SELECT user_id, nombre, username FROM {tabla} "
+                             f"WHERE user_id NOT IN (SELECT user_id FROM usuarios) {filtro} ORDER BY user_id", params):
+            filas.setdefault(f[0], {**dict.fromkeys(columnas), "user_id": f[0], "nombre": f[1], "username": f[2]})
+    return list(filas.values())
+
+
+def persona(con, user_id):
+    """La fila de `usuarios`, la de alguien que se conoce sin bienvenida, o None."""
+    fila = db.obtener_usuario(con, user_id)
+    if fila is not None:
+        return fila
+    otras = _sin_bienvenida(con, user_id)
+    return otras[0] if otras else None
+
+
 def buscar(con, dato):
     """Personas que encajan con `dato`: @usuario exacto, id, o parte del nombre o del @
-    (sin importar mayúsculas ni tildes). Las de enlace exacto van primero."""
+    (sin importar mayúsculas ni tildes). Las de enlace exacto van primero; las que
+    no pasaron por la bienvenida, al final."""
     dato = dato.strip()
     if dato.lstrip("-").isdigit():
-        fila = db.obtener_usuario(con, int(dato))
+        fila = persona(con, int(dato))
         return [fila] if fila else []
     buscado = normalizar(dato.lstrip("@"))
     if not buscado:
         return []
     filas = con.execute("SELECT * FROM usuarios ORDER BY COALESCE(enlace_venta_ts, 0) DESC, user_id").fetchall()
+    filas += _sin_bienvenida(con)
     exactas = [f for f in filas if normalizar(f["username"]) == buscado]
     if exactas:
         return exactas

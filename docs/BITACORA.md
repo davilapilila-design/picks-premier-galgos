@@ -3,6 +3,15 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-03 — Captación: /gratuita encuentra también a quien no pasó por la bienvenida
+
+- `/gratuita <id>` respondía «No encuentro a nadie» con clientes de antes (o que
+  entraron por otro camino): solo buscaba en `usuarios`. Ahora también busca en
+  los chats privados del dueño y en los canales de venta (`consulta.persona`), y
+  su ficha dice que no tiene bienvenida ni gratuita. El botón «Ver más info»
+  usa la misma búsqueda.
+- Commits: (este commit)
+
 ## 2026-11-03 — Captación: ventas cada 20 min mientras hay una venta abierta; rama `captacion`
 
 - El dueño quiere ver las compras y su cruce el mismo día sin leer overoption

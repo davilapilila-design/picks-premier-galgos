@@ -1,7 +1,7 @@
 import unittest
 from zoneinfo import ZoneInfo
 
-from premier_captacion import consulta, db
+from premier_captacion import consulta, db, nombres, ventas
 
 from .apoyo import PROPIETARIO, conexion, update_boton, update_mensaje, usuario
 from .test_bot import Base
@@ -90,6 +90,47 @@ class TestOrdenGratuita(Base):
         self.bot.procesar(update_boton(2, "gra:1", uid=500))
         self.assertFalse(any("VIP Galgos" in e["text"] for e in self.api.envios_a(500)))
         self.assertEqual(self.api.envios_a(PROPIETARIO), [])
+
+    def test_el_boton_da_la_ficha_de_quien_no_paso_por_la_bienvenida(self):
+        with self.con:
+            nombres.guardar_chats(self.con, [(40, "M", None)], T)
+        self.bot.procesar(update_boton(1, "gra:40", uid=PROPIETARIO))
+        self.assertIn("👤 M", self.ultimo()["text"])
+
+
+class TestSinBienvenida(unittest.TestCase):
+    """Clientes de antes (o que entraron por otro camino): el lector los
+    conoce por el chat privado con el dueño o por los canales de venta, pero
+    no están en `usuarios`."""
+
+    def setUp(self):
+        self.con = conexion()
+        self.addCleanup(self.con.close)
+        persona(self.con, 1, "José Pérez", "josep")
+        with self.con:
+            nombres.guardar_chats(self.con, [(40, "M", None), (1, "José Pérez", "josep")], T)
+            ventas.guardar_persona(self.con, 41, "Marta Gil", "martag")
+            ventas.guardar_persona(self.con, 40, "M", None)
+
+    def ids(self, dato):
+        return [f["user_id"] for f in consulta.buscar(self.con, dato)]
+
+    def test_se_encuentran_por_id_arroba_o_nombre_sin_repetirse(self):
+        self.assertEqual(self.ids("40"), [40])
+        self.assertEqual(self.ids("@martag"), [41])
+        self.assertEqual(self.ids("marta"), [41])
+        self.assertEqual(self.ids("jose"), [1])
+
+    def test_ficha_sin_gratuita(self):
+        texto, teclado = consulta.respuesta(self.con, "40", TZ)
+        self.assertIsNone(teclado)
+        self.assertIn("👤 M", texto)
+        self.assertIn("Sin bienvenida apuntada", texto)
+        self.assertIn("No le consta ninguna apuesta gratuita", texto)
+
+    def test_quien_no_se_conoce_sigue_sin_encontrarse(self):
+        self.assertEqual(self.ids("99"), [])
+        self.assertIsNone(consulta.persona(self.con, 99))
 
 
 if __name__ == "__main__":

@@ -528,7 +528,7 @@ class BotCaptacion:
             self._boton_textos(datos)
         elif datos.startswith(consulta.CALLBACK) and uid == self.cfg.propietario_id:
             uid_buscado = datos[len(consulta.CALLBACK):]
-            fila = db.obtener_usuario(self.con, int(uid_buscado)) if uid_buscado.isdigit() else None
+            fila = consulta.persona(self.con, int(uid_buscado)) if uid_buscado.isdigit() else None
             if fila is not None:
                 self._responder(uid, consulta.ficha(self.con, fila, self.cfg.tz))
 
