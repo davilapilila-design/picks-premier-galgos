@@ -3,6 +3,24 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-03 — Captación: ventas cada 20 min mientras hay una venta abierta; rama `captacion`
+
+- El dueño quiere ver las compras y su cruce el mismo día sin leer overoption
+  cada hora: el lector guarda al momento los mensajes del canal principal y un
+  anuncio de venta (enlace de payoption en el texto) abre lecturas cada 20 min
+  (`captacion-pagos-venta@`, `pagos --si-hay-venta`) hasta 15 min después de
+  la última carrera del canal de esa venta (4 h si aún no se sabe; nunca más de
+  8 h; `anuncios.py`). Las lecturas fijas (8:10, 16:10, 0:10) siguen igual.
+- Sin avisos falsos: una compra de las últimas 48 h no es «mala» hasta que se
+  lea quién se unió con su enlace después del pago (cruce.RECIENTE_S).
+- overoption: los productos que no son UUID no se consultan y uno sin enlace
+  se repite como mucho una vez al día (antes, ~180 peticiones fallidas por
+  lectura).
+- La rama pasa a llamarse `captacion` (bienvenida y clientes juntas: comparten
+  la sesión de Telegram y la base); el instalador la descarga por defecto.
+  Diseño: `docs/superpowers/specs/2026-11-03-ventas-cada-20-min-design.md`.
+- Commits: `f3e195a`, `d93e2b7`, `4a71552`, `f790376`, `a7be31b`, `44aeff8`, (este commit).
+
 ## 2026-11-02 — Captación: resumen rehecho, primero quién te escribió por primera vez
 
 - Lo que más le importa al dueño es cuántas personas le escriben por primera
