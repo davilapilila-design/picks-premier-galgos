@@ -374,7 +374,26 @@ async def servicio(cfg, entorno):
                     await client.disconnect()
                     return
 
-        from . import invitaciones, nombres, publicaciones, ventas  # (ventas importa analisis, que importa este módulo)
+        from . import anuncios, invitaciones, nombres, publicaciones, ventas  # (ventas importa analisis, que importa este módulo)
+
+        # El canal principal, al momento (solo se guarda el mensaje): un anuncio
+        # de venta abre las lecturas de overoption cada 20 min (anuncios.py).
+        principal = carpetas.id_canal_puro(cfg.canal_id)
+
+        def del_principal(e):
+            return principal is not None and getattr(
+                getattr(e.message, "peer_id", None), "channel_id", None) == principal
+
+        @client.on(events.NewMessage(func=del_principal))
+        async def al_publicar(evento):
+            if not del_principal(evento):
+                return
+            try:
+                if publicaciones.guardar_al_momento(con, principal, evento.message) \
+                        and anuncios.es_anuncio(evento.message.message):
+                    log.info("Anuncio de venta en el canal principal: overoption se leerá cada 20 min")
+            except Exception:
+                log.exception("Error guardando un mensaje del canal principal")
 
         tarea = asyncio.ensure_future(revisar())
         tarea_modo = asyncio.ensure_future(vigilar_modo())
@@ -383,8 +402,8 @@ async def servicio(cfg, entorno):
         tarea_chats = asyncio.ensure_future(nombres.lectura_periodica(client, con))
         # Quién se unió con los enlaces de las ventas nuevas de overoption.
         tarea_enlaces = asyncio.ensure_future(invitaciones.lectura_periodica(client, con))
-        # Mensajes de los canales de venta y del grupo de picks, y enlaces
-        # enviados por privado (gratuitas y compensaciones), cada hora.
+        # Mensajes de los canales de venta, del grupo de picks y del canal
+        # principal, y enlaces enviados por privado (gratuitas y compensaciones), cada hora.
         tarea_publicaciones = asyncio.ensure_future(
             publicaciones.lectura_periodica(client, con, cfg, tg_real.destino_enlace))
         parada = asyncio.Event()

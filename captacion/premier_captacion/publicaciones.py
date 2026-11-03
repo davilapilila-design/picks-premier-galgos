@@ -5,14 +5,19 @@ piezas 1 y 2). SOLO LECTURA en Telegram: leer chats y preguntar a qué canal
 lleva un enlace, que ya estaban permitidos (guardia.LECTURA).
 
 Dentro del lector, cada hora (lectura_periodica):
-- De cada canal de venta (desde el 22/07) y del grupo de picks, los mensajes
-  nuevos desde el último guardado: las apuestas, los enlaces que se publican
-  (la compensación de un canal fallado es el enlace del siguiente) y, en el
-  grupo, de qué mensaje de canal es reenvío cada pick.
+- De cada canal de venta (desde el 22/07), del grupo de picks y del canal
+  principal, los mensajes nuevos desde el último leído: las apuestas, los
+  enlaces que se publican (la compensación de un canal fallado es el enlace
+  del siguiente), en el grupo de qué mensaje de canal es reenvío cada pick y,
+  en el principal, los anuncios de venta (anuncios.py).
 - De los chats privados con movimiento desde la última vez, los mensajes del
   dueño con un enlace de invitación (gratuitas y compensaciones por privado),
   de cualquier persona, no solo de las del embudo.
 El destino de cada enlace nuevo se pregunta una vez y queda en `enlaces`.
+
+Además, el lector guarda al momento cada mensaje del canal principal
+(guardar_al_momento): un anuncio de venta abre las lecturas de overoption
+cada 20 min (diseño del 2026-11-03).
 """
 import asyncio
 import logging
@@ -48,6 +53,14 @@ def guardar_privados(con, user_id, filas):
     """filas: [(msg_id, ts, hash)]."""
     con.executemany("INSERT OR IGNORE INTO enlaces_privados (user_id, msg_id, ts, hash) VALUES (?, ?, ?, ?)",
                     [(user_id, mid, int(ts), h) for mid, ts, h in filas])
+
+
+def _desde_id(con, chat_id):
+    """Desde qué mensaje sigue el repaso de un chat: el último que leyó (no lo
+    guardado al momento, que podría saltarse mensajes) o, la primera vez, el
+    último guardado."""
+    v = db.leer_estado(con, f"publicaciones_ultimo_{chat_id}")
+    return int(v) if v is not None else ultimo(con, chat_id)
 
 
 def ultimo(con, chat_id):
@@ -101,25 +114,55 @@ async def _apuntar_destinos(con, hashes, destino):
                 db.guardar_enlace(con, h, chat_id, titulo, time.time())
 
 
+def fila_de(m):
+    """La fila de un mensaje con texto o enlace, o None (p. ej. una foto sola)."""
+    texto = (m.message or "")[:MAX_TEXTO]
+    hashes = enlaces.hashes_invitacion(enlaces.textos_de(m))
+    if not (texto.strip() or hashes):
+        return None
+    return {"msg_id": m.id, "ts": m.date.timestamp(), "texto": texto, "hashes": hashes, "reenvio": _reenvio(m)}
+
+
+def guardar_al_momento(con, chat_id, m):
+    """Dentro del lector, al llegar un mensaje del canal principal: se guarda
+    ya (el repaso de cada hora lo vuelve a ver sin duplicarlo). True si se guardó."""
+    fila = fila_de(m)
+    if fila is None:
+        return False
+    with con:
+        guardar_mensajes(con, chat_id, [fila])
+    return True
+
+
 async def _leer_chat(client, chat, desde_id, desde_fecha):
     """(filas nuevas con texto o enlace, último msg_id visto)."""
     filas, ultimo_id = [], desde_id
     kw = {"min_id": desde_id} if desde_id else {"offset_date": desde_fecha}
     async for m in client.iter_messages(chat, reverse=True, **kw):
         ultimo_id = max(ultimo_id or 0, m.id)
-        texto = (m.message or "")[:MAX_TEXTO]
-        hashes = enlaces.hashes_invitacion(enlaces.textos_de(m))
-        if texto.strip() or hashes:
-            filas.append({"msg_id": m.id, "ts": m.date.timestamp(), "texto": texto, "hashes": hashes,
-                          "reenvio": _reenvio(m)})
+        fila = fila_de(m)
+        if fila is not None:
+            filas.append(fila)
     return filas, ultimo_id
 
 
+async def _canal_principal(client, cfg):
+    """La entidad del canal principal, o None si no hay o no se puede ver."""
+    if getattr(cfg, "canal_id", None) is None:
+        return None
+    try:
+        return await client.get_entity(cfg.canal_id)
+    except Exception:
+        log.exception("No pude ver el canal principal")
+        return None
+
+
 async def leer_canales(client, con, cfg, destino, dormir=asyncio.sleep):
-    """Los mensajes nuevos de los canales de venta y del grupo de picks.
-    Devuelve cuántos se guardaron."""
+    """Los mensajes nuevos de los canales de venta, del grupo de picks y del
+    canal principal. Devuelve cuántos se guardaron."""
     todos, grupo = await analisis.canales_de_venta(client, cfg)
-    chats = ventas.filtrar(todos, cfg) + ([grupo] if grupo is not None else [])
+    principal = await _canal_principal(client, cfg)
+    chats = ventas.filtrar(todos, cfg) + [c for c in (grupo, principal) if c is not None]
     if grupo is not None:
         with con:
             db.guardar_estado(con, CLAVE_GRUPO, grupo.id)
@@ -128,7 +171,7 @@ async def leer_canales(client, con, cfg, destino, dormir=asyncio.sleep):
     for chat in chats:
         try:
             filas, ultimo_id = await _con_esperas(
-                lambda: _leer_chat(client, chat, ultimo(con, chat.id), desde_fecha), dormir)
+                lambda: _leer_chat(client, chat, _desde_id(con, chat.id), desde_fecha), dormir)
             await _apuntar_destinos(con, dict.fromkeys(h for f in filas for h in f["hashes"]), destino)
         except Exception:
             log.exception("No pude leer los mensajes de «%s»", getattr(chat, "title", chat.id))

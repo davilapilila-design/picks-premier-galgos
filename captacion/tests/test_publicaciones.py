@@ -191,5 +191,48 @@ class TestLeerPrivados(ConBase):
         self.assertEqual(self.leer(cliente, ahora=T0 + 100), 1)
 
 
+class TestCanalPrincipal(ConBase):
+    """El canal principal: el lector guarda al momento sus mensajes (los
+    anuncios de venta abren las lecturas de overoption cada 20 min) y el
+    repaso de cada hora también lo lee, por si se escapa alguno."""
+
+    ANUNCIO = "Estas 3 apuestas por solo 36 € https://payoption.io/Ejemplo/abc"
+
+    class ConPrincipal(Cliente):
+        async def get_entity(self, cid):
+            assert cid == -1000000000500, cid
+            return chat(500, "Canal principal")
+
+    def leer(self, cliente):
+        async def falsos(client, cfg):
+            return [chat(10, "Lunes")], None
+        cfg = SimpleNamespace(tz=MADRID, canal_id=-1000000000500)
+        with mock.patch.object(publicaciones.analisis, "canales_de_venta", falsos):
+            return asyncio.run(publicaciones.leer_canales(cliente, self.con, cfg, self.destino, dormir=self.dormir))
+
+    def test_guardar_al_momento(self):
+        m = mensaje(7, T0, self.ANUNCIO)
+        self.assertTrue(publicaciones.guardar_al_momento(self.con, 500, m))
+        self.assertTrue(publicaciones.guardar_al_momento(self.con, 500, m))  # repetido: no se duplica
+        self.assertFalse(publicaciones.guardar_al_momento(self.con, 500, mensaje(8, T0, "")))  # foto sin texto
+        self.assertEqual([tuple(f) for f in self.con.execute("SELECT chat_id, msg_id, texto FROM publicaciones")],
+                         [(500, 7, self.ANUNCIO)])
+
+    def test_el_repaso_de_cada_hora_lee_tambien_el_canal_principal(self):
+        cliente = self.ConPrincipal({10: [mensaje(1, T0, "hola")], 500: [mensaje(3, T0, self.ANUNCIO)]})
+        self.assertEqual(self.leer(cliente), 2)
+        self.assertEqual([tuple(f) for f in self.con.execute("SELECT chat_id, msg_id FROM publicaciones ORDER BY 1")],
+                         [(10, 1), (500, 3)])
+
+    def test_lo_guardado_al_momento_no_hace_saltar_mensajes(self):
+        cliente = self.ConPrincipal({500: [mensaje(3, T0, "uno")]})
+        self.leer(cliente)
+        publicaciones.guardar_al_momento(self.con, 500, mensaje(9, T0 + 900, self.ANUNCIO))
+        cliente.mensajes[500] += [mensaje(5, T0 + 300, "dos"), mensaje(9, T0 + 900, self.ANUNCIO)]
+        self.leer(cliente)
+        self.assertEqual([f[0] for f in self.con.execute(
+            "SELECT msg_id FROM publicaciones WHERE chat_id = 500 ORDER BY 1")], [3, 5, 9])
+
+
 if __name__ == "__main__":
     unittest.main()
