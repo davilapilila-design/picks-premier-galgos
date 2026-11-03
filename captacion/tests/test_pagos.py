@@ -157,17 +157,21 @@ class TestCliente(unittest.TestCase):
                             msg=f"petición que no es de solo lectura: {metodo} {ruta}")
 
 
+UID_A = "aaaaaaaa-0000-4000-8000-000000000001"
+UID_B = "bbbbbbbb-0000-4000-8000-000000000002"
+
+
 class TestBajada(unittest.TestCase):
     def setUp(self):
         self.con = db.abrir(":memory:")
         self.addCleanup(self.con.close)
 
     def test_baja_resuelve_enlaces_y_guarda(self):
-        tx = [_venta(_id="v1", content_uid="uid-A"),
-              _venta(_id="v2", content_uid="uid-A"),
-              _venta(_id="v3", content_uid="uid-B")]
+        tx = [_venta(_id="v1", content_uid=UID_A),
+              _venta(_id="v2", content_uid=UID_A),
+              _venta(_id="v3", content_uid=UID_B)]
         api = OveroptionFalso(transacciones=tx,
-                              enlaces={"uid-A": "https://t.me/+AAA", "uid-B": "https://t.me/+BBB"})
+                              enlaces={UID_A: "https://t.me/+AAA", UID_B: "https://t.me/+BBB"})
         cli = pagos.ClienteOveroption(pedir=api.pedir)
         n = pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta")
         self.assertEqual(n, 3)
@@ -177,22 +181,47 @@ class TestBajada(unittest.TestCase):
         self.assertEqual(fila["enlace"], "https://t.me/+BBB")
 
     def test_no_pide_el_mismo_contenido_dos_veces(self):
-        tx = [_venta(_id="v1", content_uid="uid-A"),
-              _venta(_id="v2", content_uid="uid-A")]
-        api = OveroptionFalso(transacciones=tx, enlaces={"uid-A": "https://t.me/+AAA"})
+        tx = [_venta(_id="v1", content_uid=UID_A),
+              _venta(_id="v2", content_uid=UID_A)]
+        api = OveroptionFalso(transacciones=tx, enlaces={UID_A: "https://t.me/+AAA"})
         cli = pagos.ClienteOveroption(pedir=api.pedir)
         pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta")
         peticiones_contenido = [r for _, r in api.llamadas if r.startswith("/content/")]
-        self.assertEqual(peticiones_contenido, ["/content/uid-A"])
+        self.assertEqual(peticiones_contenido, ["/content/" + UID_A])
 
     def test_usa_la_cache_de_enlaces_entre_ejecuciones(self):
-        tx = [_venta(_id="v1", content_uid="uid-A")]
-        api = OveroptionFalso(transacciones=tx, enlaces={"uid-A": "https://t.me/+AAA"})
+        tx = [_venta(_id="v1", content_uid=UID_A)]
+        api = OveroptionFalso(transacciones=tx, enlaces={UID_A: "https://t.me/+AAA"})
         cli = pagos.ClienteOveroption(pedir=api.pedir)
         pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta")
         api.llamadas.clear()
         pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta")
         self.assertEqual([r for _, r in api.llamadas if r.startswith("/content/")], [])
+
+    def test_no_consulta_productos_que_no_son_uuid(self):
+        # overoption los rechaza siempre («uid must be a UUID»): ni se preguntan.
+        tx = [_venta(_id="v1", content_uid="overoption_legacy_123")]
+        api = OveroptionFalso(transacciones=tx)
+        cli = pagos.ClienteOveroption(pedir=api.pedir)
+        self.assertEqual(pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta"), 1)
+        self.assertEqual([r for _, r in api.llamadas if r.startswith("/content/")], [])
+
+    def test_sin_enlace_se_repite_como_mucho_una_vez_al_dia(self):
+        tx = [_venta(_id="v1", content_uid=UID_A)]
+        api = OveroptionFalso(transacciones=tx, enlaces={})  # aún sin enlace
+        cli = pagos.ClienteOveroption(pedir=api.pedir)
+
+        def contenido():
+            return [r for _, r in api.llamadas if r.startswith("/content/")]
+
+        pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta", ahora=1000)
+        pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta", ahora=1000 + 3600)
+        self.assertEqual(len(contenido()), 1)
+        api._enlaces[UID_A] = "https://t.me/+AAA"
+        pagos.bajar_y_guardar(self.con, cli, "yo@example.com", "secreta", ahora=1000 + 24 * 3600)
+        self.assertEqual(len(contenido()), 2)
+        fila = self.con.execute("SELECT enlace FROM pagos_overoption WHERE id='v1'").fetchone()
+        self.assertEqual(fila["enlace"], "https://t.me/+AAA")
 
 
 if __name__ == "__main__":

@@ -52,6 +52,11 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 # Las condiciones de overoption no prohíben leer la propia cuenta por
 # programa, pero conviene ir suave: una descarga cada varias horas.
 TIMEOUT_S = 60
+# Productos: overoption solo acepta ids UUID (los antiguos, «overoption_legacy_…»,
+# los rechaza siempre) y uno ya consultado sin enlace se repite como mucho una
+# vez al día (antes se preguntaba por unos 180 en cada lectura).
+RE_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+REPETIR_SIN_ENLACE_S = 24 * 3600
 
 
 # --- Normalización (puro, testeable) ------------------------------------------------
@@ -136,10 +141,17 @@ def guardar_ventas(con, ventas, ahora=None):
     return len(filas)
 
 
-def enlace_en_cache(con, content_uid):
-    fila = con.execute("SELECT enlace FROM pagos_contenidos WHERE content_uid = ?",
+def contenido_en_cache(con, content_uid):
+    """La fila guardada de un producto (enlace, visto_ts) o None."""
+    return con.execute("SELECT enlace, visto_ts FROM pagos_contenidos WHERE content_uid = ?",
                        (content_uid,)).fetchone()
-    return fila["enlace"] if fila else None
+
+
+def _preguntar(content_uid, fila, ahora):
+    """Si hay que pedir a overoption el enlace de un producto que no lo tiene."""
+    if not RE_UUID.match(content_uid):
+        return False
+    return fila is None or fila["visto_ts"] is None or ahora - fila["visto_ts"] >= REPETIR_SIN_ENLACE_S
 
 
 def guardar_contenido(con, content_uid, enlace, titulo, ahora=None):
@@ -214,7 +226,7 @@ class ClienteOveroption:
 
 def bajar_y_guardar(con, cliente, email, password, ahora=None):
     """Entra, baja todas las ventas, resuelve el enlace de cada producto (con
-    caché) y lo guarda todo. Devuelve cuántas ventas se guardaron."""
+    caché; ver _preguntar) y lo guarda todo. Devuelve cuántas ventas se guardaron."""
     ahora = int(time.time() if ahora is None else ahora)
     cliente.entrar(email, password)
     transacciones = cliente.transacciones()
@@ -229,8 +241,9 @@ def bajar_y_guardar(con, cliente, email, password, ahora=None):
             if uid in enlaces:
                 enlace = enlaces[uid]
             else:
-                enlace = enlace_en_cache(con, uid)
-                if enlace is None:
+                fila = contenido_en_cache(con, uid)
+                enlace = fila["enlace"] if fila else None
+                if enlace is None and _preguntar(uid, fila, ahora):
                     try:
                         enlace = cliente.enlace_contenido(uid)
                     except ErrorOveroption as e:
