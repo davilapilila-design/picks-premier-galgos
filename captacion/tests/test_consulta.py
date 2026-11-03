@@ -39,7 +39,7 @@ class TestConsulta(unittest.TestCase):
 
     def test_ficha_con_la_gratuita_y_los_envios_posteriores(self):
         texto = consulta.ficha(self.con, db.obtener_usuario(self.con, 1), TZ)
-        self.assertIn("José Pérez (@josep)", texto)
+        self.assertTrue(texto.startswith("👤 Nombre: José Pérez\n🆔 Id de Telegram: 1\n📛 Usuario: @josep\n"), texto)
         self.assertIn("🎁 Gratuita: 09/10/2025 a las 11:53, canal de venta «VIP Galgos»", texto)
         self.assertIn("Después se le envió 1 enlace de venta más", texto)
         self.assertIn("10/10/2025 a las 10:53: «Packs» – t.me/+falso", texto)
@@ -95,7 +95,7 @@ class TestOrdenGratuita(Base):
         with self.con:
             nombres.guardar_chats(self.con, [(40, "M", None)], T)
         self.bot.procesar(update_boton(1, "gra:40", uid=PROPIETARIO))
-        self.assertIn("👤 M", self.ultimo()["text"])
+        self.assertIn("🆔 Id de Telegram: 40", self.ultimo()["text"])
 
 
 class TestSinBienvenida(unittest.TestCase):
@@ -124,7 +124,7 @@ class TestSinBienvenida(unittest.TestCase):
     def test_ficha_sin_gratuita(self):
         texto, teclado = consulta.respuesta(self.con, "40", TZ)
         self.assertIsNone(teclado)
-        self.assertIn("👤 M", texto)
+        self.assertTrue(texto.startswith("👤 Nombre: M\n🆔 Id de Telegram: 40\n📛 Usuario: no tiene @\n"), texto)
         self.assertIn("Sin bienvenida apuntada", texto)
         self.assertIn("No le consta ninguna apuesta gratuita", texto)
 

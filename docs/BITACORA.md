@@ -10,7 +10,9 @@ Entradas más recientes arriba.
   los chats privados del dueño y en los canales de venta (`consulta.persona`), y
   su ficha dice que no tiene bienvenida ni gratuita. El botón «Ver más info»
   usa la misma búsqueda.
-- Commits: (este commit)
+- La ficha empieza con el nombre, el id de Telegram y el @ (o «no tiene @»),
+  que pidió el dueño.
+- Commits: 8b39cfc, (este commit)
 
 ## 2026-11-03 — Captación: ventas cada 20 min mientras hay una venta abierta; rama `captacion`
 

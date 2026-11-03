@@ -70,7 +70,9 @@ def ficha(con, fila, tz):
     def fecha(ts):
         return f"{datetime.fromtimestamp(ts, tz):%d/%m/%Y a las %H:%M}"
 
-    lineas = [f"👤 {nombre(fila)}"]
+    lineas = [f"👤 Nombre: {fila['nombre'] or 'sin nombre'}",
+              f"🆔 Id de Telegram: {fila['user_id']}",
+              f"📛 Usuario: @{fila['username']}" if fila["username"] else "📛 Usuario: no tiene @"]
     if fila["bienvenida_ts"] is not None:
         lineas.append(f"👋 Bienvenida: {fecha(fila['bienvenida_ts'])} "
                       f"({textos.descripcion_tipo(con, fila['bienvenida_tipo'], tz)})")
