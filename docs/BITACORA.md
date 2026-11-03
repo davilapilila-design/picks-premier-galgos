@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-03 (cont.) — msg 446: horas de las patas corregidas a las del mensaje
+- La doble de Dunstall Park del 10/10 se guardó con las horas una hora antes (19:58 y 21:54)
+  de las que pone el mensaje (20:58 y 22:54, hora de Madrid). Con eso la pata 2 no casaba con
+  ninguna carrera y la pata 1 se había cruzado con la carrera anterior (la de las 19:58).
+- Corregida `hora_carrera` de las dos patas en `apuestas_patas` (solo esa columna). El job
+  escribió las dos carreras correctas y las fórmulas de las patas ya apuntan a ellas. La
+  posición y el resultado de cada pata estaban puestos a mano y ya eran los reales (3.º y 1.º);
+  la apuesta sigue perdida (resultado manual), sin cambios en unidades.
+- Las 3 filas de la carrera de las 19:58 siguen en `resultados_galgos`: son datos reales de
+  esa carrera, aunque ya no las usa ninguna pata.
+
 ## 2026-11-03 — `resultados_galgos` duplicaba las carreras de los días 1-9 de cada mes
 - **Qué fallaba**: desde el 01/11 cada pasada volvía a escribir las mismas carreras (27 filas
   cada 20 min, 9 carreras del 1 y el 2/11). El job decide qué carreras ya tienen resultado
