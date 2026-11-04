@@ -182,6 +182,13 @@ class TestSinBienvenida(unittest.TestCase):
         self.assertIn("Sin bienvenida apuntada", texto)
         self.assertIn("No le consta ninguna apuesta gratuita", texto)
 
+    def test_los_caracteres_invisibles_del_nombre_no_cuentan(self):
+        with self.con:  # relleno coreano y espacios de anchura cero alrededor del nombre
+            nombres.guardar_chats(self.con, [(42, "ㅤㅤRicardoㅤ", None),
+                                             (43, "​Luis⁠ Ruiz​", None)], T)
+        self.assertEqual(self.ids("ricardo"), [42])
+        self.assertEqual(self.ids("luis ruiz"), [43])
+
     def test_quien_no_se_conoce_sigue_sin_encontrarse(self):
         self.assertEqual(self.ids("99"), [])
         self.assertIsNone(consulta.persona(self.con, 99))

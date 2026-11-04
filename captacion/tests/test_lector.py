@@ -181,6 +181,21 @@ class TestProcesar(unittest.TestCase):
         for otro in (SimpleNamespace(id=1, bot=True, is_self=False), SimpleNamespace(id=2, bot=False, is_self=True), None):
             self.assertEqual(self.procesar(self.msg(False, "x"), otro), ([], []))
 
+    def test_quien_escribe_queda_apuntado_al_momento(self):
+        """Para que /gratuita lo encuentre sin esperar a la lista diaria de chats."""
+        org = OrganizadorFalso()
+        ric = SimpleNamespace(id=600, first_name="Ricardo", last_name="Gil", username="ricgil", bot=False, is_self=False)
+        luis = SimpleNamespace(id=601, first_name="Luis", last_name=None, username=None, bot=False, is_self=False)
+        self.procesar(self.msg(False, "hola"), ric, org)
+        self.procesar(self.msg(True, "buenas"), luis, org)  # también si escribe primero el dueño
+        self.procesar(self.msg(False, "x"), SimpleNamespace(id=602, first_name="Bot", bot=True, is_self=False), org)
+        filas = [tuple(f) for f in org.con.execute("SELECT user_id, nombre, username FROM personas_chat ORDER BY user_id")]
+        self.assertEqual(filas, [(600, "Ricardo Gil", "ricgil"), (601, "Luis", None)])
+        ric.username = "ricardo"  # cambia su @: se actualiza
+        self.procesar(self.msg(False, "otra"), ric, org)
+        self.assertEqual(org.con.execute("SELECT username FROM personas_chat WHERE user_id = 600").fetchone()[0],
+                         "ricardo")
+
 
 class TestEmbudoPrueba(unittest.TestCase):
     def test_marca_como_del_embudo(self):

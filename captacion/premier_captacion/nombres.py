@@ -10,8 +10,9 @@ completo y el nombre (o sus 4 primeras letras); un nombre suelto nunca vale
 (pagos.emparejar_ventas decide con esto y con la hora).
 
 Los nombres salen de los canales de venta, de los usuarios del bot y de los
-chats privados del dueño, que el lector apunta una vez al día (solo id,
-nombre y @usuario; ningún mensaje; autorizado por el dueño el 2026-10-30).
+chats privados del dueño, que el lector apunta una vez al día y, desde el
+2026-11-04, también al momento con cada mensaje privado (solo id, nombre y
+@usuario; ningún mensaje; autorizado por el dueño el 2026-10-30).
 """
 import asyncio
 import logging
@@ -105,6 +106,17 @@ def guardar_chats(con, personas, ahora=None):
         "ON CONFLICT (user_id) DO UPDATE SET nombre = excluded.nombre, "
         "username = excluded.username, visto_ts = excluded.visto_ts",
         [(uid, nombre, username, ahora) for uid, nombre, username in personas])
+
+
+def apuntar_chat(con, u, ahora=None):
+    """Al momento, la persona de un mensaje privado (el lector, por cada uno
+    que escribe o recibe el dueño): /gratuita la encuentra sin esperar a la
+    lista diaria."""
+    if getattr(u, "deleted", False):
+        return
+    nombre = " ".join(x for x in (getattr(u, "first_name", None), getattr(u, "last_name", None)) if x) or None
+    with con:
+        guardar_chats(con, [(u.id, nombre, getattr(u, "username", None))], ahora)
 
 
 async def leer_chats(client):

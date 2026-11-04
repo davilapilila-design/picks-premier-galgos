@@ -38,7 +38,7 @@ import sys
 import time
 from dataclasses import replace
 
-from . import carpetas, consulta, db, guardia, historico
+from . import carpetas, consulta, db, guardia, historico, nombres
 from .enlaces import hashes_invitacion, textos_de
 from .config import ErrorConfig, cargar_config
 from .telegram_api import BotAPI, ErrorRed, ErrorTelegram
@@ -239,6 +239,10 @@ async def procesar(mensaje, otro, entrada, org, tg_real):
         await org.al_enviar(otro.id, mensaje.id, ts, textos_de(mensaje))
     else:
         await org.al_recibir(otro.id, mensaje.id, ts, mensaje.message or "", usuario=_usuario(otro))
+    try:  # que /gratuita lo encuentre ya, sin esperar a la lista diaria de chats
+        nombres.apuntar_chat(org.con, otro)
+    except Exception:
+        log.exception("No pude apuntar el nombre de %s", otro.id)
 
 
 def _usuario(otro):

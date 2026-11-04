@@ -7,6 +7,7 @@ Lo apunta el lector al ver que el dueño envía un enlace de venta (y la fase
 los mensajes. Solo lee la base de datos.
 """
 import json
+import unicodedata
 from datetime import datetime
 
 from . import db, textos
@@ -15,6 +16,7 @@ from .carpetas import normalizar
 MAX_OPCIONES = 8
 CALLBACK = "gra:"  # + user_id: ficha de una de las opciones
 CALLBACK_CONTIENE = "grc:"  # + lo buscado: los que lo contienen
+_RELLENOS = {0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800}  # se ven como espacios en blanco
 
 _BOTONES = {"ya_apostado": "«Ya he apostado»", "primera_vez": "«Es mi primera vez»", "otro": "otro texto"}
 
@@ -47,8 +49,11 @@ def _es_id(dato):
 
 
 def _comparable(texto):
-    """Sin mayúsculas, tildes ni espacios de más."""
-    return " ".join(normalizar(texto).split())
+    """Sin mayúsculas, tildes, espacios de más ni caracteres invisibles (hay
+    quien rodea su nombre de rellenos coreanos o espacios de anchura cero)."""
+    visible = "".join(" " if ord(c) in _RELLENOS else c for c in texto or ""
+                      if unicodedata.category(c) != "Cf")
+    return " ".join(normalizar(visible).split())
 
 
 def buscar(con, dato, contiene=False):

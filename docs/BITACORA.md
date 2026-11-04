@@ -3,6 +3,16 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-04 — Captación: /gratuita encuentra a quien acaba de escribir y a nombres con invisibles
+
+- Un cliente que escribió por primera vez al dueño no salía en `/gratuita` ni por
+  su @: la lista de chats privados (`personas_chat`) solo se rellenaba una vez al
+  día. Ahora el lector apunta al momento a la persona de cada mensaje privado
+  (`nombres.apuntar_chat`, solo id, nombre y @; ningún permiso nuevo).
+- Su nombre llevaba rellenos coreanos invisibles alrededor: la búsqueda exacta
+  no los tiene en cuenta (ni los espacios de anchura cero).
+- Commits: (este commit)
+
 ## 2026-11-03 — Captación: /gratuita encuentra también a quien no pasó por la bienvenida
 
 - `/gratuita <id>` respondía «No encuentro a nadie» con clientes de antes (o que
