@@ -229,6 +229,17 @@ MIGRACIONES = [
         PRIMARY KEY (user_id, msg_id, hash)
     );
     """,
+    # 13 (nombres y @ que alguien tuvo antes, para encontrarle por ellos en
+    # /gratuita; pedido por el dueño el 2026-11-04; ver nombre_visto)
+    """
+    CREATE TABLE nombres_anteriores (
+        user_id INTEGER NOT NULL,
+        nombre TEXT,
+        username TEXT,
+        cambio_ts INTEGER NOT NULL  -- cuándo se vio que ya no los usaba
+    );
+    CREATE INDEX nombres_anteriores_usuario ON nombres_anteriores (user_id);
+    """,
 ]
 
 
@@ -281,8 +292,47 @@ def nombre_completo(usuario):
     return " ".join(p for p in partes if p) or None
 
 
+_TABLAS_NOMBRE = ("usuarios", "personas_chat", "ventas_personas")
+
+
+def _mismo_nombre(a, b):
+    return a[0] == b[0] and (a[1] or "").casefold() == (b[1] or "").casefold()  # el @ no distingue mayúsculas
+
+
+def nombre_visto(con, user_id, nombre, username, ts, completo=True):
+    """El nombre y el @ que Telegram da ahora para alguien: si en alguna tabla
+    tenía otros, se apuntan en `nombres_anteriores` y se ponen los nuevos en
+    todas (pedido por el dueño el 2026-11-04). Con `completo=False` (datos de
+    los canales de venta), un None es «no se sabe», no «no tiene»."""
+    if nombre is None and username is None:
+        return
+    for tabla in _TABLAS_NOMBRE:
+        f = con.execute(f"SELECT nombre, username FROM {tabla} WHERE user_id = ?", (user_id,)).fetchone()
+        if f is None:
+            continue
+        antes = (f[0], f[1])
+        ahora = (nombre, username) if completo else (nombre if nombre is not None else antes[0],
+                                                    username if username is not None else antes[1])
+        if _mismo_nombre(antes, ahora):
+            continue
+        ya = con.execute("SELECT 1 FROM nombres_anteriores WHERE user_id = ? AND nombre IS ? AND username IS ?",
+                         (user_id, *antes)).fetchone()
+        if antes != (None, None) and ya is None:
+            con.execute("INSERT INTO nombres_anteriores (user_id, nombre, username, cambio_ts) VALUES (?, ?, ?, ?)",
+                        (user_id, *antes, int(ts)))
+        con.execute(f"UPDATE {tabla} SET nombre = ?, username = ? WHERE user_id = ?", (*ahora, user_id))
+
+
+def anteriores(con, user_id):
+    """[(nombre, username, cambio_ts)] que tuvo antes, el más reciente primero."""
+    return [tuple(f) for f in con.execute(
+        "SELECT nombre, username, cambio_ts FROM nombres_anteriores WHERE user_id = ? "
+        "ORDER BY cambio_ts DESC, rowid DESC", (user_id,))]
+
+
 def actualizar_datos_usuario(con, ts, usuario):
     """Crea la fila de la persona o refresca su nombre/@ (pueden cambiar)."""
+    nombre_visto(con, usuario["id"], nombre_completo(usuario), usuario.get("username"), ts)
     con.execute(
         """
         INSERT INTO usuarios (user_id, nombre, username, idioma, creado_ts, actualizado_ts)

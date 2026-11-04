@@ -380,7 +380,10 @@ mayúsculas ni tildes). Busca el nombre **exacto**; debajo sale el botón
 «🔎 Buscar los que contienen…» para ampliar, y si nadie se llama exactamente
 así, busca directamente los que lo contienen. También encuentra a los clientes
 que no pasaron por la bienvenida, y a quien te escribe por privado desde el
-primer mensaje (los caracteres invisibles del nombre no cuentan). La ficha empieza con el nombre, el id de
+primer mensaje (los caracteres invisibles del nombre no cuentan). Si alguien
+cambia de nombre o de @, el bot guarda los anteriores: lo encuentras también
+por ellos (te avisa de que es como se llamaba antes) y la ficha los enseña
+(«📝 Antes: …»). La ficha empieza con el nombre, el id de
 Telegram y el @ (o «no tiene @»). El
 bot te dice cuándo recibió la bienvenida, cuándo te escribió y con qué botón,
 y **cuándo le diste la gratuita, a qué canal de venta y con qué enlace** (y

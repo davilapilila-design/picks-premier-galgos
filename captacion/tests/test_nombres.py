@@ -98,6 +98,56 @@ class TestChats(unittest.TestCase):
         self.assertEqual(filas, [(500, "Ana Ferrandiz", "anaf", 2), (501, "Luis", None, 2)])
 
 
+class TestNombresAnteriores(unittest.TestCase):
+    """Historial de nombres y @ (pedido por el dueño el 2026-11-04)."""
+
+    def setUp(self):
+        self.con = db.abrir(":memory:")
+        self.addCleanup(self.con.close)
+
+    def anteriores(self, uid):
+        return [tuple(f) for f in self.con.execute(
+            "SELECT nombre, username, cambio_ts FROM nombres_anteriores WHERE user_id = ? ORDER BY cambio_ts, rowid",
+            (uid,))]
+
+    def test_se_apunta_el_anterior_al_cambiar(self):
+        with self.con:
+            db.actualizar_datos_usuario(self.con, 1, {"id": 500, "first_name": "Juanito", "username": "juan_viejo"})
+            db.actualizar_datos_usuario(self.con, 2, {"id": 500, "first_name": "Juanito", "username": "JUAN_VIEJO"})
+            db.actualizar_datos_usuario(self.con, 3, {"id": 500, "first_name": "Juan Pérez", "username": "juanp"})
+            db.actualizar_datos_usuario(self.con, 4, {"id": 500, "first_name": "Juan Pérez", "username": "juanp"})
+        self.assertEqual(self.anteriores(500), [("Juanito", "JUAN_VIEJO", 3)])  # el @ solo cambió de mayúsculas
+
+    def test_la_lista_de_chats_pone_al_dia_el_nombre_en_todas_partes(self):
+        from premier_captacion import ventas
+        with self.con:
+            db.actualizar_datos_usuario(self.con, 1, {"id": 501, "first_name": "Bea", "username": "bea"})
+            ventas.guardar_persona(self.con, 501, "Bea", "bea")
+            nombres.guardar_chats(self.con, [(501, "Beatriz Gil", "beagil"), (502, "Luis", None)], ahora=5)
+            nombres.guardar_chats(self.con, [(501, "Beatriz Gil", "beagil")], ahora=6)
+        self.assertEqual(self.anteriores(501), [("Bea", "bea", 5)])
+        for tabla in ("usuarios", "ventas_personas", "personas_chat"):
+            fila = self.con.execute(f"SELECT nombre, username FROM {tabla} WHERE user_id = 501").fetchone()
+            self.assertEqual(tuple(fila), ("Beatriz Gil", "beagil"), tabla)
+        self.assertEqual(self.anteriores(502), [])
+
+    def test_canales_de_venta_sin_dato_no_es_un_cambio(self):
+        from premier_captacion import ventas
+        with self.con:
+            ventas.guardar_persona(self.con, 503, "Leo", "leo")
+            ventas.guardar_persona(self.con, 503, "Leo", None)      # sin @ en ese dato: no se sabe
+            ventas.guardar_persona(self.con, 503, "Leo Ruiz", None)
+        self.assertEqual([a[:2] for a in self.anteriores(503)], [("Leo", "leo")])
+        self.assertEqual(tuple(self.con.execute("SELECT nombre, username FROM ventas_personas").fetchone()),
+                         ("Leo Ruiz", "leo"))
+
+    def test_sin_datos_no_es_un_cambio(self):
+        with self.con:
+            db.actualizar_datos_usuario(self.con, 1, {"id": 504, "first_name": "Ana", "username": "ana"})
+            db.nombre_visto(self.con, 504, None, None, 2)
+        self.assertEqual(self.anteriores(504), [])
+
+
 class ClienteDialogos:
     def __init__(self, entidades):
         self.entidades = entidades

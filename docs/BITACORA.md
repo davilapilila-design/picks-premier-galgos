@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-04 — Captación: historial de nombres y @ en /gratuita
+
+- Pedido por el dueño: si alguien cambia de nombre o de @, encontrarle por los
+  de antes y saber que los cambió. Tabla nueva `nombres_anteriores` (migración
+  13): `db.nombre_visto` apunta el anterior cada vez que Telegram da otro (bot,
+  mensajes privados, lista diaria de chats, canales de venta) y pone el nuevo en
+  todas las tablas. `/gratuita` busca también por ellos (detrás de quien lo
+  tiene ahora, con aviso) y la ficha los enseña («📝 Antes: …»).
+- Solo desde ahora: lo anterior no se puede recuperar (la primera lista diaria
+  apunta las diferencias que ya había entre tablas, con la fecha de ese día).
+- Commits: (este commit)
+
 ## 2026-11-04 — Captación: quien escribe sin bienvenida se registra (o se avisa si no está en el canal)
 
 - Un cliente entró por el enlace principal del canal (sin aprobación, estaba en

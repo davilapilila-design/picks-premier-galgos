@@ -198,6 +198,28 @@ class TestSinBienvenida(unittest.TestCase):
         self.assertIn("· registrado el", texto)
         self.assertNotIn("👋 Bienvenida:", texto)
 
+    def cambia(self, uid, nombre, username, ts):
+        with self.con:
+            nombres.guardar_chats(self.con, [(uid, nombre, username)], ts)
+
+    def test_por_el_nombre_o_el_arroba_de_antes(self):
+        self.cambia(41, "Marta G.", "marta_nueva", T + 86400)
+        self.assertEqual(self.ids("@martag"), [41])
+        self.assertEqual(self.ids("marta gil"), [41])
+        self.assertEqual(self.ids("martag", contiene=True), [41])
+        texto, _ = consulta.respuesta(self.con, "@martag", TZ)
+        self.assertTrue(texto.startswith("⚠️ «@martag» es como se llamaba antes (cambio visto el 10/10/2025). "
+                                         "Ahora:\n\n👤 Nombre: Marta G.\n"), texto)
+        self.assertIn("📝 Antes: Marta Gil (@martag) (cambio visto el 10/10/2025)", texto)
+
+    def test_el_actual_va_antes_que_quien_lo_tuvo(self):
+        self.cambia(41, "Marta G.", "marta_nueva", T + 86400)
+        self.cambia(45, "Otra Marta", "martag", T + 2 * 86400)  # alguien coge el @ que quedó libre
+        self.assertEqual(self.ids("@martag"), [45, 41])
+        _, teclado = consulta.respuesta(self.con, "@martag", TZ)
+        botones = [b[0]["text"] for b in teclado["inline_keyboard"]]
+        self.assertEqual(botones[:2], ["Otra Marta (@martag)", "Marta G. (@marta_nueva) · antes @martag"])
+
     def test_quien_no_se_conoce_sigue_sin_encontrarse(self):
         self.assertEqual(self.ids("99"), [])
         self.assertIsNone(consulta.persona(self.con, 99))

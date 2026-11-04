@@ -20,6 +20,8 @@ import re
 import time
 import unicodedata
 
+from . import db
+
 log = logging.getLogger("captacion.nombres")
 
 CHATS_CADA_S = 24 * 3600
@@ -101,6 +103,8 @@ def choca(correo, nombre, username):
 def guardar_chats(con, personas, ahora=None):
     """personas: [(user_id, nombre, username)] de los chats privados."""
     ahora = int(time.time() if ahora is None else ahora)
+    for uid, nombre, username in personas:
+        db.nombre_visto(con, uid, nombre, username, ahora)
     con.executemany(
         "INSERT INTO personas_chat (user_id, nombre, username, visto_ts) VALUES (?, ?, ?, ?) "
         "ON CONFLICT (user_id) DO UPDATE SET nombre = excluded.nombre, "

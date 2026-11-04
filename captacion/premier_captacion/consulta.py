@@ -71,10 +71,35 @@ def buscar(con, dato, contiene=False):
     filas = con.execute("SELECT * FROM usuarios ORDER BY COALESCE(enlace_venta_ts, 0) DESC, user_id").fetchall()
     filas += _sin_bienvenida(con)
     if contiene:
-        return [f for f in filas
-                if buscado in _comparable(f["nombre"]) or buscado in _comparable(f["username"])]
-    exactas = [f for f in filas if _comparable(f["username"]) == buscado]
-    return exactas or [f for f in filas if _comparable(f["nombre"]) == buscado]
+        actuales = [f for f in filas
+                    if buscado in _comparable(f["nombre"]) or buscado in _comparable(f["username"])]
+    else:
+        actuales = ([f for f in filas if _comparable(f["username"]) == buscado]
+                    or [f for f in filas if _comparable(f["nombre"]) == buscado])
+    return actuales + _por_nombre_anterior(con, buscado, contiene, {f["user_id"] for f in actuales})
+
+
+def _por_nombre_anterior(con, buscado, contiene, excluir):
+    """Quienes tuvieron antes ese nombre o @ (db.nombre_visto), detrás de los
+    que lo tienen ahora; con `_antes` = (fecha del cambio, cómo se llamaba)."""
+    encontrados = []
+    for uid, nombre, username, cambio_ts in con.execute(
+            "SELECT user_id, nombre, username, cambio_ts FROM nombres_anteriores ORDER BY cambio_ts DESC, rowid DESC"):
+        if uid in excluir:
+            continue
+        n, u = _comparable(nombre), _comparable(username)
+        por_arroba = buscado in u if contiene else u == buscado
+        if not (por_arroba or (buscado in n if contiene else n == buscado)):
+            continue
+        fila = persona(con, uid)
+        if fila is not None:
+            excluir.add(uid)
+            encontrados.append({**dict(fila), "_antes": (cambio_ts, f"@{username}" if por_arroba else nombre)})
+    return encontrados
+
+
+def _antes(fila):
+    return fila.get("_antes") if isinstance(fila, dict) else None
 
 
 def nombre(fila):
@@ -89,6 +114,10 @@ def ficha(con, fila, tz):
     lineas = [f"👤 Nombre: {fila['nombre'] or 'sin nombre'}",
               f"🆔 Id de Telegram: {fila['user_id']}",
               f"📛 Usuario: @{fila['username']}" if fila["username"] else "📛 Usuario: no tiene @"]
+    for n, u, cambio_ts in db.anteriores(con, fila["user_id"])[:3]:
+        if (n, (u or "").casefold()) != (fila["nombre"], (fila["username"] or "").casefold()):
+            lineas.append(f"📝 Antes: {n or 'sin nombre'}" + (f" (@{u})" if u else "")
+                          + f" (cambio visto el {datetime.fromtimestamp(cambio_ts, tz):%d/%m/%Y})")
     if fila["bienvenida_tipo"] in mensajes.TIPOS_SIN_BIENVENIDA:  # lo registró el lector al escribir
         lineas.append(f"👋 {textos.descripcion_tipo(con, fila['bienvenida_tipo'], tz)} · "
                       f"registrado el {fecha(fila['bienvenida_ts'])}")
@@ -153,13 +182,18 @@ def respuesta(con, dato, tz, contiene=False):
         return (f"No encuentro a nadie con «{dato}». Prueba con su @ o con otra parte del nombre.", None)
     ampliar = [] if contiene or _es_id(dato) else _boton_contiene(dato)
     if len(filas) == 1:
-        texto = (f"{aviso} Lo contiene:\n\n" if aviso else "") + ficha(con, filas[0], tz)
+        texto = f"{aviso} Lo contiene:\n\n" if aviso else ""
+        if _antes(filas[0]):
+            texto += (f"⚠️ «{dato}» es como se llamaba antes (cambio visto el "
+                      f"{datetime.fromtimestamp(_antes(filas[0])[0], tz):%d/%m/%Y}). Ahora:\n\n")
+        texto += ficha(con, filas[0], tz)
         return texto, ({"inline_keyboard": ampliar} if ampliar else None)
     texto = (f"{aviso}\n" if aviso else "") + (
         f"Hay {len(filas)} personas que {'contienen' if contiene else 'se llaman'} «{dato}». ¿Cuál?")
     if len(filas) > MAX_OPCIONES:
         texto += f"\n(Te enseño las {MAX_OPCIONES} primeras; si no está, afina más el nombre.)"
     teclado = {"inline_keyboard": [
-        [{"text": ("🎁 " if f["enlace_venta_ts"] is not None else "") + nombre(f)[:60],
+        [{"text": (("🎁 " if f["enlace_venta_ts"] is not None else "") + nombre(f)
+                   + (f" · antes {_antes(f)[1]}" if _antes(f) else ""))[:64],
           "callback_data": f"{CALLBACK}{f['user_id']}"}] for f in filas[:MAX_OPCIONES]] + ampliar}
     return texto, teclado
