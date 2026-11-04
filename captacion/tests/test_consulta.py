@@ -220,6 +220,14 @@ class TestSinBienvenida(unittest.TestCase):
         botones = [b[0]["text"] for b in teclado["inline_keyboard"]]
         self.assertEqual(botones[:2], ["Otra Marta (@martag)", "Marta G. (@marta_nueva) · antes @martag"])
 
+    def test_con_arroba_solo_cuenta_el_arroba(self):
+        """Su nombre de ahora se escribe como su @ de antes: con @ es el @ de antes."""
+        self.cambia(41, "Martag", "marta_nueva", T + 86400)
+        texto, _ = consulta.respuesta(self.con, "@martag", TZ)
+        self.assertTrue(texto.startswith("⚠️ «@martag» es como se llamaba antes"), texto)
+        self.assertEqual(self.ids("martag"), [41])  # sin @, también por el nombre
+        self.assertEqual(self.ids("@m"), [])        # «M» es un nombre, no un @
+
     def test_quien_no_se_conoce_sigue_sin_encontrarse(self):
         self.assertEqual(self.ids("99"), [])
         self.assertIsNone(consulta.persona(self.con, 99))

@@ -20,7 +20,9 @@ Entradas más recientes arriba.
   (`nombres.nombre_telethon` → None): solo su @, y se queda el nombre del bot.
   Antes, el lector ya escribía esos nombres en `usuarios`; se irán corrigiendo
   solos cuando el bot vea el nombre de verdad.
-- Commits: 09a2f6d, (este commit)
+- `/gratuita @x` (búsqueda exacta) mira solo el @, el de ahora y los de antes:
+  si su nombre actual se escribía como su @ viejo, salía sin el aviso.
+- Commits: 09a2f6d, b5f2384, (este commit)
 
 ## 2026-11-04 — Captación: quien escribe sin bienvenida se registra (o se avisa si no está en el canal)
 

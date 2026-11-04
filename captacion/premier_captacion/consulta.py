@@ -60,7 +60,8 @@ def buscar(con, dato, contiene=False):
     """Personas que encajan con `dato` (sin importar mayúsculas ni tildes): id,
     @usuario exacto o nombre completo exacto; con `contiene`, las que llevan
     `dato` en el nombre o en el @. Las de gratuita van primero; las que no
-    pasaron por la bienvenida, al final."""
+    pasaron por la bienvenida, al final. Con @ delante, la búsqueda exacta
+    solo mira el @ (el de ahora y los de antes)."""
     dato = dato.strip()
     if _es_id(dato):
         fila = persona(con, int(dato))
@@ -68,6 +69,7 @@ def buscar(con, dato, contiene=False):
     buscado = _comparable(dato.lstrip("@"))
     if not buscado:
         return []
+    solo_arroba = dato.startswith("@") and not contiene
     filas = con.execute("SELECT * FROM usuarios ORDER BY COALESCE(enlace_venta_ts, 0) DESC, user_id").fetchall()
     filas += _sin_bienvenida(con)
     if contiene:
@@ -75,11 +77,11 @@ def buscar(con, dato, contiene=False):
                     if buscado in _comparable(f["nombre"]) or buscado in _comparable(f["username"])]
     else:
         actuales = ([f for f in filas if _comparable(f["username"]) == buscado]
-                    or [f for f in filas if _comparable(f["nombre"]) == buscado])
-    return actuales + _por_nombre_anterior(con, buscado, contiene, {f["user_id"] for f in actuales})
+                    or ([] if solo_arroba else [f for f in filas if _comparable(f["nombre"]) == buscado]))
+    return actuales + _por_nombre_anterior(con, buscado, contiene, {f["user_id"] for f in actuales}, solo_arroba)
 
 
-def _por_nombre_anterior(con, buscado, contiene, excluir):
+def _por_nombre_anterior(con, buscado, contiene, excluir, solo_arroba=False):
     """Quienes tuvieron antes ese nombre o @ (db.nombre_visto), detrás de los
     que lo tienen ahora; con `_antes` = (fecha del cambio, cómo se llamaba)."""
     encontrados = []
@@ -89,7 +91,7 @@ def _por_nombre_anterior(con, buscado, contiene, excluir):
             continue
         n, u = _comparable(nombre), _comparable(username)
         por_arroba = buscado in u if contiene else u == buscado
-        if not (por_arroba or (buscado in n if contiene else n == buscado)):
+        if not (por_arroba or (not solo_arroba and (buscado in n if contiene else n == buscado))):
             continue
         fila = persona(con, uid)
         if fila is not None:
