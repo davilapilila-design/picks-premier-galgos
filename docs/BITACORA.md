@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-04 — Captación: quien escribe sin bienvenida se registra (o se avisa si no está en el canal)
+
+- Un cliente entró por el enlace principal del canal (sin aprobación, estaba en
+  la descripción): el bot no lo vio y el lector no lo movía ni apuntaba su
+  gratuita. Regla del dueño: a quien escribe sin bienvenida, el lector le
+  pregunta al bot (Bot API `getChatMember`, solo lectura) si está en el canal.
+  Si pidió entrar (enlace con aprobación) → registrado con gratuita y al día;
+  si no → registrado sin gratuita (`sin_bot`) y a «free send»; si no está en el
+  canal → no se mueve y aviso al dueño con el enlace de la descripción
+  (`getChat`). Administradores, sin tocar. Solo en la instancia real.
+- `PLAN.md` tenía los hashes de dos enlaces de entrada (repo público): quitados.
+  El principal ya está revocado y el de la descripción ahora pide aprobación.
+- Commits: (este commit)
+
 ## 2026-11-04 — Captación: /gratuita encuentra a quien acaba de escribir y a nombres con invisibles
 
 - Un cliente que escribió por primera vez al dueño no salía en `/gratuita` ni por

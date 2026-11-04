@@ -54,12 +54,21 @@ TIPO_MANUAL_BUENAS = "manual_buenas"
 TIPO_MANUAL_BUENOS_DIAS = "manual_buenos_dias"
 # A quien ya estaba en el canal o vuelve a entrar: sin la gratuita.
 TIPO_BIENVENIDA_RECURRENTE = "bot_recurrente"
+# Sin bienvenida: el lector los registra cuando escriben al dueño estando en
+# el canal (decisión del dueño, 2026-11-04; carpetas.py).
+TIPO_SIN_BOT = "sin_bot"
+TIPO_APROBADO_SIN_BIENVENIDA = "aprobado_sin_bienvenida"
+TIPOS_SIN_BIENVENIDA = (TIPO_SIN_BOT, TIPO_APROBADO_SIN_BIENVENIDA)
 
 TIPOS_MENSAJE = {
     TIPO_BIENVENIDA_BOT: "Bienvenida del bot, versión B (dos botones), desde 2026-10",
     TIPO_MANUAL_BUENAS: "Bienvenida manual «Buenas! Bienvenido a PREMIER GALGOS», antes del bot",
     TIPO_MANUAL_BUENOS_DIAS: "Bienvenida manual «Buenos días y bienvenido a Premier Galgos», antes del bot",
     TIPO_BIENVENIDA_RECURRENTE: "Bienvenida del bot sin la gratuita (ya estaba en el canal o volvió a entrar)",
+    TIPO_SIN_BOT: "Sin bienvenida: entró al canal sin pasar por el bot (enlace sin aprobación) o ya estaba antes; "
+                  "sin gratuita",
+    TIPO_APROBADO_SIN_BIENVENIDA: "Sin bienvenida: pidió entrar y se le aceptó sin mensaje del bot "
+                                  "(pausa o retraso); con gratuita",
 }
 
 
@@ -149,7 +158,7 @@ TEXTO_MANUAL_BUENOS_DIAS = (
 # Para la pestaña «Tipos de mensaje» del Sheet: de dónde sale cada tipo y
 # su texto completo.
 ORIGEN_TIPO = {TIPO_BIENVENIDA_BOT: "bot", TIPO_MANUAL_BUENAS: "manual", TIPO_MANUAL_BUENOS_DIAS: "manual",
-               TIPO_BIENVENIDA_RECURRENTE: "bot"}
+               TIPO_BIENVENIDA_RECURRENTE: "bot", TIPO_SIN_BOT: "lector", TIPO_APROBADO_SIN_BIENVENIDA: "lector"}
 TEXTOS_TIPO = {
     TIPO_BIENVENIDA_BOT: TEXTO_BIENVENIDA,
     TIPO_BIENVENIDA_RECURRENTE: TEXTO_BIENVENIDA_RECURRENTE,

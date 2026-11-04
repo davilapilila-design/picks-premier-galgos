@@ -9,6 +9,7 @@ from unittest import mock
 
 from premier_captacion import carpetas, db, guardia, lector, mensajes
 from premier_captacion.config import ErrorConfig, cargar_config
+from premier_captacion.telegram_api import ErrorRed, ErrorTelegram
 
 
 
@@ -195,6 +196,59 @@ class TestProcesar(unittest.TestCase):
         self.procesar(self.msg(False, "otra"), ric, org)
         self.assertEqual(org.con.execute("SELECT username FROM personas_chat WHERE user_id = 600").fetchone()[0],
                          "ricardo")
+
+
+class ApiFalsa:
+    def __init__(self, **respuestas):
+        self.respuestas = respuestas
+        self.llamadas = []
+
+    def llamar(self, metodo, _timeout_red=None, **params):
+        self.llamadas.append(metodo)
+        r = self.respuestas[metodo]
+        r = r(params) if callable(r) else r
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+class TestCanalPorBot(unittest.TestCase):
+    """Lo que el lector pregunta al bot sobre el canal principal (solo lectura)."""
+
+    def canal(self, api):
+        self.ahora = 1000.0
+        return lector.CanalPorBot(api, -1001234567890, reloj=lambda: self.ahora)
+
+    def test_esta_en_el_canal_segun_su_estado(self):
+        estados = {1: {"status": "member"}, 2: {"status": "administrator"}, 3: {"status": "creator"},
+                   4: {"status": "left"}, 5: {"status": "kicked"},
+                   6: {"status": "restricted", "is_member": True}, 7: {"status": "restricted", "is_member": False}}
+        canal = self.canal(ApiFalsa(getChatMember=lambda p: estados[p["user_id"]]))
+        self.assertEqual([asyncio.run(canal.es_miembro(u)) for u in range(1, 8)],
+                         [True, None, None, False, False, True, False])  # los administradores, como antes
+
+    def test_si_falla_no_se_sabe_y_se_vuelve_a_preguntar(self):
+        respuestas = [ErrorRed("sin red"), ErrorTelegram("getChatMember", 400, "Bad Request"), {"status": "member"}]
+        api = ApiFalsa(getChatMember=lambda p: respuestas.pop(0))
+        canal = self.canal(api)
+        self.assertEqual([asyncio.run(canal.es_miembro(9)) for _ in range(3)], [None, None, True])
+
+    def test_la_respuesta_vale_un_rato(self):
+        api = ApiFalsa(getChatMember={"status": "left"})
+        canal = self.canal(api)
+        asyncio.run(canal.es_miembro(9))
+        asyncio.run(canal.es_miembro(9))
+        self.assertEqual(len(api.llamadas), 1)
+        self.ahora += lector.CanalPorBot.VIGENCIA_S + 1
+        asyncio.run(canal.es_miembro(9))
+        self.assertEqual(len(api.llamadas), 2)
+
+    def test_enlace_de_entrada_de_la_descripcion(self):
+        desc = "Grupo solo para mayores de 🔞\n\nContacto 📲 @dueno\n\nEnlace del canal: https://t.me/+ENTRADA_a-b1"
+        self.assertEqual(asyncio.run(self.canal(ApiFalsa(getChat={"description": desc})).enlace_entrada()),
+                         "https://t.me/+ENTRADA_a-b1")
+        self.assertIsNone(asyncio.run(self.canal(ApiFalsa(getChat={"description": "sin enlace"})).enlace_entrada()))
+        self.assertIsNone(asyncio.run(self.canal(ApiFalsa(getChat=ErrorRed("x"))).enlace_entrada()))
 
 
 class TestEmbudoPrueba(unittest.TestCase):

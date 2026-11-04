@@ -189,6 +189,15 @@ class TestSinBienvenida(unittest.TestCase):
         self.assertEqual(self.ids("ricardo"), [42])
         self.assertEqual(self.ids("luis ruiz"), [43])
 
+    def test_ficha_de_quien_entro_sin_pasar_por_el_bot(self):
+        with self.con:  # lo registra el lector cuando escribe estando en el canal
+            db.actualizar_datos_usuario(self.con, T, {"id": 44, "first_name": "Rita"})
+            db.actualizar_campos(self.con, 44, T, bienvenida_tipo="sin_bot", bienvenida_ts=T)
+        texto, _ = consulta.respuesta(self.con, "44", TZ)
+        self.assertIn("👋 Sin bienvenida: entró al canal sin pasar por el bot", texto)
+        self.assertIn("· registrado el", texto)
+        self.assertNotIn("👋 Bienvenida:", texto)
+
     def test_quien_no_se_conoce_sigue_sin_encontrarse(self):
         self.assertEqual(self.ids("99"), [])
         self.assertIsNone(consulta.persona(self.con, 99))

@@ -10,7 +10,7 @@ import json
 import unicodedata
 from datetime import datetime
 
-from . import db, textos
+from . import db, mensajes, textos
 from .carpetas import normalizar
 
 MAX_OPCIONES = 8
@@ -89,7 +89,10 @@ def ficha(con, fila, tz):
     lineas = [f"👤 Nombre: {fila['nombre'] or 'sin nombre'}",
               f"🆔 Id de Telegram: {fila['user_id']}",
               f"📛 Usuario: @{fila['username']}" if fila["username"] else "📛 Usuario: no tiene @"]
-    if fila["bienvenida_ts"] is not None:
+    if fila["bienvenida_tipo"] in mensajes.TIPOS_SIN_BIENVENIDA:  # lo registró el lector al escribir
+        lineas.append(f"👋 {textos.descripcion_tipo(con, fila['bienvenida_tipo'], tz)} · "
+                      f"registrado el {fecha(fila['bienvenida_ts'])}")
+    elif fila["bienvenida_ts"] is not None:
         lineas.append(f"👋 Bienvenida: {fecha(fila['bienvenida_ts'])} "
                       f"({textos.descripcion_tipo(con, fila['bienvenida_tipo'], tz)})")
     else:

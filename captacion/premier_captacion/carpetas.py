@@ -35,7 +35,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import db, enlaces
+from . import db, enlaces, mensajes
 
 log = logging.getLogger("captacion.carpetas")
 
@@ -133,13 +133,17 @@ def pide_gratuita(texto):
 
 
 class Organizador:
-    def __init__(self, con, tg, tz, ajustes, avisar=None, reloj=time.time):
+    def __init__(self, con, tg, tz, ajustes, avisar=None, reloj=time.time, canal=None):
         self.con = con
         self.tg = tg
         self.tz = tz
         self.aj = ajustes
         self.avisar = avisar or (lambda texto, teclado=None: None)
         self.reloj = reloj
+        # Qué responde el bot sobre el canal principal (es_miembro,
+        # enlace_entrada; lector.CanalPorBot): sin él, a quien no tiene
+        # bienvenida no se le registra (instancia de prueba, tests antiguos).
+        self.canal = canal
         self._candado_creado = None
         self._dia_simulado = None
 
@@ -230,16 +234,14 @@ class Organizador:
         if self.con.execute("SELECT 1 FROM eventos WHERE user_id = ? AND tipo = 'aviso_gratuita_repetida' "
                             "AND ts > ?", (user_id, int(ts) - AVISO_GRATUITA_S)).fetchone():
             return
-        if usuario:
-            nombre = db.nombre_completo(usuario) or "sin nombre"
-            quien = f"{nombre} (@{usuario['username']})" if usuario.get("username") else nombre
-        else:
-            quien = self._nombre(user_id)
+        quien = self._quien(user_id, usuario)
         if estado == "gratuita":
             motivo = (f"ya la tuvo el {datetime.fromtimestamp(fila['enlace_venta_ts'], self.tz):%d/%m} "
                       f"(«{fila['canal_venta'] or 'canal desconocido'}»)")
         elif fila is not None and fila["recurrente_ts"] is not None:
             motivo = "ya estaba en el canal o ya había pasado por aquí (le llegó la bienvenida sin gratuita)"
+        elif fila is not None and fila["bienvenida_tipo"] == mensajes.TIPO_SIN_BOT:
+            motivo = "entró al canal sin pasar por el bot (enlace sin aprobación) o ya estaba antes"
         else:
             motivo = "ya estaba en el canal"
         with self.con:
@@ -249,10 +251,61 @@ class Organizador:
         self.avisar(f"⚠️ {quien} te ha escrito pidiendo la gratuita, pero {motivo}.",
                     {"inline_keyboard": [[{"text": "🔎 Ver más info", "callback_data": f"{CALLBACK}{user_id}"}]]})
 
+    def _quien(self, user_id, usuario):
+        if usuario:
+            nombre = db.nombre_completo(usuario) or "sin nombre"
+            return f"{nombre} (@{usuario['username']})" if usuario.get("username") else nombre
+        return self._nombre(user_id)
+
+    async def _registrar_sin_bienvenida(self, user_id, ts, fila, usuario):
+        """Quien escribe sin haber recibido ninguna bienvenida (decisión del
+        dueño, 2026-11-04). Si está en el canal se registra: con la gratuita si
+        pidió entrar (un enlace con aprobación, aunque el bot no le escribiera)
+        y sin ella si entró sin pasar por el bot. Si no está, se queda donde
+        está y se avisa al dueño con el enlace para entrar.
+        Devuelve (fila, está en el canal: True, False o None si no se sabe)."""
+        if self.canal is None:
+            return fila, None
+        miembro = await self.canal.es_miembro(user_id)
+        if not miembro:
+            if miembro is False:
+                await self._avisar_fuera_del_canal(user_id, ts, usuario)
+            return fila, miembro
+        solicitud = fila["primera_solicitud_ts"] if fila is not None else None
+        tipo = mensajes.TIPO_APROBADO_SIN_BIENVENIDA if solicitud else mensajes.TIPO_SIN_BOT
+        with self.con:
+            if usuario or fila is None:
+                db.actualizar_datos_usuario(self.con, ts, usuario or {"id": user_id})
+            db.actualizar_campos(self.con, user_id, ts, bienvenida_tipo=tipo, bienvenida_ts=int(solicitud or ts))
+            db.registrar_evento(self.con, ts, "registrado_sin_bienvenida", user_id, tipo_mensaje=tipo)
+        return db.obtener_usuario(self.con, user_id), True
+
+    async def _avisar_fuera_del_canal(self, user_id, ts, usuario):
+        """Una vez al día por persona, y solo por mensajes recientes."""
+        if self.reloj() - ts > AVISO_GRATUITA_S:
+            return
+        if self.con.execute("SELECT 1 FROM eventos WHERE user_id = ? AND tipo = 'aviso_fuera_del_canal' "
+                            "AND ts > ?", (user_id, int(ts) - AVISO_GRATUITA_S)).fetchone():
+            return
+        enlace = await self.canal.enlace_entrada()
+        with self.con:
+            db.registrar_evento(self.con, ts, "aviso_fuera_del_canal", user_id)
+        texto = f"👤 {self._quien(user_id, usuario)} te ha escrito y no está en el canal. "
+        if enlace:
+            texto += f"Envíale este enlace para que entre (pide aprobación, así pasa por el bot):\n{enlace}"
+        else:
+            texto += ("Envíale un enlace para entrar que pida aprobación (no el principal del canal), "
+                      "así pasa por el bot.")
+        self.avisar(texto)
+
     async def al_recibir(self, user_id, msg_id, ts, texto, usuario=None):
         """Un mensaje que alguien le ha enviado al dueño por privado."""
         async with self._candado:
             fila = db.obtener_usuario(self.con, user_id)
+            if not db.es_del_embudo(fila):
+                fila, en_canal = await self._registrar_sin_bienvenida(user_id, ts, fila, usuario)
+                if en_canal is False:
+                    return  # se queda donde está (en «Personales»); ya se avisó al dueño
             self._vigilar_gratuita(user_id, ts, texto, fila, usuario)
             # Quien ya no puede recibir la gratuita (ya la tuvo, o ya estaba
             # en el canal) va a «free send» y no a la carpeta del día

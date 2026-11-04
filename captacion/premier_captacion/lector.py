@@ -301,6 +301,58 @@ def crear_avisador(cfg):
     return avisar
 
 
+class CanalPorBot:
+    """Lo que el lector pregunta al bot sobre el canal principal, con la Bot
+    API y solo lectura (getChatMember, getChat; nada de la cuenta del dueño):
+    si alguien está dentro y el enlace para entrar que hay en la descripción
+    (decisión del dueño, 2026-11-04; ver carpetas.Organizador)."""
+
+    VIGENCIA_S = 600
+    _RE_ENLACE = re.compile(r"(?:https?://)?t\.me/(?:\+|joinchat/)[\w-]+")
+
+    def __init__(self, api, canal_id, reloj=time.time):
+        self.api, self.canal_id, self.reloj = api, canal_id, reloj
+        self._miembros = {}  # user_id -> (cuándo, respuesta)
+        self._enlace = None  # (cuándo, enlace)
+
+    async def _llamar(self, metodo, **params):
+        return await asyncio.get_running_loop().run_in_executor(
+            None, lambda: self.api.llamar(metodo, _timeout_red=20, **params))
+
+    async def es_miembro(self, user_id):
+        """True / False, o None si no se pudo saber (se volverá a preguntar) o
+        es del equipo (administradores: no son clientes, se dejan como antes)."""
+        guardado = self._miembros.get(user_id)
+        if guardado and self.reloj() - guardado[0] < self.VIGENCIA_S:
+            return guardado[1]
+        try:
+            r = await self._llamar("getChatMember", chat_id=self.canal_id, user_id=user_id)
+        except (ErrorTelegram, ErrorRed) as e:
+            log.warning("No pude saber si %s está en el canal: %s", user_id, e)
+            return None
+        estado = r.get("status")
+        if estado in ("creator", "administrator"):
+            miembro = None
+        else:
+            miembro = estado == "member" or (estado == "restricted" and bool(r.get("is_member")))
+        self._miembros[user_id] = (self.reloj(), miembro)
+        return miembro
+
+    async def enlace_entrada(self):
+        """El enlace de invitación de la descripción del canal, o None."""
+        if self._enlace and self.reloj() - self._enlace[0] < self.VIGENCIA_S:
+            return self._enlace[1]
+        try:
+            descripcion = (await self._llamar("getChat", chat_id=self.canal_id)).get("description") or ""
+        except (ErrorTelegram, ErrorRed) as e:
+            log.warning("No pude leer la descripción del canal: %s", e)
+            return None
+        m = self._RE_ENLACE.search(descripcion)
+        enlace = None if m is None else (m.group() if m.group().startswith("http") else f"https://{m.group()}")
+        self._enlace = (self.reloj(), enlace)
+        return enlace
+
+
 # --- Modos -------------------------------------------------------------------
 
 async def servicio(cfg, entorno):
@@ -330,7 +382,12 @@ async def servicio(cfg, entorno):
             tg = await carpetas.CarpetasEnMemoria.desde(tg_real, max_carpetas=aj.max_carpetas, max_chats=aj.max_chats)
         else:
             tg = tg_real
-        org = carpetas.Organizador(con, tg, cfg.tz, aj, avisar=avisar)
+        # Solo en la instancia real (la de bienvenidas manuales): en la de
+        # prueba la cuenta del dueño no está en el canal de prueba y se
+        # avisaría de cada cliente que le escribe.
+        canal = (CanalPorBot(BotAPI(cfg.bot_token), cfg.canal_id)
+                 if aj.bienvenidas_manuales and cfg.bot_token and cfg.canal_id is not None else None)
+        org = carpetas.Organizador(con, tg, cfg.tz, aj, avisar=avisar, canal=canal)
 
         @client.on(events.NewMessage(func=lambda e: e.is_private))
         async def al_mensaje(evento):

@@ -370,6 +370,8 @@ def estado_oferta(con, user_id, fila):
         return "gratuita"
     if fila is not None and fila["recurrente_ts"] is not None:
         return "recurrente"
+    if fila is not None and fila["bienvenida_tipo"] == "sin_bot":  # mensajes.TIPO_SIN_BOT
+        return "recurrente"
     # En la lista del canal pero con la bienvenida normal del bot: entró como
     # cliente nuevo (la lista se leyó después), así que sigue siendo nueva.
     nueva_del_bot = fila is not None and (fila["bienvenida_tipo"] or "").startswith("bot_b")

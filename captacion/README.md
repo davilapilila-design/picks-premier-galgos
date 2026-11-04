@@ -198,6 +198,11 @@ carpetas (reglas completas en `premier_captacion/carpetas.py`):
   carpeta «free send», y ahí se queda.
 - Se quedan las 5 carpetas de días más recientes; «free send» guarda los ~90
   más recientes. Solo toca chats del embudo y solo esas carpetas.
+- Quien escribe sin haber recibido ninguna bienvenida (en la instancia real):
+  si está en el canal, se registra; con gratuita y al día si pidió entrar con
+  un enlace con aprobación, sin gratuita y a «free send» si entró sin pasar
+  por el bot. Si no está en el canal, no se mueve y el bot te avisa con el
+  enlace de la descripción del canal para que se lo mandes.
 
 **Seguridad**:
 - **Nunca envía nada.** Toda petición a Telegram pasa por un candado

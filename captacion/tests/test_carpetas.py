@@ -43,7 +43,7 @@ class Base(unittest.TestCase):
         self.tg = CarpetasEnMemoria(cuenta_tipica(), destinos=dict([VENTA, PRINCIPAL]))
         self.org = self.organizador()
 
-    def organizador(self, **ajustes):
+    def organizador(self, canal=None, **ajustes):
         aj = dict(canal_principal=CANAL, simular=False)
         aj.update(ajustes)
         self.teclados = []
@@ -52,7 +52,7 @@ class Base(unittest.TestCase):
             self.avisos.append(texto)
             self.teclados.append(teclado)
         return Organizador(self.con, self.tg, MADRID, Ajustes(**aj), avisar=avisar,
-                           reloj=lambda: self.ahora)
+                           reloj=lambda: self.ahora, canal=canal)
 
     def del_embudo(self, uid, nombre="Ana", **campos):
         with self.con:
@@ -413,6 +413,105 @@ class TestAvisoGratuitaRepetida(Base):
         self.recibe(603, 10, "hola, ¿a qué hora es el pack?")
         self.recibe(603, 11, self.FRASE, momento=self.ahora - 2 * 86400)  # antiguo, recuperado
         self.assertEqual(self.avisos_gratuita(), [])
+
+
+class CanalFalso:
+    """Lo que el lector pregunta al bot sobre el canal principal."""
+
+    def __init__(self, miembros=(), enlace="https://t.me/+ENTRADA00000001", falla=False):
+        self.miembros, self.enlace, self.falla = set(miembros), enlace, falla
+        self.preguntas = []
+
+    async def es_miembro(self, user_id):
+        self.preguntas.append(user_id)
+        return None if self.falla else user_id in self.miembros
+
+    async def enlace_entrada(self):
+        return self.enlace
+
+
+class TestQuienNoEstaRegistrado(Base):
+    """Quien escribe sin haber recibido ninguna bienvenida (decisión del
+    dueño, 2026-11-04): si está en el canal se registra y va al día (pidió
+    entrar con aprobación) o a «free send» (entró sin pasar por el bot); si
+    no está, se queda donde está y se avisa al dueño con el enlace para entrar."""
+
+    FRASE = TestAvisoGratuitaRepetida.FRASE
+
+    def con_canal(self, **kw):
+        self.canal = CanalFalso(**kw)
+        self.org = self.organizador(canal=self.canal)
+
+    def escribe(self, uid, msg_id, texto="hola", nombre="Ricardo", momento=None):
+        self.correr(self.org.al_recibir(uid, msg_id, momento or self.ahora, texto,
+                                        usuario(uid, nombre, nombre.lower())))
+
+    def test_entro_sin_pasar_por_el_bot_se_registra_sin_gratuita(self):
+        self.con_canal(miembros={700})
+        self.escribe(700, 1, self.FRASE)
+        fila = db.obtener_usuario(self.con, 700)
+        self.assertEqual((fila["bienvenida_tipo"], fila["bienvenida_ts"], fila["boton"]),
+                         ("sin_bot", AHORA, "primera_vez"))
+        self.assertEqual(db.estado_oferta(self.con, 700, fila), "recurrente")
+        self.assertIn("registrado_sin_bienvenida", self.eventos(700))
+        self.assertEqual(self.usuarios_de("free send"), {700})
+        self.assertIsNone(self.usuarios_de("15.10"))
+        avisos = [a for a in self.avisos if "pidiendo la gratuita" in a]
+        self.assertEqual(len(avisos), 1)
+        self.assertIn("entró al canal sin pasar por el bot", avisos[0])
+        # Si aun así el dueño le da la gratuita, queda apuntada.
+        self.envia(700, 2, "t.me/+VENTA0000000001")
+        self.assertEqual(db.obtener_usuario(self.con, 700)["enlace_venta_ts"], AHORA)
+        self.assertEqual(self.usuarios_de("free send"), {700})
+
+    def test_pidio_entrar_aunque_el_bot_no_le_escribiera_tiene_gratuita(self):
+        self.con_canal(miembros={701})
+        with self.con:  # p. ej. con el bot en pausa: se aceptó a mano
+            db.registrar_solicitud(self.con, AHORA - 3600, usuario(701, "Bea", "bea"), "Entrada - Descripción")
+        self.escribe(701, 1, self.FRASE, nombre="Bea")
+        fila = db.obtener_usuario(self.con, 701)
+        self.assertEqual((fila["bienvenida_tipo"], fila["bienvenida_ts"]), ("aprobado_sin_bienvenida", AHORA - 3600))
+        self.assertEqual(db.estado_oferta(self.con, 701, fila), "nueva")
+        self.assertEqual(self.usuarios_de("15.10"), {701})
+        self.assertEqual([a for a in self.avisos if "pidiendo la gratuita" in a], [])
+
+    def test_no_esta_en_el_canal_se_queda_donde_esta_y_avisa_con_el_enlace(self):
+        self.con_canal()
+        antes = list(self.tg.cambios)
+        self.escribe(702, 1)
+        self.escribe(702, 2)  # una vez al día por persona
+        self.assertEqual(self.tg.cambios, antes)
+        self.assertIsNone(db.obtener_usuario(self.con, 702))
+        self.assertEqual(len(self.avisos), 1)
+        self.assertIn("Ricardo (@ricardo) te ha escrito y no está en el canal", self.avisos[0])
+        self.assertIn("https://t.me/+ENTRADA00000001", self.avisos[0])
+        self.escribe(703, 1, momento=AHORA - 2 * 86400)  # antiguo, recuperado: sin aviso
+        self.assertEqual(len(self.avisos), 1)
+
+    def test_sin_enlace_en_la_descripcion_avisa_igual(self):
+        self.con_canal(enlace=None)
+        self.escribe(704, 1)
+        self.assertEqual(len(self.avisos), 1)
+        self.assertIn("que pida aprobación", self.avisos[0])
+
+    def test_si_no_se_puede_saber_sigue_como_antes(self):
+        self.con_canal(falla=True)
+        with self.con:
+            db.guardar_miembros(self.con, [706], 1)
+        antes = list(self.tg.cambios)
+        self.escribe(705, 1)
+        self.assertEqual(self.tg.cambios, antes)
+        self.assertIsNone(db.obtener_usuario(self.con, 705))
+        self.escribe(706, 1)  # de la lista del canal: a «free send», como siempre
+        self.assertEqual(self.usuarios_de("free send"), {706})
+        self.assertEqual(self.avisos, [])
+
+    def test_a_quien_ya_esta_registrado_no_se_pregunta(self):
+        self.con_canal()
+        self.del_embudo(707)
+        self.recibe(707, 1)
+        self.assertEqual(self.canal.preguntas, [])
+        self.assertEqual(self.usuarios_de("15.10"), {707})
 
 
 class TestAyudas(unittest.TestCase):
