@@ -506,12 +506,31 @@ class TestQuienNoEstaRegistrado(Base):
         self.assertEqual(self.usuarios_de("free send"), {706})
         self.assertEqual(self.avisos, [])
 
-    def test_a_quien_ya_esta_registrado_no_se_pregunta(self):
-        self.con_canal()
+    def test_registrado_y_en_el_canal_sigue_como_siempre(self):
+        self.con_canal(miembros={707})
         self.del_embudo(707)
         self.recibe(707, 1)
-        self.assertEqual(self.canal.preguntas, [])
         self.assertEqual(self.usuarios_de("15.10"), {707})
+        self.assertEqual(self.avisos, [])
+
+    def test_registrado_que_se_fue_del_canal_sale_de_las_carpetas_y_avisa(self):
+        """Decisión del dueño (2026-11-04): fuera del canal, en «Personales»."""
+        self.con_canal(miembros={708, 709})
+        self.del_embudo(708, "Iker")
+        self.del_embudo(709, "Bea")
+        self.recibe(708, 1)                                # hoy, al día
+        self.envia(709, 1, "t.me/+VENTA0000000001")        # gratuita → free send
+        self.assertEqual((self.usuarios_de("15.10"), self.usuarios_de("free send")), ({708}, {709}))
+        self.canal.miembros.clear()                        # se van del canal
+        self.recibe(708, 2)
+        self.recibe(709, 2)
+        self.assertIsNone(self.usuarios_de("15.10"))       # vacía: Telegram no las acepta, se borra
+        self.assertIsNone(self.usuarios_de("free send"))
+        self.assertEqual(len(self.avisos), 2)
+        self.assertIn("Iker (@iker) te ha escrito y no está en el canal", self.avisos[0])
+        self.assertEqual(db.obtener_usuario(self.con, 708)["ultimo_msg_id"], 2)  # se apunta que escribió
+        self.recibe(708, 3, momento=AHORA - 6 * 86400)     # antiguo, recuperado: ni se pregunta
+        self.assertEqual(self.canal.preguntas.count(708), 2)
 
 
 class TestAyudas(unittest.TestCase):

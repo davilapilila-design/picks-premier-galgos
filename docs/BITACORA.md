@@ -13,6 +13,8 @@ Entradas más recientes arriba.
   si no → registrado sin gratuita (`sin_bot`) y a «free send»; si no está en el
   canal → no se mueve y aviso al dueño con el enlace de la descripción
   (`getChat`). Administradores, sin tocar. Solo en la instancia real.
+- Ampliado el mismo día (decisión del dueño): quien está registrado pero se fue
+  del canal y escribe, sale de la carpeta del día y de «free send» y aviso igual.
 - `PLAN.md` tenía los hashes de dos enlaces de entrada (repo público): quitados.
   El principal ya está revocado y el de la descripción ahora pide aprobación.
 - Commits: (este commit)

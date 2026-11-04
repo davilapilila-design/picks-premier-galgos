@@ -203,6 +203,9 @@ carpetas (reglas completas en `premier_captacion/carpetas.py`):
   un enlace con aprobación, sin gratuita y a «free send» si entró sin pasar
   por el bot. Si no está en el canal, no se mueve y el bot te avisa con el
   enlace de la descripción del canal para que se lo mandes.
+- Quien te escribe y ya no está en el canal (aunque esté registrado) sale de
+  la carpeta del día y de «free send» (se queda en «Personales») y te llega
+  el mismo aviso.
 
 **Seguridad**:
 - **Nunca envía nada.** Toda petición a Telegram pasa por un candado

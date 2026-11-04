@@ -261,15 +261,12 @@ class Organizador:
         """Quien escribe sin haber recibido ninguna bienvenida (decisión del
         dueño, 2026-11-04). Si está en el canal se registra: con la gratuita si
         pidió entrar (un enlace con aprobación, aunque el bot no le escribiera)
-        y sin ella si entró sin pasar por el bot. Si no está, se queda donde
-        está y se avisa al dueño con el enlace para entrar.
+        y sin ella si entró sin pasar por el bot. Si no está, no se registra.
         Devuelve (fila, está en el canal: True, False o None si no se sabe)."""
         if self.canal is None:
             return fila, None
         miembro = await self.canal.es_miembro(user_id)
         if not miembro:
-            if miembro is False:
-                await self._avisar_fuera_del_canal(user_id, ts, usuario)
             return fila, miembro
         solicitud = fila["primera_solicitud_ts"] if fila is not None else None
         tipo = mensajes.TIPO_APROBADO_SIN_BIENVENIDA if solicitud else mensajes.TIPO_SIN_BOT
@@ -279,6 +276,19 @@ class Organizador:
             db.actualizar_campos(self.con, user_id, ts, bienvenida_tipo=tipo, bienvenida_ts=int(solicitud or ts))
             db.registrar_evento(self.con, ts, "registrado_sin_bienvenida", user_id, tipo_mensaje=tipo)
         return db.obtener_usuario(self.con, user_id), True
+
+    async def _fuera_del_canal(self, user_id, ts, usuario):
+        """Quien escribe y no está en el canal (registrado o no; decisión del
+        dueño, 2026-11-04) no va a ninguna carpeta: sale de las del día y de
+        «free send» (se queda en «Personales»), y se avisa al dueño."""
+        await self._quitar_de_dias(user_id)
+        fs = next((c for c in await self.tg.carpetas() if self._es_free_send(c)), None)
+        if fs is not None and user_id in fs.usuarios:
+            sigue = await self.tg.cambiar(fs.id, quitar={user_id})
+            self._informar(f"saco a {self._nombre(user_id, usuario)} de «{fs.titulo}» (no está en el canal)"
+                           + ("" if sigue else "; se queda vacía y la borro"))
+            self._apuntar_carpeta(user_id, fs.titulo, "sale")
+        await self._avisar_fuera_del_canal(user_id, ts, usuario)
 
     async def _avisar_fuera_del_canal(self, user_id, ts, usuario):
         """Una vez al día por persona, y solo por mensajes recientes."""
@@ -301,18 +311,20 @@ class Organizador:
     async def al_recibir(self, user_id, msg_id, ts, texto, usuario=None):
         """Un mensaje que alguien le ha enviado al dueño por privado."""
         async with self._candado:
+            reciente = self._dia(ts) >= self._hoy() - timedelta(days=self.aj.dias - 1)
             fila = db.obtener_usuario(self.con, user_id)
             if not db.es_del_embudo(fila):
                 fila, en_canal = await self._registrar_sin_bienvenida(user_id, ts, fila, usuario)
                 if en_canal is False:
-                    return  # se queda donde está (en «Personales»); ya se avisó al dueño
+                    if reciente:
+                        await self._fuera_del_canal(user_id, ts, usuario)
+                    return
             self._vigilar_gratuita(user_id, ts, texto, fila, usuario)
             # Quien ya no puede recibir la gratuita (ya la tuvo, o ya estaba
             # en el canal) va a «free send» y no a la carpeta del día
             # (2026-10-28, decisión del dueño). También los que estaban en el
             # canal sin haber pasado por la bienvenida.
             sin_gratuita = db.estado_oferta(self.con, user_id, fila) != "nueva"
-            reciente = self._dia(ts) >= self._hoy() - timedelta(days=self.aj.dias - 1)
             if not db.es_del_embudo(fila):
                 if sin_gratuita and reciente:
                     await self._a_free_send(user_id, usuario)
@@ -340,6 +352,9 @@ class Organizador:
 
             if not reciente:
                 return  # mensaje antiguo (p. ej. al recuperar lo perdido): no se mueve
+            if self.canal is not None and await self.canal.es_miembro(user_id) is False:
+                await self._fuera_del_canal(user_id, ts, usuario)  # se fue del canal
+                return
             if sin_gratuita:
                 # Si ya está, no hace nada; si no (p. ej. borró el chat y
                 # Telegram lo sacó de la carpeta), vuelve a entrar.
