@@ -100,16 +100,24 @@ def choca(correo, nombre, username):
 
 # --- Chats privados del dueño ---------------------------------------------------------
 
+def nombre_telethon(u):
+    """El nombre de una persona según Telethon, o None si está en los contactos
+    del dueño: entonces Telegram da el nombre con que la guardó él, no el suyo."""
+    if getattr(u, "contact", False):
+        return None
+    return " ".join(x for x in (getattr(u, "first_name", None), getattr(u, "last_name", None)) if x) or None
+
+
 def guardar_chats(con, personas, ahora=None):
-    """personas: [(user_id, nombre, username)] de los chats privados."""
+    """personas: [(user_id, nombre, username)] de los chats privados (nombre
+    None: no se sabe, p. ej. un contacto del dueño; se queda el que había)."""
     ahora = int(time.time() if ahora is None else ahora)
-    for uid, nombre, username in personas:
-        db.nombre_visto(con, uid, nombre, username, ahora)
+    filas = [(uid, *db.nombre_visto(con, uid, nombre, username, ahora, completo=nombre is not None), ahora)
+             for uid, nombre, username in personas]
     con.executemany(
         "INSERT INTO personas_chat (user_id, nombre, username, visto_ts) VALUES (?, ?, ?, ?) "
-        "ON CONFLICT (user_id) DO UPDATE SET nombre = excluded.nombre, "
-        "username = excluded.username, visto_ts = excluded.visto_ts",
-        [(uid, nombre, username, ahora) for uid, nombre, username in personas])
+        "ON CONFLICT (user_id) DO UPDATE SET nombre = COALESCE(excluded.nombre, nombre), "
+        "username = excluded.username, visto_ts = excluded.visto_ts", filas)
 
 
 def apuntar_chat(con, u, ahora=None):
@@ -118,9 +126,8 @@ def apuntar_chat(con, u, ahora=None):
     lista diaria."""
     if getattr(u, "deleted", False):
         return
-    nombre = " ".join(x for x in (getattr(u, "first_name", None), getattr(u, "last_name", None)) if x) or None
     with con:
-        guardar_chats(con, [(u.id, nombre, getattr(u, "username", None))], ahora)
+        guardar_chats(con, [(u.id, nombre_telethon(u), getattr(u, "username", None))], ahora)
 
 
 async def leer_chats(client):
@@ -132,7 +139,7 @@ async def leer_chats(client):
     async for dialogo in client.iter_dialogs():
         u = dialogo.entity
         if isinstance(u, types.User) and not u.bot and not u.deleted and not u.is_self:
-            nombre = " ".join(x for x in (u.first_name, u.last_name) if x) or None
+            nombre = nombre_telethon(u)
             personas.append((u.id, nombre, u.username))
     return personas
 

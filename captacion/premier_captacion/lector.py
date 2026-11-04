@@ -246,8 +246,12 @@ async def procesar(mensaje, otro, entrada, org, tg_real):
 
 
 def _usuario(otro):
-    return {"id": otro.id, "first_name": getattr(otro, "first_name", None),
-            "last_name": getattr(otro, "last_name", None), "username": getattr(otro, "username", None)}
+    # De los contactos del dueño Telegram da el nombre con que los guardó él:
+    # sin nombre (db.actualizar_datos_usuario deja el que había).
+    contacto = getattr(otro, "contact", False)
+    return {"id": otro.id, "first_name": None if contacto else getattr(otro, "first_name", None),
+            "last_name": None if contacto else getattr(otro, "last_name", None),
+            "username": getattr(otro, "username", None)}
 
 
 async def recuperar_perdido(client, con, org, tg_real, horizonte):

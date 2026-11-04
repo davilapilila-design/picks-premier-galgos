@@ -141,6 +141,18 @@ class TestNombresAnteriores(unittest.TestCase):
         self.assertEqual(tuple(self.con.execute("SELECT nombre, username FROM ventas_personas").fetchone()),
                          ("Leo Ruiz", "leo"))
 
+    def test_sin_nombre_es_que_no_se_sabe(self):
+        """Contactos del dueño (nombre None): solo cuenta el @, y se queda el nombre que había."""
+        with self.con:
+            db.actualizar_datos_usuario(self.con, 1, {"id": 505, "first_name": "Rosa Gil", "username": "rosa"})
+            nombres.guardar_chats(self.con, [(505, None, "rosa")], ahora=2)
+            db.actualizar_datos_usuario(self.con, 3, {"id": 505, "username": "rosa"})
+            nombres.guardar_chats(self.con, [(505, None, "rosa_g")], ahora=4)
+        self.assertEqual(self.anteriores(505), [("Rosa Gil", "rosa", 4)])
+        for tabla in ("usuarios", "personas_chat"):
+            fila = self.con.execute(f"SELECT nombre, username FROM {tabla} WHERE user_id = 505").fetchone()
+            self.assertEqual(tuple(fila), ("Rosa Gil", "rosa_g"), tabla)
+
     def test_sin_datos_no_es_un_cambio(self):
         with self.con:
             db.actualizar_datos_usuario(self.con, 1, {"id": 504, "first_name": "Ana", "username": "ana"})
@@ -167,6 +179,11 @@ class TestLeerChats(unittest.TestCase):
         canal = types.Channel(id=10, title="Canal", photo=types.ChatPhotoEmpty(), date=None)
         cliente = ClienteDialogos([ana, bot, borrada, yo, canal])
         self.assertEqual(asyncio.run(nombres.leer_chats(cliente)), [(500, "Ana Ferrandiz", "anaf")])
+
+    def test_de_los_contactos_no_se_sabe_el_nombre(self):
+        """Telegram da el nombre con que el dueño guardó el contacto, no el suyo."""
+        luis = types.User(id=504, first_name="Luis cliente", username="luis", contact=True)
+        self.assertEqual(asyncio.run(nombres.leer_chats(ClienteDialogos([luis]))), [(504, None, "luis")])
 
 
 if __name__ == "__main__":

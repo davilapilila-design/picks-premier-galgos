@@ -25,7 +25,7 @@ import os
 import time
 from datetime import datetime
 
-from . import analisis, carpetas, db, sheet
+from . import analisis, carpetas, db, nombres, sheet
 
 log = logging.getLogger("captacion.ventas")
 
@@ -50,7 +50,7 @@ def guardar_canal(con, canal_id, titulo, ts):
 
 
 def guardar_persona(con, user_id, nombre, username):
-    db.nombre_visto(con, user_id, nombre, username, time.time(), completo=False)  # el historial de nombres
+    nombre, username = db.nombre_visto(con, user_id, nombre, username, time.time(), completo=False)
     con.execute("INSERT INTO ventas_personas (user_id, nombre, username) VALUES (?, ?, ?) "
                 "ON CONFLICT (user_id) DO UPDATE SET nombre = COALESCE(excluded.nombre, nombre), "
                 "username = COALESCE(excluded.username, username)", (user_id, nombre, username))
@@ -93,7 +93,7 @@ def filtrar(todos, cfg):
 
 
 def _nombre(u):
-    return " ".join(x for x in (getattr(u, "first_name", None), getattr(u, "last_name", None)) if x) or None
+    return nombres.nombre_telethon(u)  # None con los contactos del dueño
 
 
 async def leer_miembros(client, canal):

@@ -12,8 +12,15 @@ Entradas más recientes arriba.
   todas las tablas. `/gratuita` busca también por ellos (detrás de quien lo
   tiene ahora, con aviso) y la ficha los enseña («📝 Antes: …»).
 - Solo desde ahora: lo anterior no se puede recuperar (la primera lista diaria
-  apunta las diferencias que ya había entre tablas, con la fecha de ese día).
-- Commits: (este commit)
+  apunta las diferencias que ya había entre tablas, con la fecha de ese día:
+  18 personas, 17 cambios de verdad).
+- Arreglo del mismo día: de los contactos del dueño (615) Telegram da a la
+  cuenta del dueño el nombre con que él los guardó, no el suyo (salió una cuenta
+  suya guardada como «Yo»). El nombre que da Telethon de un contacto ya no cuenta
+  (`nombres.nombre_telethon` → None): solo su @, y se queda el nombre del bot.
+  Antes, el lector ya escribía esos nombres en `usuarios`; se irán corrigiendo
+  solos cuando el bot vea el nombre de verdad.
+- Commits: 09a2f6d, (este commit)
 
 ## 2026-11-04 — Captación: quien escribe sin bienvenida se registra (o se avisa si no está en el canal)
 

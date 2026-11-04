@@ -303,24 +303,35 @@ def nombre_visto(con, user_id, nombre, username, ts, completo=True):
     """El nombre y el @ que Telegram da ahora para alguien: si en alguna tabla
     tenía otros, se apuntan en `nombres_anteriores` y se ponen los nuevos en
     todas (pedido por el dueño el 2026-11-04). Con `completo=False` (datos de
-    los canales de venta), un None es «no se sabe», no «no tiene»."""
-    if nombre is None and username is None:
-        return
+    los canales de venta, contactos del dueño), un None es «no se sabe», no
+    «no tiene»: se toma lo que ya había. Devuelve (nombre, username) así
+    completados."""
+    filas = {}
     for tabla in _TABLAS_NOMBRE:
         f = con.execute(f"SELECT nombre, username FROM {tabla} WHERE user_id = ?", (user_id,)).fetchone()
-        if f is None:
-            continue
-        antes = (f[0], f[1])
-        ahora = (nombre, username) if completo else (nombre if nombre is not None else antes[0],
-                                                    username if username is not None else antes[1])
+        if f is not None:
+            filas[tabla] = (f[0], f[1])  # el bot primero: su nombre es el de verdad
+    if not completo:
+        nombre = nombre if nombre is not None else next((a[0] for a in filas.values() if a[0] is not None), None)
+        username = username if username is not None else next((a[1] for a in filas.values() if a[1]), None)
+    ahora = (nombre, username)
+    if ahora == (None, None):
+        return ahora
+    ya = [tuple(f) for f in con.execute("SELECT nombre, username FROM nombres_anteriores WHERE user_id = ?",
+                                        (user_id,))]
+    for tabla, antes in filas.items():
         if _mismo_nombre(antes, ahora):
             continue
-        ya = con.execute("SELECT 1 FROM nombres_anteriores WHERE user_id = ? AND nombre IS ? AND username IS ?",
-                         (user_id, *antes)).fetchone()
-        if antes != (None, None) and ya is None:
-            con.execute("INSERT INTO nombres_anteriores (user_id, nombre, username, cambio_ts) VALUES (?, ?, ?, ?)",
-                        (user_id, *antes, int(ts)))
         con.execute(f"UPDATE {tabla} SET nombre = ?, username = ? WHERE user_id = ?", (*ahora, user_id))
+        conocidos = ya + list(filas.values())
+        # Un @ sin nombre (p. ej. de un contacto) no se apunta si ya consta con el nombre.
+        if antes == (None, None) or any(_mismo_nombre(antes, o) for o in ya) or (
+                antes[0] is None and any(o[0] is not None and _mismo_nombre((None, o[1]), antes) for o in conocidos)):
+            continue
+        con.execute("INSERT INTO nombres_anteriores (user_id, nombre, username, cambio_ts) VALUES (?, ?, ?, ?)",
+                    (user_id, *antes, int(ts)))
+        ya.append(antes)
+    return ahora
 
 
 def anteriores(con, user_id):
@@ -332,21 +343,23 @@ def anteriores(con, user_id):
 
 def actualizar_datos_usuario(con, ts, usuario):
     """Crea la fila de la persona o refresca su nombre/@ (pueden cambiar)."""
-    nombre_visto(con, usuario["id"], nombre_completo(usuario), usuario.get("username"), ts)
+    nombre = nombre_completo(usuario)  # None: no se sabe (contacto del dueño), se queda el que había
+    nombre, username = nombre_visto(con, usuario["id"], nombre, usuario.get("username"), ts,
+                                    completo=nombre is not None)
     con.execute(
         """
         INSERT INTO usuarios (user_id, nombre, username, idioma, creado_ts, actualizado_ts)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id) DO UPDATE SET
-            nombre = excluded.nombre,
+            nombre = COALESCE(excluded.nombre, usuarios.nombre),
             username = excluded.username,
             idioma = COALESCE(excluded.idioma, usuarios.idioma),
             actualizado_ts = excluded.actualizado_ts
         """,
         (
             usuario["id"],
-            nombre_completo(usuario),
-            usuario.get("username"),
+            nombre,
+            username,
             usuario.get("language_code"),
             int(ts),
             int(ts),
