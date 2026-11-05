@@ -3,6 +3,15 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-05 — Captación: lectura de overoption también a las 23:50
+
+- Pedido por el dueño: el resumen diario (00:05) salía sin las ventas de la
+  noche, porque la última lectura fija era a las 0:10. Se añade una a las 23:50.
+- Las lecturas fijas pasan a hora de España (`Europe/Madrid`): estaban como
+  07/15/23:10 en la hora de la VM, que es UTC, y en verano se habrían movido una
+  hora. En invierno siguen a las 8:10, 16:10 y 0:10.
+- Commits: (este commit)
+
 ## 2026-11-05 — Captación: el resumen diario contado con frases y nombres
 
 - Pedido por el dueño: el resumen diario no se entendía (números dentro de
@@ -13,7 +22,7 @@ Entradas más recientes arriba.
   pasar por el bot, fuera del canal, los de siempre), quién volvió, las ventas de
   overoption del día con su cruce y, al final, el bot (solo detalla si hubo algo).
 - `/resumen` sale igual; el semanal no cambia. Más de 10 nombres: «y N más».
-- Commits: (este commit)
+- Commits: b951121
 
 ## 2026-11-04 — Captación: historial de nombres y @ en /gratuita
 

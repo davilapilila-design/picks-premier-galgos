@@ -1,6 +1,6 @@
 # Baja las ventas de overoption (solo lectura) y las guarda en la base de
 # datos local para cruzarlas con las entradas a los canales. La lanza
-# captacion-pagos@<instancia>.timer tres veces al día.
+# captacion-pagos@<instancia>.timer cuatro veces al día.
 #   systemctl start captacion-pagos@real       (baja ahora mismo)
 #   journalctl -u captacion-pagos@real -n 30
 [Unit]

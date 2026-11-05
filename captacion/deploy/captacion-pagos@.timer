@@ -1,9 +1,12 @@
 [Unit]
-Description=Timer: ventas de overoption (%i), tres veces al día
+Description=Timer: ventas de overoption (%i), cuatro veces al día
 
 [Timer]
-# Hora de Madrid (la de la VM). Las ventas crecen despacio: con 3 veces basta.
-OnCalendar=*-*-* 07,15,23:10
+# Hora de España (la VM va en UTC). Las ventas crecen despacio: con 4 veces
+# basta. La de las 23:50, para que el resumen diario de las 00:05 tenga las
+# ventas de la noche (pedido por el dueño el 2026-11-05).
+OnCalendar=*-*-* 00,08,16:10:00 Europe/Madrid
+OnCalendar=*-*-* 23:50:00 Europe/Madrid
 RandomizedDelaySec=5m
 Persistent=true
 
