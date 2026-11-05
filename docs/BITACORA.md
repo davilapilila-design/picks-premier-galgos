@@ -3,6 +3,18 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-05 — Captación: el resumen diario contado con frases y nombres
+
+- Pedido por el dueño: el resumen diario no se entendía (números dentro de
+  números, «primera vez» mezclando a los nuevos con los de otros días, líneas
+  repetidas). Ahora va como un embudo de los nuevos del día con sus nombres
+  (entraron, te escribieron, la gratuita, los que no escribieron y quién bloqueó
+  el bot), luego el resto de quien te escribió por grupos (por primera vez, sin
+  pasar por el bot, fuera del canal, los de siempre), quién volvió, las ventas de
+  overoption del día con su cruce y, al final, el bot (solo detalla si hubo algo).
+- `/resumen` sale igual; el semanal no cambia. Más de 10 nombres: «y N más».
+- Commits: (este commit)
+
 ## 2026-11-04 — Captación: historial de nombres y @ en /gratuita
 
 - Pedido por el dueño: si alguien cambia de nombre o de @, encontrarle por los

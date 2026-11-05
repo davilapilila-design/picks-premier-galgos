@@ -43,15 +43,16 @@ class TestDiario(Base):
     def test_dia_cerrado(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
         lineas = texto.split("\n")
-        self.assertEqual(lineas[0], "📊 Resumen del miércoles 14.10")
-        self.assertIn("👥 Entraron al canal: 2 personas", lineas)
-        self.assertIn("   · 2 nuevos (bienvenida con gratuita)", lineas)
-        self.assertIn("   · Por el enlace «landing»: 1", lineas)
-        self.assertIn("   · Por el enlace «descripcion-web»: 1", lineas)
+        self.assertEqual(lineas[0], "📊 Miércoles 14/10")
+        self.assertIn("🆕 Entraron 2 personas nuevas. El bot les mandó a 1 de ellas la bienvenida con la gratuita.",
+                      lineas)
+        self.assertIn("🔗 Por qué enlace entraron: «landing» 1 · «descripcion-web» 1", lineas)
+        self.assertIn("🤖 1 persona escribió al bot en vez de a ti.", lineas)
         self.assertIn("⚠️ Sin bienvenida por algún problema: 1", lineas)
         self.assertIn("   · llegaron con más de 5 min de espera (¿bot parado?): 1", lineas)
-        self.assertIn("   · 0 ya estaban o volvieron (bienvenida sin gratuita)", lineas)
-        self.assertIn("✅ Aceptadas: 2 · 🤖 Escribieron al bot: 1", lineas)
+        self.assertEqual(lineas[-1], "✅ El bot aceptó las 2 solicitudes.")
+        self.assertNotIn("↩️", texto)  # nadie volvió
+        self.assertNotIn("💶", texto)  # sin ventas de overoption leídas
 
     def test_pausa(self):
         self.evento(ts(2026, 10, 14, 13, 0), "solicitud_en_pausa", 5)
@@ -75,38 +76,30 @@ class TestDiario(Base):
         textos.guardar(self.con, "bienvenida", "Hola v2", ts(2026, 10, 14, 15, 0))
         self.evento(ts(2026, 10, 14, 16, 0), "bienvenida_enviada", 7, tipo_mensaje="bot_b_v2")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 2 personas\n   · 0 de los 2 nuevos del día", texto)  # ninguno de los que entraron
+        self.assertNotIn("📚", texto)  # ninguno de los que entraron ese día
         self.evento(ts(2026, 10, 14, 17, 0), "faq", 2, tema="menu")  # el 2 entró ese día
         self.evento(ts(2026, 10, 14, 17, 0), "solicitud", 8)
         self.evento(ts(2026, 10, 14, 17, 0), "ya_recibida", 8)  # ya estaba en el canal
         self.evento(ts(2026, 10, 14, 17, 1), "faq", 8, tema="menu")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
-        self.assertIn("📚 Miraron las dudas frecuentes: 4 personas\n   · 1 de los 2 nuevos del día", texto)
-        self.assertIn("   · 1 ya estaban o volvieron (bienvenida sin gratuita)", texto)
+        self.assertIn("📚 1 de las 2 miró las preguntas frecuentes del bot.", texto)
+        self.assertIn("↩️ 1 persona volvió a entrar al canal (id 8): sin gratuita, porque ya estaba "
+                      "o ya había pasado por aquí.", texto)
         # Con dos versiones de bienvenida en el día, sale el desglose con sus nombres.
+        self.assertIn("🧪 Versiones de la bienvenida:", texto)
         self.assertIn("   · Bienvenida del bot, versión 2 (cambiada desde el bot el 14/10/2026): 1", texto)
         self.assertIn(f"   · {mensajes.TIPOS_MENSAJE['bot_b_v1']}: 1", texto)
 
-    def test_primero_los_que_te_escriben_por_primera_vez(self):
-        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 2, primera_vez=True)  # nuevo de ese día
-        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 9, primera_vez=True)  # entró otro día
-        self.evento(ts(2026, 10, 14, 13, 0), "te_escribe", 10)  # ya te había escrito
-        lineas = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14)).split("\n")
-        self.assertEqual(lineas[2:6], ["✉️ Te escribieron por primera vez: 2 personas",
-                                       "   · 1 de los 2 nuevos del día (50 %)",
-                                       "   · 1 que entraron otros días",
-                                       "   (en total te escribieron 3: 1 ya te habían escrito antes)"])
-        self.assertIn("✅ Aceptadas: 2 · 🤖 Escribieron al bot: 1 · 🔗 Enlaces de venta enviados: 0", lineas)
-
     def test_lo_que_va_de_dia(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14), ahora_ts=ts(2026, 10, 14, 11, 0))
-        self.assertTrue(texto.startswith("📊 Hoy, miércoles 14.10 (hasta las 11:00)"))
-        self.assertIn("👥 Entraron al canal: 1 persona", texto)
+        self.assertTrue(texto.startswith("📊 Hoy, miércoles 14/10 (hasta las 11:00)"))
+        self.assertIn("🆕 Entró 1 persona nueva. El bot le mandó la bienvenida con la gratuita.", texto)
 
     def test_dia_vacio_no_falla(self):
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 1, 1))
-        self.assertIn("👥 Entraron al canal: 0 personas", texto)
+        self.assertIn("🆕 No entró nadie nuevo.", texto)
         self.assertNotIn("⚠️", texto)
+        self.assertNotIn("✅", texto)
 
     def test_cambio_de_hora_de_octubre(self):
         # El 25-10-2026 dura 25 horas en España; el día se corta en las
@@ -114,7 +107,149 @@ class TestDiario(Base):
         self.evento(ts(2026, 10, 25, 23, 30), "solicitud", 9, enlace="landing")
         self.evento(ts(2026, 10, 26, 0, 10), "solicitud", 10, enlace="landing")
         texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 25))
-        self.assertIn("👥 Entraron al canal: 1 persona", texto)
+        self.assertIn("🆕 Entró 1 persona nueva.", texto)
+
+    def test_bot_bloqueado_al_volver(self):
+        # Quien bloqueó el bot y vuelve a entrar: no le llega la bienvenida,
+        # pero se le acepta igual.
+        self.evento(ts(2026, 10, 14, 18, 0), "bienvenida_fallida", 2, motivo="Forbidden: bot was blocked by the user")
+        texto = resumen.texto_diario(self.con, MADRID, date(2026, 10, 14))
+        self.assertIn("   · tenían el bot bloqueado: 1", texto)
+
+
+class TestEmbudo(Base):
+    """El día contado con frases y nombres (2026-11-05). Personas inventadas."""
+
+    def persona(self, uid, nombre, username=None, momento=None, **campos):
+        with self.con:
+            db.actualizar_datos_usuario(self.con, momento or ts(2026, 10, 1, 9, 0),
+                                        {"id": uid, "first_name": nombre, "username": username})
+            db.actualizar_campos(self.con, uid, momento or ts(2026, 10, 1, 9, 0), **campos)
+
+    def nuevo(self, uid, nombre, hora, username=None):
+        momento = ts(2026, 11, 4, hora, 0)
+        with self.con:
+            db.registrar_solicitud(self.con, momento, {"id": uid, "first_name": nombre, "username": username},
+                                   "Enlace de campaña")
+        self.evento(momento, "solicitud", uid, enlace="Enlace de campaña")
+        self.evento(momento, "bienvenida_enviada", uid, tipo_mensaje="bot_b_v1")
+        self.evento(momento, "aceptada", uid)
+
+    def gratuita(self, uid, momento):
+        self.evento(momento, "enlace_venta", uid, canal="Canal de venta", enlace="https://t.me/+inventado")
+        with self.con:
+            fila = db.obtener_usuario(self.con, uid)
+            if fila["enlace_venta_ts"] is None:
+                db.actualizar_campos(self.con, uid, momento, enlace_venta_ts=momento)
+
+    def setUp(self):
+        super().setUp()
+        h = lambda hora, minuto=0: ts(2026, 11, 4, hora, minuto)  # noqa: E731
+        # Nuevos del día.
+        self.nuevo(21, "Ana Ruiz", 10, "ana_r")
+        self.evento(h(10, 1), "faq", 21, tema="menu")
+        self.evento(h(10, 5), "te_escribe", 21, primera_vez=True)
+        self.gratuita(21, h(11))
+        self.nuevo(22, "Bruno", 12)
+        self.evento(h(12, 10), "te_escribe", 22, primera_vez=True)
+        self.nuevo(23, "Carla", 13, "carla")
+        self.evento(h(13, 1), "bloqueo_bot", 23)
+        self.nuevo(24, "Dani", 14)
+        self.evento(h(14, 1), "faq", 24, tema="menu")
+        # Gente de otros días que te escribe.
+        self.persona(30, "Eva", bienvenida_ts=ts(2026, 10, 20, 9, 0))
+        self.evento(h(15), "te_escribe", 30, primera_vez=True)
+        self.persona(31, "Fede", "fede")
+        self.evento(h(15, 30), "registrado_sin_bienvenida", 31, tipo_mensaje=mensajes.TIPO_SIN_BOT)
+        self.evento(h(15, 30), "te_escribe", 31, primera_vez=True)
+        self.persona(32, "Gema")
+        self.evento(h(15, 40), "registrado_sin_bienvenida", 32, tipo_mensaje=mensajes.TIPO_APROBADO_SIN_BIENVENIDA)
+        self.evento(h(15, 40), "te_escribe", 32, primera_vez=True)
+        self.persona(33, "Hugo", enlace_venta_ts=ts(2026, 10, 2, 9, 0))
+        self.evento(h(16), "te_escribe", 33)
+        self.gratuita(33, h(16, 5))  # otro enlace: la gratuita ya la tuvo
+        self.persona(34, "Iris")
+        self.evento(h(16, 10), "te_escribe", 34)
+        with self.con:
+            self.con.execute("INSERT INTO personas_chat (user_id, nombre, username, visto_ts) VALUES (35, 'Juan', NULL, 0)")
+        self.evento(h(16, 20), "aviso_fuera_del_canal", 35)
+        # Volvió a entrar.
+        self.persona(36, "Kike", "kike", bienvenida_ts=ts(2026, 9, 1, 9, 0))
+        self.evento(h(17), "solicitud", 36, enlace="Enlace de campaña")
+        self.evento(h(17), "ya_recibida", 36, tipo_mensaje="bot_b_v1")
+        self.evento(h(17), "bienvenida_enviada", 36, tipo_mensaje=mensajes.TIPO_BIENVENIDA_RECURRENTE)
+        self.evento(h(17), "aceptada", 36)
+        # La gratuita a alguien de otro día.
+        self.persona(37, "Laura")
+        self.gratuita(37, h(18))
+
+    def test_el_dia_con_frases(self):
+        texto = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4))
+        self.assertEqual(texto.split("\n"), [
+            "📊 Miércoles 04/11",
+            "",
+            "🆕 Entraron 4 personas nuevas. El bot les mandó a todas la bienvenida con la gratuita.",
+            "",
+            "✉️ 2 de esas 4 te escribieron por privado (50 %): Ana Ruiz @ana_r y Bruno.",
+            "🎁 Les enviaste la gratuita a 1 de las 2. Falta: Bruno.",
+            "😶 Las otras 2 no te han escrito. 1 de ellas bloqueó el bot: Carla @carla "
+            "(sigue en el canal, pero el bot ya no puede escribirle).",
+            "",
+            "📚 2 de las 4 miraron las preguntas frecuentes del bot. 1 de ellas te escribió.",
+            "",
+            "💬 También te escribieron 6 personas que no son nuevas:",
+            "· Eva (entró el 20/10), que te escribe por primera vez.",
+            "· Fede @fede, que entró al canal sin pasar por el bot: no tiene gratuita, va a free send.",
+            "· Gema, que pidió entrar pero no le llegó la bienvenida: sí tiene gratuita, va a la carpeta del día.",
+            "· Juan, que no está en el canal: te avisé con el enlace para que entre.",
+            "· 2 que ya te habían escrito otras veces (1 ya tuvo su gratuita).",
+            "🎁 También enviaste la gratuita a Laura (no era nueva).",
+            "🔗 También enviaste enlaces de venta a Hugo, que ya había tenido la gratuita.",
+            "",
+            "↩️ 1 persona volvió a entrar al canal (Kike @kike): sin gratuita, porque ya estaba "
+            "o ya había pasado por aquí.",
+            "",
+            "✅ El bot aceptó las 5 solicitudes, sin fallos.",
+        ])
+
+    def test_todas_con_gratuita_y_nadie_sin_escribir(self):
+        self.gratuita(22, ts(2026, 11, 4, 19, 0))
+        lineas = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")
+        self.assertIn("🎁 A todas les enviaste la gratuita.", lineas)
+
+    def test_ninguna_gratuita(self):
+        with self.con:
+            self.con.execute("UPDATE usuarios SET enlace_venta_ts = NULL WHERE user_id = 21")
+        lineas = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")
+        self.assertIn("🎁 A ninguna de las 2 le has enviado todavía la gratuita.", lineas)
+
+    def test_muchos_nombres_se_cortan(self):
+        for i in range(12):
+            self.nuevo(100 + i, f"Persona{i}", 20)
+            self.evento(ts(2026, 11, 4, 20, 30), "te_escribe", 100 + i, primera_vez=True)
+        texto = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4))
+        self.assertIn("Persona7 y 4 más.", texto)
+
+    def test_ventas_del_dia(self):
+        from .test_cruce import canal, entra_movimiento, persona, venta
+        persona(self.con, 41, "Comprador", "comprador")
+        with self.con:
+            self.con.execute("INSERT INTO pagos_correos_manual (correo, texto, ts) VALUES ('a@example.com', '41', 0)")
+        canal(self.con, 5, "Canal 5")
+        entra_movimiento(self.con, 5, 1, 42, ts(2026, 11, 4, 11, 0) + 5, "https://t.me/+C5")
+        leido = ts(2026, 11, 4, 20, 0)
+        venta(self.con, "v1", "https://t.me/+C1", ts(2026, 11, 4, 10, 0), correo="a@example.com", importe=30, ahora=leido)
+        venta(self.con, "v2", "https://t.me/+C5", ts(2026, 11, 4, 11, 0), producto="Canal 5", correo="b@example.com",
+              importe=22.5, ahora=leido)
+        venta(self.con, "v3", "https://t.me/+otro", ts(2026, 11, 4, 12, 0), correo="c@example.com", importe=20, ahora=leido)
+        venta(self.con, "v4", "https://t.me/+C1", ts(2026, 11, 3, 12, 0), correo="a@example.com", importe=99, ahora=leido)
+        lineas = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")
+        self.assertIn("💶 Ventas del día: 3, 72,50 € (leídas hasta las 20:00). Sabemos de quién es 1; "
+                      "1 está dudosa; 1 sin identificar.", lineas)
+
+    def test_euros(self):
+        self.assertEqual(resumen._euros(644.0), "644 €")
+        self.assertEqual(resumen._euros(1234.5), "1.234,50 €")
 
 
 class TestSemanal(Base):
