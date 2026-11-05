@@ -256,6 +256,19 @@ class TestEmbudo(Base):
         lineas = resumen.texto_semanal(self.con, MADRID, date(2026, 11, 2)).split("\n")
         self.assertIn("💶 Ventas de la semana: 1, 30 €. 1 sin identificar. La semana anterior: 2, 45 €.", lineas)
 
+    def test_quien_no_paso_por_el_bot_pero_ya_es_cliente(self):
+        from .test_cruce import venta
+        with self.con:
+            self.con.execute("INSERT INTO pagos_correos_manual (correo, texto, ts) VALUES ('fede@example.com', '31', 0)")
+        for i, dia in enumerate((10, 20)):
+            venta(self.con, f"f{i}", "https://t.me/+C1", ts(2026, 10, dia, 10, 0), correo="fede@example.com",
+                  ahora=ts(2026, 11, 9, 0, 30))
+        diario = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")
+        self.assertIn("· Fede @fede (2 compras), que ya es cliente y no pasó por el bot: no tiene gratuita, "
+                      "va a free send.", diario)
+        semanal = resumen.texto_semanal(self.con, MADRID, date(2026, 11, 2)).split("\n")
+        self.assertIn("· 1 que ya es cliente y no pasó por el bot: no tiene gratuita.", semanal)
+
     def test_todas_con_gratuita_y_nadie_sin_escribir(self):
         self.gratuita(22, ts(2026, 11, 4, 19, 0))
         lineas = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")

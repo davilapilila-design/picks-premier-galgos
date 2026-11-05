@@ -10,7 +10,10 @@ Entradas más recientes arriba.
   lado solo en lo que importa (nuevos, cuántos te escribieron y ventas), los
   nombres solo de quien espera la gratuita, «nuevos por día» solo hasta hoy y el
   bot al final. Fuera los porcentajes de subida/bajada sobre números pequeños.
-- Commits: (este commit)
+- Quien escribe sin haber pasado por el bot y ya ha comprado sale como cliente
+  («ya es cliente y no pasó por el bot», con sus compras en el diario): el dueño
+  pensó que se habían colado y eran clientes de antes del bot.
+- Commits: 5b2202a, (este commit)
 
 ## 2026-11-05 — Captación: lectura de overoption también a las 23:50
 

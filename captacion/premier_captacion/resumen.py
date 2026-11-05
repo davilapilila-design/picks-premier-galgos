@@ -188,19 +188,30 @@ def _grupos(con, est, desde, hasta):
         volvieron=est["volvieron"] & est["personas"])
 
 
-def _ventas(con, tz, desde, hasta, de="del día", antes=None):
-    """Las ventas de overoption del periodo y si se sabe de quién son
-    (cruce.py), con las del periodo `antes` (desde, hasta) para comparar;
-    nada si aún no se leen o si el cruce falla (el resumen sale igual)."""
-    leido = con.execute("SELECT MAX(bajado_ts) FROM pagos_overoption").fetchone()[0]
-    if leido is None:
-        return []
+def _cruzadas(con):
+    """Las ventas de overoption con su persona (cruce.py), o None si aún no
+    se leen o si el cruce falla (el resumen sale igual, sin ellas)."""
+    if con.execute("SELECT 1 FROM pagos_overoption LIMIT 1").fetchone() is None:
+        return None
     try:
         from . import cruce
-        resultados = cruce.calcular(con).resultados
+        return cruce.calcular(con).resultados
     except Exception:
         log.exception("No se pudo cruzar las ventas para el resumen")
+        return None
+
+
+def _compras(resultados):
+    """user_id -> cuántas compras suyas se conocen."""
+    return Counter(r["user_id"] for r in resultados or () if r["user_id"] is not None)
+
+
+def _ventas(con, tz, resultados, desde, hasta, de="del día", antes=None):
+    """Las ventas de overoption del periodo y si se sabe de quién son, con las
+    del periodo `antes` (desde, hasta) para comparar."""
+    if resultados is None:
         return []
+    leido = con.execute("SELECT MAX(bajado_ts) FROM pagos_overoption").fetchone()[0]
 
     def entre(a, b):
         return [r for r in resultados if a <= (r["pago_ts"] or 0) < b]
@@ -315,6 +326,8 @@ def _dudas(g, con_lector):
 def _cuerpo_diario(con, est, tz, desde, hasta, nombres_tipo):
     """El día contado con frases y con nombres, para saber quién es quién."""
     g = _grupos(con, est, desde, hasta)
+    resultados = _cruzadas(con)
+    compras = _compras(resultados)
 
     def quienes(uids, extra=None):
         return _quienes(con, uids, est["orden"], extra)
@@ -348,10 +361,17 @@ def _cuerpo_diario(con, est, tz, desde, hasta, nombres_tipo):
             if g.primera:
                 bloque.append(f"· {quienes(g.primera, entro)}, que te {_v(len(g.primera), 'escribe', 'escriben')} "
                               "por primera vez.")
-            if g.sin_bot:
-                s = len(g.sin_bot)
-                bloque.append(f"· {quienes(g.sin_bot)}, que {_v(s, 'entró', 'entraron')} al canal sin pasar por el "
-                              f"bot: no {_v(s, 'tiene', 'tienen')} gratuita, {_v(s, 'va', 'van')} a free send.")
+            # Quien no pasó por el bot suele ser un cliente de antes del bot.
+            clientes = {u for u in g.sin_bot if compras[u]}
+            if clientes:
+                c = len(clientes)
+                bloque.append(f"· {quienes(clientes, lambda u: f' ({compras[u]} {_v(compras[u], 'compra', 'compras')})')}"
+                              f", que ya {_v(c, 'es cliente', 'son clientes')} y no {_v(c, 'pasó', 'pasaron')} por el "
+                              f"bot: no {_v(c, 'tiene', 'tienen')} gratuita, {_v(c, 'va', 'van')} a free send.")
+            if g.sin_bot - clientes:
+                s = len(g.sin_bot - clientes)
+                bloque.append(f"· {quienes(g.sin_bot - clientes)}, que {_v(s, 'entró', 'entraron')} al canal sin pasar "
+                              f"por el bot: no {_v(s, 'tiene', 'tienen')} gratuita, {_v(s, 'va', 'van')} a free send.")
             if g.aprobados:
                 s = len(g.aprobados)
                 bloque.append(f"· {quienes(g.aprobados)}, que {_v(s, 'pidió', 'pidieron')} entrar pero no "
@@ -387,7 +407,7 @@ def _cuerpo_diario(con, est, tz, desde, hasta, nombres_tipo):
         lineas += ["", f"↩️ {v} {_v(v, 'persona volvió', 'personas volvieron')} a entrar al canal "
                        f"({quienes(g.volvieron)}): sin gratuita, porque ya {_v(v, 'estaba', 'estaban')} "
                        f"o ya {_v(v, 'había', 'habían')} pasado por aquí."]
-    return lineas + _ventas(con, tz, desde, hasta) + _bot(est, nombres_tipo)
+    return lineas + _ventas(con, tz, resultados, desde, hasta) + _bot(est, nombres_tipo)
 
 
 def _cuerpo_semanal(con, est, anterior, tz, lunes, periodo, periodo_antes, nombres_tipo, eventos):
@@ -395,6 +415,8 @@ def _cuerpo_semanal(con, est, anterior, tz, lunes, periodo, periodo_antes, nombr
     semana anterior al lado; con nombres, solo quien espera la gratuita."""
     g = _grupos(con, est, *periodo)
     a = _grupos(con, anterior, *periodo_antes)
+    resultados = _cruzadas(con)
+    compras = _compras(resultados)
 
     def quienes(uids):
         return _quienes(con, uids, est["orden"])
@@ -428,8 +450,12 @@ def _cuerpo_semanal(con, est, anterior, tz, lunes, periodo, periodo_antes, nombr
                                                  f"escribieron {o} personas que no son nuevas de esta semana:"))
             if g.primera:
                 bloque.append(f"· {len(g.primera)} por primera vez.")
-            if g.sin_bot:
-                s = len(g.sin_bot)
+            c = sum(1 for u in g.sin_bot if compras[u])
+            if c:
+                bloque.append(f"· {c} que ya {_v(c, 'es cliente', 'son clientes')} y no {_v(c, 'pasó', 'pasaron')} "
+                              f"por el bot: no {_v(c, 'tiene', 'tienen')} gratuita.")
+            if len(g.sin_bot) - c:
+                s = len(g.sin_bot) - c
                 bloque.append(f"· {s} que {_v(s, 'entró', 'entraron')} al canal sin pasar por el bot: "
                               f"no {_v(s, 'tiene', 'tienen')} gratuita.")
             if g.aprobados:
@@ -456,7 +482,7 @@ def _cuerpo_semanal(con, est, anterior, tz, lunes, periodo, periodo_antes, nombr
     if g.volvieron:
         v = len(g.volvieron)
         lineas += ["", f"↩️ {v} {_v(v, 'persona volvió', 'personas volvieron')} a entrar al canal: sin gratuita."]
-    lineas += _ventas(con, tz, *periodo, de="de la semana", antes=periodo_antes)
+    lineas += _ventas(con, tz, resultados, *periodo, de="de la semana", antes=periodo_antes)
 
     primera_solicitud = {}
     for ev in eventos:
