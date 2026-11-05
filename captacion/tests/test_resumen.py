@@ -212,6 +212,50 @@ class TestEmbudo(Base):
             "✅ El bot aceptó las 5 solicitudes, sin fallos.",
         ])
 
+    def test_la_semana_con_frases(self):
+        # La semana anterior: 2 nuevos, 1 te escribió.
+        self.nuevo(50, "Antiguo", 10)
+        with self.con:
+            self.con.execute("UPDATE eventos SET ts = ts - 7 * 86400 WHERE user_id = 50")
+        self.evento(ts(2026, 10, 28, 11, 0), "te_escribe", 50, primera_vez=True)
+        self.evento(ts(2026, 10, 28, 12, 0), "solicitud", 51, enlace="Enlace de campaña")
+        texto = resumen.texto_semanal(self.con, MADRID, date(2026, 11, 2))
+        self.assertEqual(texto.split("\n"), [
+            "📅 Semana del lunes 02/11 al domingo 08/11",
+            "",
+            "🆕 Entraron 4 personas nuevas (semana anterior: 2).",
+            "",
+            "✉️ 2 de las 4 te escribieron por privado (50 %; semana anterior: 1 de 2).",
+            "🎁 Les enviaste la gratuita a 1 de las 2. Falta: Bruno.",
+            "😶 Las otras 2 no te han escrito. 1 de ellas bloqueó el bot.",
+            "",
+            "📚 2 de las 4 miraron las preguntas frecuentes del bot. 1 de ellas te escribió.",
+            "",
+            "💬 También te escribieron 6 personas que no son nuevas de esta semana:",
+            "· 1 por primera vez.",
+            "· 1 que entró al canal sin pasar por el bot: no tiene gratuita.",
+            "· 1 que pidió entrar pero no le llegó la bienvenida: sí tiene gratuita.",
+            "· 1 que no está en el canal (te avisé con el enlace).",
+            "· 2 que ya te habían escrito otras veces.",
+            "🎁 También enviaste la gratuita a 1 que no era nueva de esta semana.",
+            "🔗 También enviaste enlaces de venta a 1 que ya había tenido la gratuita.",
+            "",
+            "↩️ 1 persona volvió a entrar al canal: sin gratuita.",
+            "",
+            "📈 Nuevos por día: lun 0 · mar 0 · mié 4 · jue 0 · vie 0 · sáb 0 · dom 0",
+            "",
+            "✅ El bot aceptó las 5 solicitudes, sin fallos.",
+        ])
+
+    def test_ventas_de_la_semana_con_la_anterior(self):
+        from .test_cruce import venta
+        leido = ts(2026, 11, 9, 0, 30)
+        venta(self.con, "v1", "https://t.me/+C1", ts(2026, 11, 4, 10, 0), importe=30, ahora=leido)
+        venta(self.con, "v2", "https://t.me/+C1", ts(2026, 10, 28, 10, 0), importe=20, ahora=leido)
+        venta(self.con, "v3", "https://t.me/+C1", ts(2026, 10, 29, 10, 0), importe=25, ahora=leido)
+        lineas = resumen.texto_semanal(self.con, MADRID, date(2026, 11, 2)).split("\n")
+        self.assertIn("💶 Ventas de la semana: 1, 30 €. 1 sin identificar. La semana anterior: 2, 45 €.", lineas)
+
     def test_todas_con_gratuita_y_nadie_sin_escribir(self):
         self.gratuita(22, ts(2026, 11, 4, 19, 0))
         lineas = resumen.texto_diario(self.con, MADRID, date(2026, 11, 4)).split("\n")
@@ -262,19 +306,22 @@ class TestSemanal(Base):
 
         texto = resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12))
         lineas = texto.split("\n")
-        self.assertEqual(lineas[0], "📅 Resumen semanal: lunes 12.10 – domingo 18.10")
-        self.assertIn("👥 Entraron al canal: 3 personas  ↗️ +50 % vs semana anterior (2)", lineas)
-        self.assertIn("   · Bienvenida del bot, versión B (dos botones), desde 2026-10: 3", lineas)
-        self.assertEqual(lineas[-1], "📈 Solicitudes por día: lun 2 · mar 0 · mié 0 · jue 0 · vie 0 · sáb 0 · dom 1")
+        self.assertEqual(lineas[0], "📅 Semana del lunes 12/10 al domingo 18/10")
+        self.assertIn("🆕 Entraron 3 personas nuevas (semana anterior: 2).", lineas)
+        self.assertIn("📈 Nuevos por día: lun 2 · mar 0 · mié 0 · jue 0 · vie 0 · sáb 0 · dom 1", lineas)
+        self.assertNotIn("🧪", texto)  # una sola versión de la bienvenida
 
     def test_semana_en_curso_compara_el_mismo_tramo(self):
         self.evento(ts(2026, 10, 6, 9, 0), "solicitud", 1, enlace="x")    # martes anterior, 9:00
         self.evento(ts(2026, 10, 6, 20, 0), "solicitud", 2, enlace="x")   # martes anterior, 20:00
         self.evento(ts(2026, 10, 13, 9, 0), "solicitud", 3, enlace="x")   # este martes, 9:00
         texto = resumen.texto_semanal(self.con, MADRID, date(2026, 10, 12), ahora_ts=ts(2026, 10, 13, 12, 0))
-        self.assertTrue(texto.startswith("📅 Semana en curso, desde el lunes 12.10"))
+        lineas = texto.split("\n")
+        self.assertEqual(lineas[:2], ["📅 Semana en curso, desde el lunes 12/10 (hasta ahora)",
+                                      "Comparada con la semana anterior hasta el mismo momento."])
         # Hasta el martes a las 12:00 en ambas semanas: 1 frente a 1.
-        self.assertIn("👥 Entraron al canal: 1 persona  ➡️ +0 % vs semana anterior (1)", texto)
+        self.assertIn("🆕 Entró 1 persona nueva (semana anterior: 1).", lineas)
+        self.assertIn("📈 Nuevos por día: lun 0 · mar 1", lineas)  # los días que aún no han llegado, no
 
 
 class TestMain(unittest.TestCase):

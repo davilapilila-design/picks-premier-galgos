@@ -3,6 +3,15 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-05 — Captación: el resumen semanal, con el mismo estilo que el diario
+
+- Pedido por el dueño: el semanal tenía los mismos problemas que el diario. Ahora
+  usa los mismos grupos (`resumen._grupos`) en números, con la semana anterior al
+  lado solo en lo que importa (nuevos, cuántos te escribieron y ventas), los
+  nombres solo de quien espera la gratuita, «nuevos por día» solo hasta hoy y el
+  bot al final. Fuera los porcentajes de subida/bajada sobre números pequeños.
+- Commits: (este commit)
+
 ## 2026-11-05 — Captación: lectura de overoption también a las 23:50
 
 - Pedido por el dueño: el resumen diario (00:05) salía sin las ventas de la
@@ -10,7 +19,7 @@ Entradas más recientes arriba.
 - Las lecturas fijas pasan a hora de España (`Europe/Madrid`): estaban como
   07/15/23:10 en la hora de la VM, que es UTC, y en verano se habrían movido una
   hora. En invierno siguen a las 8:10, 16:10 y 0:10.
-- Commits: (este commit)
+- Commits: 419c2b3
 
 ## 2026-11-05 — Captación: el resumen diario contado con frases y nombres
 
