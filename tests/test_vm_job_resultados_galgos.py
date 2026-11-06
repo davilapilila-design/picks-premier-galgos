@@ -154,3 +154,24 @@ def test_con_sitio_no_anade_filas():
     hoja = _HojaFalsa(2000)
     job.escribir_filas(hoja, 1013, [["x"] * 11])
     assert hoja.anadidas == [] and hoja.escrito[0] == "A1013:K1013"
+
+
+def test_carrera_escrita_con_otro_formato_de_fecha_ya_esta_cubierta():
+    # 01-03/11/2026: las filas nuevas de resultados_galgos se ven «1/11/2026» y la clave del job
+    # era «01/11/2026» → nunca cubierta, y las mismas filas se volvían a escribir cada 20 min.
+    existentes = [["Towcester", "1/11/2026", "16:32", "4"],
+                  ["Central Park", "01/10/2026", "9:05", "1"]]
+    cubiertas = job.carreras_cubiertas(existentes)
+    patas = [_pata("649", "1/11/2026", "Towcester", "16:32"),
+             _pata("650", "01/11/2026 17:00:00", "towcester ", "16:32"),
+             _pata("387", "1/10/2026", "Central Park", "09:05")]
+    tarde = datetime(2026, 11, 3, 12, 0, tzinfo=MADRID)
+    pend, cubiertas_n, _ = job.calcular_pendientes(patas, cubiertas, tarde)
+    assert pend == [] and cubiertas_n == 3
+
+
+def test_otra_hora_u_otro_dia_no_estan_cubiertos():
+    cubiertas = job.carreras_cubiertas([["Towcester", "1/11/2026", "16:32", "4"]])
+    patas = [_pata("1", "1/11/2026", "Towcester", "16:52"), _pata("2", "11/1/2026", "Towcester", "16:32")]
+    pend, _, _ = job.calcular_pendientes(patas, cubiertas, datetime(2026, 11, 3, 12, 0, tzinfo=MADRID))
+    assert len(pend) == 2

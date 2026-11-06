@@ -3,6 +3,31 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-03 (cont.) — msg 446: horas de las patas corregidas a las del mensaje
+- La doble de Dunstall Park del 10/10 se guardó con las horas una hora antes (19:58 y 21:54)
+  de las que pone el mensaje (20:58 y 22:54, hora de Madrid). Con eso la pata 2 no casaba con
+  ninguna carrera y la pata 1 se había cruzado con la carrera anterior (la de las 19:58).
+- Corregida `hora_carrera` de las dos patas en `apuestas_patas` (solo esa columna). El job
+  escribió las dos carreras correctas y las fórmulas de las patas ya apuntan a ellas. La
+  posición y el resultado de cada pata estaban puestos a mano y ya eran los reales (3.º y 1.º);
+  la apuesta sigue perdida (resultado manual), sin cambios en unidades.
+- Las 3 filas de la carrera de las 19:58 siguen en `resultados_galgos`: son datos reales de
+  esa carrera, aunque ya no las usa ninguna pata.
+
+## 2026-11-03 — `resultados_galgos` duplicaba las carreras de los días 1-9 de cada mes
+- **Qué fallaba**: desde el 01/11 cada pasada volvía a escribir las mismas carreras (27 filas
+  cada 20 min, 9 carreras del 1 y el 2/11). El job decide qué carreras ya tienen resultado
+  comparando el texto de la fecha: su clave era «01/11/2026» y la hoja enseñaba «1/11/2026».
+- **Por qué ahora**: las filas que añade `escribir_filas` (29/10) heredan el formato de la fila
+  de arriba (`d/m/yyyy`), mientras que las filas antiguas tenían `dd/mm/yyyy`. Con días de dos
+  cifras no se notaba. Las apuestas se resolvieron bien: las filas repetidas eran idénticas.
+- **Arreglo** (`scripts/vm_job_resultados_galgos.py`): `clave_carrera` compara canódromo, fecha
+  (como fecha) y hora (normalizada a `HH:MM`), así que el formato de la hoja ya no importa;
+  `carreras_cubiertas` la usa para las filas existentes. Tests: 2 nuevos (fecha sin cero, hora
+  `9:05` frente a `09:05`, y que otra hora u otro día siguen pendientes).
+- **Limpieza** (03/11, tras desplegar): borradas de la hoja las 783 filas repetidas (9
+  carreras del 1 y 2/11), dejando la primera de cada una; quedan 1089 filas. Copia previa en la
+  VM (`/root/picks-backups/`). Las apuestas de esos días no cambian.
 ## 2026-10-31 — `/stats` y resumen semanal: cuota media
 - Pedido del dueño: añadir la cuota media al mensaje de estadísticas.
 - `calcularEstadisticasPeriodo_` (Estadisticas.gs): media de la cuota

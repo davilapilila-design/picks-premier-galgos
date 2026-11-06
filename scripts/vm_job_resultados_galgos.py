@@ -138,7 +138,29 @@ def urls_para_rellenar(existentes, df):
     return out
 
 
-def calcular_pendientes(patas, carreras_cubiertas, limite):
+def clave_carrera(hipodromo, fecha_dt, hora):
+    """Clave de una carrera con la fecha y la hora como valores, no como texto: la hoja
+    enseña la misma fecha como «01/11/2026» o «1/11/2026» según el formato de cada fila, y
+    comparando el texto el job no veía sus propias filas y las reescribía en cada pasada
+    (01-03/11/2026)."""
+    return (hipodromo.strip().lower(), fecha_dt, datetime.strptime(hora.strip(), "%H:%M").strftime("%H:%M"))
+
+
+def carreras_cubiertas(existentes):
+    """Carreras que ya tienen filas en `resultados_galgos` (columnas A-C)."""
+    cubiertas = set()
+    for row in existentes:
+        if len(row) < 3 or not row[0]:
+            continue
+        try:
+            fecha_dt = datetime.strptime(row[1].strip().split(" ")[0], "%d/%m/%Y").date()
+            cubiertas.add(clave_carrera(row[0], fecha_dt, row[2]))
+        except ValueError:
+            continue
+    return cubiertas
+
+
+def calcular_pendientes(patas, cubiertas, limite):
     """Fase barata (sin parquet): qué patas hay que mirar de verdad -
     no cubiertas todavía Y su carrera ya debería haber corrido."""
     pendientes = []
@@ -161,8 +183,8 @@ def calcular_pendientes(patas, carreras_cubiertas, limite):
             continue
 
         fecha_str = fecha_dt.strftime("%d/%m/%Y")
-        clave_carrera = (hipodromo.lower(), fecha_str, hora_carrera)
-        if clave_carrera in carreras_cubiertas:
+        clave = clave_carrera(hipodromo, fecha_dt, hora_carrera)
+        if clave in cubiertas:
             saltadas_ya_cubiertas += 1
             continue
 
@@ -175,7 +197,7 @@ def calcular_pendientes(patas, carreras_cubiertas, limite):
         pendientes.append({
             "hipodromo": hipodromo, "hora_carrera": hora_carrera,
             "fecha_dt": fecha_dt, "fecha_str": fecha_str,
-            "clave_carrera": clave_carrera, "rtime_uk": rtime_uk(fecha_dt, hora_carrera),
+            "clave_carrera": clave, "rtime_uk": rtime_uk(fecha_dt, hora_carrera),
         })
 
     return pendientes, saltadas_ya_cubiertas, saltadas_futuras
@@ -277,16 +299,13 @@ def main():
 
     ws_resultados = sh.worksheet("resultados_galgos")
     existentes = ws_resultados.get("A2:D")
-    carreras_cubiertas = set()
-    for row in existentes:
-        if len(row) >= 3 and row[0]:
-            carreras_cubiertas.add((row[0].strip().lower(), row[1], row[2]))
+    cubiertas = carreras_cubiertas(existentes)
 
     ahora_madrid = datetime.now(MADRID)
     limite = ahora_madrid - timedelta(minutes=MARGEN_CARRERA_CORRIDA_MIN)
 
     pendientes, saltadas_ya_cubiertas, saltadas_futuras = calcular_pendientes(
-        patas, carreras_cubiertas, limite
+        patas, cubiertas, limite
     )
 
     print(
