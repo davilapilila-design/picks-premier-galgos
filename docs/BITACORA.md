@@ -3,6 +3,20 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-06 — Picks con foto en error: Gemini rechazaba la imagen ("Unsupported mime type: application/octet-stream")
+- Síntoma (visto por el dueño): picks quedándose en `error` al procesarlos -
+  msg 686 (04/11), 688 y 689; `reintentarMensajesConError` los reintenta y
+  siguen fallando.
+- Causa (registro de Apps Script): Gemini devuelve 400 "Unsupported mime
+  type: application/octet-stream in contents.inline_data". `AI.gs` mandaba
+  `fotoBlob.getContentType() || 'image/jpeg'`: el servidor de archivos de
+  Telegram entrega ahora la foto como `application/octet-stream` (no
+  vacío), así que el `image/jpeg` de reserva nunca se aplicaba.
+- Arreglo: `mimeImagen_` saca el tipo de los primeros bytes (JPEG/PNG/WebP)
+  y, si no lo reconoce, usa `image/jpeg` (Telegram recomprime las fotos a
+  JPEG). `test_mimeImagen` nuevo, OK en local junto con el resto.
+- Commits: (este commit)
+
 ## 2026-11-03 (cont.) — msg 446: horas de las patas corregidas a las del mensaje
 - La doble de Dunstall Park del 10/10 se guardó con las horas una hora antes (19:58 y 21:54)
   de las que pone el mensaje (20:58 y 22:54, hora de Madrid). Con eso la pata 2 no casaba con

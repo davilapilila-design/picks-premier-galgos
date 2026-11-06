@@ -113,13 +113,45 @@ function listarModelosGemini() {
     .map(function (m) { return m.name.replace('models/', ''); });
 }
 
+/**
+ * Tipo MIME de la foto para Gemini, sacado de los primeros bytes del archivo
+ * (JPEG FF D8, PNG 89 50 4E 47, WebP RIFF....WEBP), no del que declara la
+ * descarga: desde el 04/11/2026 el servidor de archivos de Telegram la
+ * entrega como "application/octet-stream" y Gemini la rechaza con 400
+ * ("Unsupported mime type") - los picks con foto se quedaban en error (msg
+ * 686, 688, 689, ver docs/BITACORA.md). Por defecto image/jpeg: Telegram
+ * recomprime siempre a JPEG lo que se manda como foto.
+ */
+function mimeImagen_(bytes, declarado) {
+  const b = function (i) { return (bytes[i] + 256) % 256; }; // bytes de Apps Script van con signo
+  if (bytes.length >= 3 && b(0) === 0xFF && b(1) === 0xD8 && b(2) === 0xFF) return 'image/jpeg';
+  if (bytes.length >= 4 && b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4E && b(3) === 0x47) return 'image/png';
+  if (bytes.length >= 12 && String.fromCharCode(b(0), b(1), b(2), b(3)) === 'RIFF' &&
+    String.fromCharCode(b(8), b(9), b(10), b(11)) === 'WEBP') return 'image/webp';
+  return /^image\//.test(declarado || '') ? declarado : 'image/jpeg';
+}
+
+/** Ejecutar A MANO desde el editor tras tocar mimeImagen_ (mismo patrón que los test_ de Dashboard.gs). */
+function test_mimeImagen() {
+  assertIguales_(mimeImagen_([-1, -40, -1, -32], 'application/octet-stream'), 'image/jpeg', 'JPEG con signo y octet-stream');
+  assertIguales_(mimeImagen_([0x89, 0x50, 0x4E, 0x47, 13, 10], 'application/octet-stream'), 'image/png', 'PNG');
+  const webp = 'RIFF\u0000\u0000\u0000\u0000WEBPVP8 '.split('').map(function (c) { return c.charCodeAt(0); });
+  assertIguales_(mimeImagen_(webp, ''), 'image/webp', 'WebP');
+  assertIguales_(mimeImagen_([1, 2, 3], 'image/gif'), 'image/gif', 'desconocido con tipo de imagen declarado');
+  assertIguales_(mimeImagen_([1, 2, 3], 'application/octet-stream'), 'image/jpeg', 'desconocido sin tipo de imagen: JPEG');
+  assertIguales_(mimeImagen_([], null), 'image/jpeg', 'vacío');
+  Logger.log('test_mimeImagen: OK');
+  return 'OK';
+}
+
 function callGeminiExtraction_(texto, fotoBlob, modelos) {
   const parts = [{ text: texto || '(sin texto, solo imagen)' }];
   if (fotoBlob) {
+    const bytes = fotoBlob.getBytes();
     parts.push({
       inline_data: {
-        mime_type: fotoBlob.getContentType() || 'image/jpeg',
-        data: Utilities.base64Encode(fotoBlob.getBytes()),
+        mime_type: mimeImagen_(bytes, fotoBlob.getContentType()),
+        data: Utilities.base64Encode(bytes),
       },
     });
   }
