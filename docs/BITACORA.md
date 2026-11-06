@@ -15,6 +15,20 @@ Entradas más recientes arriba.
 - Arreglo: `mimeImagen_` saca el tipo de los primeros bytes (JPEG/PNG/WebP)
   y, si no lo reconoce, usa `image/jpeg` (Telegram recomprime las fotos a
   JPEG). `test_mimeImagen` nuevo, OK en local junto con el resto.
+- Diagnóstico con las fotos reales antes de publicar (función temporal de
+  solo lectura añadida y quitada por la API, sin el arreglo, para no
+  disparar el reintento): las fotos son JPEG normales (`FF D8 FF E0 …
+  JFIF`, `photos/file_xxx.jpg`), y Telegram entrega como
+  `application/octet-stream` TODAS, también las de picks que se procesaron
+  bien justo antes (674, 680, 681). El código de la foto no se tocaba desde
+  agosto ni los modelos desde finales de octubre: lo que cambió es Gemini,
+  que empezó a rechazar esa etiqueta el 04/11 entre las 14:10 (último pick
+  con foto bien) y las 18:55 (msg 686). Gemini con la foto del 686
+  etiquetada `image/jpeg` la extrajo bien.
+- Desplegado (v42, con la cuota media de `/stats`, que estaba pendiente).
+  `test_mimeImagen` y `test_estadisticas` OK en Apps Script.
+  `reintentarMensajesConError` lanzado a mano: "3 resueltos" - 686, 688 y
+  689 registrados y confirmados en el grupo.
 - Commits: (este commit)
 
 ## 2026-11-03 (cont.) — msg 446: horas de las patas corregidas a las del mensaje
