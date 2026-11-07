@@ -290,7 +290,14 @@ def main():
     if nuevas_filas:
         fila_inicio = len(existentes) + 2
         fila_fin = fila_inicio + len(nuevas_filas) - 1
-        ws_resultados.update(f"A{fila_inicio}:K{fila_fin}", nuevas_filas, value_input_option="USER_ENTERED")
+        # Google rechaza escribir fuera de la cuadricula ("exceeds grid limits"). Desde el
+        # 29/10/2026 picks-resultados anade justo las filas que necesita y la pestana ya no
+        # tiene filas vacias de sobra: este job fallo cada dia del 30/10 al 07/11 (revision
+        # del 07/11/2026). Mismo arreglo que escribir_filas() en vm_job_resultados_galgos.py.
+        if fila_fin > ws_resultados.row_count:
+            ws_resultados.add_rows(fila_fin - ws_resultados.row_count)
+        ws_resultados.update(values=nuevas_filas, range_name=f"A{fila_inicio}:K{fila_fin}",
+                             value_input_option="USER_ENTERED")
         print(f"{len(nuevas_filas)} filas nuevas insertadas en resultados_galgos ({fila_inicio}-{fila_fin})", flush=True)
     else:
         print("nada que insertar en esta pasada.", flush=True)

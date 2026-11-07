@@ -3,6 +3,17 @@
 Registro de cambios significativos (ver regla en `CLAUDE.md`).
 Entradas más recientes arriba.
 
+## 2026-11-07 — picks-dog-forms: añadir filas antes de escribir (fallaba desde el 30/10)
+- `scripts/vm_job_dog_forms.py` fallaba cada día desde el 30/10 con «exceeds grid limits».
+  Escribía en `resultados_galgos` justo debajo de la última fila y, desde el arreglo del 29/10
+  de `vm_job_resultados_galgos.py` (881ef75), la pestaña ya no tiene filas vacías de sobra.
+  Mismo arreglo: `add_rows` antes del `update`, con los argumentos por nombre (sin el aviso
+  de gspread).
+- Desplegado en la VM el 07/11 (copia del original en `vm_job_dog_forms.py.bak-20261107`) y
+  lanzado a mano: escribió las 2 filas pendientes (1134-1135), sin duplicados, y las patas
+  «perdio» sin cuota bajaron de 54 a 52. No se perdió nada: el job es acumulativo y cada día
+  vuelve a calcular todas las patas pendientes.
+
 ## 2026-11-03 (cont.) — msg 446: horas de las patas corregidas a las del mensaje
 - La doble de Dunstall Park del 10/10 se guardó con las horas una hora antes (19:58 y 21:54)
   de las que pone el mensaje (20:58 y 22:54, hora de Madrid). Con eso la pata 2 no casaba con
